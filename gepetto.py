@@ -106,16 +106,19 @@ def query_chatgpt(query, cb):
     :param query: The request to send to ChatGPT
     :param cb: Tu function to which the response will be passed to.
     """
-    response = openai.Completion.create(
-        model="text-davinci-003",
-        prompt=query,
-        temperature=0.6,
-        max_tokens=2500,
-        top_p=1,
-        frequency_penalty=1,
-        presence_penalty=1
-    )
-    cb(response=response.choices[0].text)
+    try:
+        response = openai.Completion.create(
+            model="text-davinci-003",
+            prompt=query,
+            temperature=0.6,
+            max_tokens=2500,
+            top_p=1,
+            frequency_penalty=1,
+            presence_penalty=1
+        )
+        cb(response=response.choices[0].text)
+    except openai.error as e:
+        raise print(f"ChatGPT could not complete the request: {str(e)}")
 
 
 def query_chatgpt_async(query, cb):
@@ -138,6 +141,6 @@ def query_chatgpt_async(query, cb):
 def PLUGIN_ENTRY():
     if not openai.api_key:
         print("Please edit this script to insert your OpenAI API key!")
-        return None
+        raise ValueError("No valid OpenAI API key found")
 
     return GepettoPlugin()
