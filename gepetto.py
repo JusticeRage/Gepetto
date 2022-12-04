@@ -1,6 +1,7 @@
 import functools
 import idaapi
 import ida_hexrays
+import ida_kernwin
 import idc
 import openai
 import textwrap
@@ -115,7 +116,7 @@ def query_chatgpt(query, cb):
             frequency_penalty=1,
             presence_penalty=1
         )
-        cb(response=response.choices[0].text)
+        ida_kernwin.execute_sync(functools.partial(cb, response=response.choices[0].text), ida_kernwin.MFF_WRITE)
     except openai.OpenAIError as e:
         raise print(f"ChatGPT could not complete the request: {str(e)}")
 
@@ -128,10 +129,7 @@ def query_chatgpt_async(query, cb):
     """
     print("Request to ChatGPT sent...")
     t = threading.Thread(target=query_chatgpt, args=[query, cb])
-    # Ideally, this would be t.start() and the thread would run in the background.
-    # Unfortunately, set_func_cmt can only be called from the main thread :(
-    # TODO: find a fix
-    t.run()
+    t.start()
 
 # =============================================================================
 # Main

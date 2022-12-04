@@ -25,7 +25,6 @@ Once the plugin is installed properly, you should be able to invoke it from the 
 # Limitations
 
 - The plugin requires access to the HexRays decompiler to function.
-- The request to ChatGPT is currently synchronous and will cause IDA to freeze during the query. I'm currently working on a workaround.
 - ChatGPT is a general-purpose chatbot and may very well get things wrong! Always be critical of results returned!
 
 # Acknowledgements
