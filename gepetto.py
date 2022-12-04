@@ -9,9 +9,16 @@ import os
 import re
 import textwrap
 import threading
+import requests
+import uuid
 
 # Set your API key here, or put in in the OPENAI_API_KEY environment variable.
 openai.api_key = ""
+
+#If you want to use the undocumented API, set this to True
+useundocumentated = False
+authorization = "" #Obtained from the __Secure-next-auth.session-token cookie at https://chat.openai.com/chat
+accessToken = ""
 
 # =============================================================================
 # Setup the context menu and hotkey in IDA
@@ -183,19 +190,41 @@ def query_chatgpt(query, cb):
     :param query: The request to send to ChatGPT
     :param cb: Tu function to which the response will be passed to.
     """
-    try:
-        response = openai.Completion.create(
-            model="text-davinci-003",
-            prompt=query,
-            temperature=0.6,
-            max_tokens=2500,
-            top_p=1,
-            frequency_penalty=1,
-            presence_penalty=1
-        )
-        ida_kernwin.execute_sync(functools.partial(cb, response=response.choices[0].text), ida_kernwin.MFF_WRITE)
-    except openai.OpenAIError as e:
-        raise print(f"ChatGPT could not complete the request: {str(e)}")
+    
+    if useundocumentated:
+        resp = requests.post("https://chat.openai.com/backend-api/conversation", headers={"Authorization": "Bearer " + accessToken}, json={
+            "action": "next",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": {
+                        "content_type": "text",
+                        "parts": [
+                            query
+                        ]
+                    }
+                }
+            ],
+            "parent_message_id": str(uuid.uuid4()),
+            "model": "text-davinci-002-render"
+        })
+        if resp.status_code != 200:
+            raise print(f"ChatGPT could not complete the request: {str(e)}")
+        ida_kernwin.execute_sync(functools.partial(cb, response=json.loads(resp.text.split("data: ")[-2])["message"]["content"]["parts"][0]), ida_kernwin.MFF_WRITE)
+    else:
+        try:
+            response = openai.Completion.create(
+                model="text-davinci-003",
+                prompt=query,
+                temperature=0.6,
+                max_tokens=2500,
+                top_p=1,
+                frequency_penalty=1,
+                presence_penalty=1
+            )
+            ida_kernwin.execute_sync(functools.partial(cb, response=response.choices[0].text), ida_kernwin.MFF_WRITE)
+        except openai.OpenAIError as e:
+            raise print(f"ChatGPT could not complete the request: {str(e)}")
 
 # -----------------------------------------------------------------------------
 
@@ -214,10 +243,20 @@ def query_chatgpt_async(query, cb):
 # =============================================================================
 
 def PLUGIN_ENTRY():
-    if not openai.api_key:
+    global accessToken
+    if not openai.api_key and not useundocumentated:
         openai.api_key = os.getenv("OPENAI_API_KEY")
         if not openai.api_key:
             print("Please edit this script to insert your OpenAI API key!")
             raise ValueError("No valid OpenAI API key found")
+    if useundocumentated:
+        if not authorization:
+            print("Please edit this script to insert your __Secure-next-auth.session-token cookie found at https://chat.openai.com/chat")
+            raise ValueError("No valid OpenAI API key found")
+        req = requests.get("https://chat.openai.com/api/auth/session", cookies={"__Secure-next-auth.session-token": authorization})
+        if req.status_code != 200:
+            print("Failed to get session")
+            return ValueError("Failed to get session")
+        accessToken = req.json()["accessToken"]
 
     return GepettoPlugin()
