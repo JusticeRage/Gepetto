@@ -22,6 +22,10 @@ class GepettoPlugin(idaapi.plugin_t):
     menu = None
 
     def init(self):
+        # Check for whether the decompiler is available
+        if not ida_hexrays.init_hexrays_plugin():
+            return idaapi.PLUGIN_SKIP
+
         action_desc = idaapi.action_desc_t(
             self.action_name,               # The action name. This acts like an ID and must be unique
             'Explain function',             # The action text.
