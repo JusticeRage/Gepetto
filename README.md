@@ -1,7 +1,7 @@
 # Gepetto
 
-Gepetto is a Python script which uses OpenAI's ChatGPT to provide meaning to functions decompiled by IDA Pro.
-At the moment, it can ask ChatGPT to explain what a function does, and to automatically rename its variables.
+Gepetto is a Python script which uses OpenAI's GPT-3 to provide meaning to functions decompiled by IDA Pro.
+At the moment, it can ask GPT-3 to explain what a function does, and to automatically rename its variables.
 Here is a simple example of what results it can provide in mere seconds:
 
 ![](https://github.com/JusticeRage/Gepetto/blob/main/readme/comparison.png?raw=true)
@@ -20,7 +20,7 @@ Finally, with the corresponding interpreter, simply run:
 ```
 
 ⚠️ You will also need to edit the script and add your own API key, which can be found on [this page](https://beta.openai.com/account/api-keys).
-Please note that ChatGPT queries are not free (although not very expensive) and you will need to setup a payment method.
+Please note that GPT-3 queries are not free (although not very expensive) and you will need to setup a payment method.
 
 ## Usage
 
@@ -31,18 +31,18 @@ as shown in the screenshot below:
 
 You can also use the following hotkeys:
 
-- Ask ChatGPT to explain the function: `Ctrl` + `Alt` + `H`
+- Ask GPT-3 to explain the function: `Ctrl` + `Alt` + `H`
 - Request better names for the function's variables: `Ctrl` + `Alt` + `R`
 
 Initial testing shows that asking for better names works better if you ask for an explanation of the function first – I
-assume because ChatGPT then uses its own comment to make more accurate suggestions.
+assume because GPT-3 then uses its own comment to make more accurate suggestions.
 There is an element of randomness to the AI's replies. If for some reason the initial response you get doesn't suit you,
 you can always run the command again.
 
 ## Limitations
 
 - The plugin requires access to the HexRays decompiler to function.
-- ChatGPT is a general-purpose chatbot and may very well get things wrong! Always be critical of results returned!
+- GPT-3 is a general-purpose chatbot and may very well get things wrong! Always be critical of results returned!
 
 ## Acknowledgements
 

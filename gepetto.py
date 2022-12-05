@@ -25,7 +25,7 @@ class GepettoPlugin(idaapi.plugin_t):
     rename_menu_path = "Edit/Gepetto/Rename variables"
     wanted_name = 'Gepetto'
     wanted_hotkey = ''
-    comment = "Uses ChatGPT to enrich the decompiler's output"
+    comment = "Uses GPT-3 to enrich the decompiler's output"
     help = "See usage instructions on GitHub"
     menu = None
 
@@ -39,7 +39,7 @@ class GepettoPlugin(idaapi.plugin_t):
                                               'Explain function',
                                               ExplainHandler(),
                                               "Ctrl+Alt+G",
-                                              'Use ChatGPT to explain the currently selected function',
+                                              'Use GPT-3 to explain the currently selected function',
                                               199)
         idaapi.register_action(explain_action)
         idaapi.attach_action_to_menu(self.explain_menu_path, self.explain_action_name, idaapi.SETMENU_APP)
@@ -49,7 +49,7 @@ class GepettoPlugin(idaapi.plugin_t):
                                              'Rename variables',
                                              RenameHandler(),
                                              "Ctrl+Alt+R",
-                                             "Use ChatGPT to rename this function's variables",
+                                             "Use GPT-3 to rename this function's variables",
                                              199)
         idaapi.register_action(rename_action)
         idaapi.attach_action_to_menu(self.rename_menu_path, self.rename_action_name, idaapi.SETMENU_APP)
@@ -95,14 +95,14 @@ def comment_callback(address, view, response):
     idc.set_func_cmt(address, response, 0)
     # Refresh the window so the comment is displayed properly
     view.refresh_view(False)
-    print("ChatGPT query finished!")
+    print("GPT-3 query finished!")
 
 
 # -----------------------------------------------------------------------------
 
 class ExplainHandler(idaapi.action_handler_t):
     """
-    This handler is tasked with querying ChatGPT for an explanation of the
+    This handler is tasked with querying GPT-3 for an explanation of the
     given function. Once the reply is received, it is added as a function
     comment.
     """
@@ -112,7 +112,7 @@ class ExplainHandler(idaapi.action_handler_t):
     def activate(self, ctx):
         decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
         v = ida_hexrays.get_widget_vdui(ctx.widget)
-        query_chatgpt_async("Can you explain what the following C function does and suggest a better name for it?\n"
+        query_gpt_async("Can you explain what the following C function does and suggest a better name for it?\n"
                             + str(decompiler_output),
                             functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=v))
         return 1
@@ -129,11 +129,11 @@ def rename_callback(address, view, response):
     response and sets them in the pseudocode.
     :param address: The address of the function to work on
     :param view: A handle to the decompiler window
-    :param response: The response from ChatGPT
+    :param response: The response from GPT-3
     """
     j = re.search(r"\{[^}]*?\}", response)
     if not j:
-        print(f"Error: couldn't extract a response from ChatGPT's output:\n{response}")
+        print(f"Error: couldn't extract a response from GPT-3's output:\n{response}")
         return
     names = json.loads(j.group(0))
 
@@ -146,13 +146,13 @@ def rename_callback(address, view, response):
             counter += 1
     # Refresh the window to show the new names
     view.refresh_view(True)
-    print(f"ChatGPT query finished! {counter} variable(s) renamed.\nPress F5 if the new names don't appear.")
+    print(f"GPT-3 query finished! {counter} variable(s) renamed.\nPress F5 if the new names don't appear.")
 
 # -----------------------------------------------------------------------------
 
 class RenameHandler(idaapi.action_handler_t):
     """
-    This handler requests new variable names from ChatGPT and updates the
+    This handler requests new variable names from GPT-3 and updates the
     decompiler's output.
     """
     def __init__(self):
@@ -161,7 +161,7 @@ class RenameHandler(idaapi.action_handler_t):
     def activate(self, ctx):
         decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
         v = ida_hexrays.get_widget_vdui(ctx.widget)
-        query_chatgpt_async("Analyze the following C function:\n" + str(decompiler_output) +
+        query_gpt_async("Analyze the following C function:\n" + str(decompiler_output) +
                             "\nSuggest better variable names, reply with a JSON array where keys are the original names"
                             "and values are the proposed names. Do not explain anything, only print the JSON "
                             "dictionary.",
@@ -173,14 +173,14 @@ class RenameHandler(idaapi.action_handler_t):
         return idaapi.AST_ENABLE_ALWAYS
 
 # =============================================================================
-# ChatGPT interaction
+# GPT-3 interaction
 # =============================================================================
 
-def query_chatgpt(query, cb):
+def query_gpt(query, cb):
     """
-    Function which sends a query to ChatGPT and calls a callback when the response is available.
+    Function which sends a query to GPT-3 and calls a callback when the response is available.
     Blocks until the response is received
-    :param query: The request to send to ChatGPT
+    :param query: The request to send to GPT-3
     :param cb: Tu function to which the response will be passed to.
     """
     try:
@@ -195,18 +195,18 @@ def query_chatgpt(query, cb):
         )
         ida_kernwin.execute_sync(functools.partial(cb, response=response.choices[0].text), ida_kernwin.MFF_WRITE)
     except openai.OpenAIError as e:
-        raise print(f"ChatGPT could not complete the request: {str(e)}")
+        raise print(f"GPT-3 could not complete the request: {str(e)}")
 
 # -----------------------------------------------------------------------------
 
-def query_chatgpt_async(query, cb):
+def query_gpt_async(query, cb):
     """
-    Function which sends a query to ChatGPT and calls a callback when the response is available.
-    :param query: The request to send to ChatGPT
+    Function which sends a query to GPT-3 and calls a callback when the response is available.
+    :param query: The request to send to GPT-3
     :param cb: Tu function to which the response will be passed to.
     """
-    print("Request to ChatGPT sent...")
-    t = threading.Thread(target=query_chatgpt, args=[query, cb])
+    print("Request to GPT-3 sent...")
+    t = threading.Thread(target=query_gpt, args=[query, cb])
     t.start()
 
 # =============================================================================
