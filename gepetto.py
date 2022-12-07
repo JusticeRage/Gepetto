@@ -136,7 +136,11 @@ def rename_callback(address, view, response):
     if not j:
         print(f"Error: couldn't extract a response from davinci-003's output:\n{response}")
         return
-    names = json.loads(j.group(0))
+    try:
+        names = json.loads(j.group(0))
+    except json.decoder.JSONDecodeError:
+        print(f"The data returned by the model cannot be parsed. It is dumped below for manual recovery:\n{response}")
+        return
 
     # The rename function needs the start address of the function
     function_addr = idaapi.get_func(address).start_ea
@@ -186,7 +190,7 @@ class RenameHandler(idaapi.action_handler_t):
 # davinci-003 interaction
 # =============================================================================
 
-def query_model(query, cb):
+def query_model(query, cb, max_tokens=2500):
     """
     Function which sends a query to davinci-003 and calls a callback when the response is available.
     Blocks until the response is received
@@ -198,13 +202,28 @@ def query_model(query, cb):
             model="text-davinci-003",
             prompt=query,
             temperature=0.6,
-            max_tokens=2500,
+            max_tokens=max_tokens,
             top_p=1,
             frequency_penalty=1,
             presence_penalty=1,
             timeout=60  # Wait 60 seconds maximum
         )
         ida_kernwin.execute_sync(functools.partial(cb, response=response.choices[0].text), ida_kernwin.MFF_WRITE)
+    except openai.InvalidRequestError as e:
+        # Context length exceeded. Determine the max number of tokens we can ask for and retry.
+        m = re.search(r'maximum context length is (\d+) tokens, however you requested \d+ tokens \((\d+) in your '
+                      r'prompt;', str(e))
+        if not m:
+            print(f"davinci-003 could not complete the request: {str(e)}")
+            return
+        (hard_limit, prompt_tokens) = (int(m.group(1)), int(m.group(2)))
+        max_tokens = hard_limit - prompt_tokens
+        if max_tokens >= 750:
+            print(f"Context length exceeded! Reducing the completion tokens to {max_tokens}...")
+            query_model(query, cb, max_tokens)
+        else:
+            print("Unfortunately, this function is too big to be analyzed with the model's current API limits.")
+
     except openai.OpenAIError as e:
         print(f"davinci-003 could not complete the request: {str(e)}")
     except Exception as e:

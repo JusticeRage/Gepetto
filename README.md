@@ -8,7 +8,8 @@ Here is a simple example of what results it can provide in mere seconds:
 
 ## Setup
 
-Simply drop this script into your IDA plugins folder (`$IDAUSR/plugins`).
+Simply drop this script into your IDA plugins folder (`$IDAUSR/plugins`). By default, on Windows, this should be
+`%AppData%\Hex-Rays\IDA Pro\plugins` (you may need to create the folder).
 
 You will need to add the required packages to IDA's Python installation for the script to work.
 Find which interpreter IDA is using by checking the following registry key: 
