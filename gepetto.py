@@ -139,7 +139,9 @@ def rename_callback(address, view, response):
     try:
         names = json.loads(j.group(0))
     except json.decoder.JSONDecodeError:
-        print(f"The data returned by the model cannot be parsed. It is dumped below for manual recovery:\n{response}")
+        print(f"The data returned by the model cannot be parsed. Asking the model to fix it...")
+        query_model_async("Please fix the following JSON document:\n" + j.group(0),
+                          functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=view))
         return
 
     # The rename function needs the start address of the function

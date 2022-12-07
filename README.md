@@ -21,7 +21,7 @@ Finally, with the corresponding interpreter, simply run:
 ```
 
 ⚠️ You will also need to edit the script and add your own API key, which can be found on [this page](https://beta.openai.com/account/api-keys).
-Please note that davinci-003 queries are not free (although not very expensive) and you will need to setup a payment method.
+Please note that davinci-003 queries are not free (although not very expensive) and you will need to set up a payment method.
 
 ## Usage
 
