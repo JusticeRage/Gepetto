@@ -134,12 +134,14 @@ def rename_callback(address, view, response):
     """
     j = re.search(r"\{[^}]*?\}", response)
     if not j:
-        print(f"Error: couldn't extract a response from davinci-003's output:\n{response}")
+        print(f"Cannot extract valid JSON from the response. Asking the model to fix it...")
+        query_model_async("The JSON document provided in this response is invalid. Can you fix it?\n" + response,
+                          functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=view))
         return
     try:
         names = json.loads(j.group(0))
     except json.decoder.JSONDecodeError:
-        print(f"The data returned by the model cannot be parsed. Asking the model to fix it...")
+        print(f"The JSON document returned is invalid. Asking the model to fix it...")
         query_model_async("Please fix the following JSON document:\n" + j.group(0),
                           functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=view))
         return
