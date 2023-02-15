@@ -92,7 +92,11 @@ def comment_callback(address, view, response):
     response = "\n".join(textwrap.wrap(response, 80, replace_whitespace=False))
 
     # Add the response as a comment in IDA.
-    idc.set_func_cmt(address, response, 0)
+    comment = idc.get_func_cmt(address, 0)
+    if comment and len(comment) > 0:
+        idc.set_func_cmt(address, f'{response}\n{comment}', 0)
+    else:
+        idc.set_func_cmt(address, response, 0)
     # Refresh the window so the comment is displayed properly
     if view:
         view.refresh_view(False)
