@@ -19,16 +19,13 @@ import openai
 # =============================================================================
 
 # Set your API key here, or put it in the OPENAI_API_KEY environment variable.
-openai.api_key = ""
+openai.api_key = None
 model_to_use = 'gpt-3.5-turbo'
-chatsonic_api_key = ""
-bing_u_cookie =""
-rapid_api_key=""
-config_path="C:\\Users\\someone\\tools\\idapro\\plugins\\"
-model_lookup = {'gpt-3.5-turbo': query_model,
-                'CHATSONIC': query_chatsonic_model,
-                'BINGGPT': query_bing_model
-                }
+chatsonic_api_key = None
+bing_u_cookie = None
+rapid_api_key= None
+config_path="C:\\Users\\someone\\idapro\\plugins\\"
+
 
 # Specify the program language. It can be "fr_FR", "zh_CN", or any folder in gepetto-locales.
 # Defaults to English.
@@ -58,11 +55,11 @@ def read_config():
     with open(f"{config_path}gepetto-config.json") as f:
         data = json.load(f)
 
-    openai.api_key = data['openai_api_key']
-    model_to_use = data['model_to_use']
-    chatsonic_api_key = data['chatsonic_api_key']
-    bing_u_cookie = data['bing_u_cookie']
-    rapid_api_key = data['rapid_api_key']
+    openai.api_key = data.get('openai_api_key',None)
+    model_to_use = data.get('model_to_use','gpt-3.5-turbo')
+    chatsonic_api_key = data.get('chatsonic_api_key',None)
+    bing_u_cookie = data.get('bing_u_cookie',None)
+    rapid_api_key = data.get('rapid_api_key',None)
 
 
 class GepettoPlugin(idaapi.plugin_t):
@@ -75,6 +72,10 @@ class GepettoPlugin(idaapi.plugin_t):
     rename_menu_path = "Edit/Gepetto/Rename variables"
     rename_all_sub_action_name="gepetto:rename_all_sub_function"
     rename_all_sub_menu_path="Edit/Gepetto/Rename All sub_ functions"
+    vuln_action_name = "gepetto:vuln_function"
+    vuln_menu_path = "Edit/Gepetto/Find Possible Vulnerability"
+    expl_action_name = "gepetto:expl_function"
+    expl_menu_path = "Edit/Gepetto/Write Python Exploit Sample Script"
     wanted_name = 'Gepetto'
     wanted_hotkey = ''
     comment = _(f"Uses {model_to_use} to enrich the decompiler's output")
@@ -120,7 +121,7 @@ class GepettoPlugin(idaapi.plugin_t):
         # This will rename all small sub_* functions
         # We can itterate across available models so that if one model is down
         # or if we don't have tokens left, we can get output from another
-        '''
+
         rename_all_sub_action = idaapi.action_desc_t(self.rename_all_sub_action_name,
                                                    'Rename all sub_ functions',
                                                    RenameAllSubFunction_handler(),
@@ -129,7 +130,28 @@ class GepettoPlugin(idaapi.plugin_t):
                                                    199)
         idaapi.register_action(rename_all_sub_action)
         idaapi.attach_action_to_menu(self.choose_model_menu_path, self.rename_all_sub_action_name, idaapi.SETMENU_APP)
-        '''
+
+
+        #Function vulnerability Checker
+        vuln_action = idaapi.action_desc_t(self.vuln_action_name,
+                                           'Find possible vulnerability in function',
+                                           VulnHandler(),
+                                           "Ctrl+Alt+V",
+                                           "Use davinci-003 to find possible vulnerability in decompiled function",
+                                           199)
+        idaapi.register_action(vuln_action)
+        idaapi.attach_action_to_menu(self.vuln_menu_path, self.vuln_action_name, idaapi.SETMENU_APP)
+
+        #Function Exploit Creator
+        exploit_action = idaapi.action_desc_t(self.expl_action_name,
+                                              'Create Sample Python Exploit',
+                                              ExploitHandler(),
+                                              "Ctrl+Alt+X",
+                                              "Use davinci-003 to create a sample exploit script in python",
+                                              199)
+        idaapi.register_action(exploit_action)
+        idaapi.attach_action_to_menu(self.expl_menu_path, self.expl_action_name, idaapi.SETMENU_APP)
+
         # Register context menu actions
         self.menu = ContextMenuHooks()
         self.menu.hook()
@@ -143,7 +165,9 @@ class GepettoPlugin(idaapi.plugin_t):
         idaapi.detach_action_from_menu(self.explain_menu_path, self.explain_action_name)
         idaapi.detach_action_from_menu(self.rename_menu_path, self.rename_action_name)
         idaapi.detach_action_from_menu(self.choose_model_menu_path, self.choose_model_action_name)
-        #idaapi.detach_action_from_menu(self.rename_all_sub_menu_path, self.rename_all_sub_action_name)
+        idaapi.detach_action_from_menu(self.rename_all_sub_menu_path, self.rename_all_sub_action_name)
+        idaapi.detach_action_from_menu(self.vuln_menu_path, self.vuln_action_name)
+        idaapi.detach_action_from_menu(self.expl_menu_path, self.expl_action_name)
         if self.menu:
             self.menu.unhook()
         return
@@ -255,6 +279,93 @@ class ExplainHandler(idaapi.action_handler_t):
     # This action is always available.
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
+
+
+# -----------------------------------------------------------------------------
+
+class RenameAllSubFunction_handler(idaapi.action_handler_t):
+    """
+    Action handler that renames all functions that start with 'sub_' in the current IDB.
+    """
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        self.rename_all_funcs(ctx)
+        return 1
+
+    def rename_all_funcs(self, ctx):
+        """
+        Renames all small functions that start with 'sub_' in the current IDB if the decompiled output is less than 800 characters long.
+        """
+        for function_ea in idautils.Functions():
+            function_name = idc.GetFunctionName(function_ea)
+            if function_name.startswith("sub_"):
+                function_decomp = ida_hexrays.decompile(function_ea)
+                if function_decomp and len(function_decomp.code) < 800:
+                    new_name = self.get_new_name(function_ea,function_decomp)
+                    idc.MakeName(function_ea, new_name)
+
+    def update(self, ctx):
+        """
+        This method is called by IDA when the action is to be displayed in a menu or toolbar.
+        """
+        return idaapi.AST_ENABLE_ALWAYS
+
+    def get_new_name(self,function_add,decompiler_output):
+        """
+        Returns a new name for the given decompiler output.
+        """
+        query_model_async(_("Analyze the following C function:\n{decompiler_output}"
+                            "\nSuggest a better function name, reply with a JSON array where the key is the original names "
+                            "and the value is the proposed names. Do not explain anything, only print the JSON "
+                            "dictionary.").format(decompiler_output=str(decompiler_output)),
+                          functools.partial(rename_function_callback, address=function_add))
+        return 1
+
+# -----------------------------------------------------------------------------
+class VulnHandler(idaapi.action_handler_t):
+    """
+    This handler is tasked with querying davinci-003 for a possible check of vulneranilities on a given function.
+    Once the reply is received its added to the function as a comment.
+    """
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
+        v = ida_hexrays.get_widget_vdui(ctx.widget)
+        query_model_async("Can you find the vulnerabilty in the following C function and suggest the possible way to exploit it?\n"
+        + str(decompiler_output),
+        functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=v))
+        return 1
+
+    # This action is always available.
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+# -----------------------------------------------------------------------------
+class ExploitHandler(idaapi.action_handler_t):
+    """
+    This handler requests a python exploit for the vulnerable function
+    """
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        decompiler_ouput = ida_hexrays.decompile(idaapi.get_screen_ea())
+        v = ida_hexrays.get_widget_vdui(ctx.widget)
+        query_model_async("Find the vulnerability in the following C function:\n" + str(decompiler_ouput) +
+        "\nWrite a python one liner to exploit the function",
+        functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=v))
+        return 1
+
+    # This action is always available.
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+# -----------------------------------------------------------------------------
+
+def rename_function_callback(address, response, retries=0)
 
 
 # -----------------------------------------------------------------------------
@@ -493,22 +604,29 @@ def query_model_async(query, cb):
     """
     Function which sends a query to model and calls a callback when the response is available.
     :param query: The request to send to model
-    :param cb: Tu function to which the response will be passed to.
+    :param cb: The function to which the response will be passed to.
     """
     print(_(f"Request to {model_to_use} sent..."))
     t = threading.Thread(target=model_lookup[model_to_use], args=[query, cb])
     t.start()
+
+# Model map
+
+model_lookup = {'gpt-3.5-turbo': query_model,
+                'CHATSONIC': query_sonic_model,
+                'BINGGPT': query_bing_model
+                }
 
 # =============================================================================
 # Main
 # =============================================================================
 
 def PLUGIN_ENTRY():
+    read_config()
     if not openai.api_key:
         openai.api_key = os.getenv("OPENAI_API_KEY")
         if not openai.api_key:
-            print(_("Please edit this script to insert your OpenAI API key!"))
+            print(_("Please edit the gepetto-config to insert your OpenAI API key!"))
             raise ValueError("No valid OpenAI API key found")
-    read_config()
 
     return GepettoPlugin()
