@@ -365,7 +365,7 @@ class ExploitHandler(idaapi.action_handler_t):
         return idaapi.AST_ENABLE_ALWAYS
 # -----------------------------------------------------------------------------
 
-def rename_function_callback(address, response, retries=0)
+# def rename_function_callback(address, response, retries=0)
 
 
 # -----------------------------------------------------------------------------
