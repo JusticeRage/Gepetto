@@ -21,7 +21,6 @@ Finally, with the corresponding interpreter, simply run:
 ```
 
 ⚠️ You will also need to edit the script and add your own API key, which can be found on [this page](https://beta.openai.com/account/api-keys).
-You can drop the key in gepetto-config.json ; just make sure to edit the config_path variable in the script to point it in the right direction.
 Please note that gpt-3.5-turbo queries are not free (although not very expensive) and you will need to set up a payment method.
 
 ⚠️ Warning ⚠️
@@ -32,6 +31,13 @@ If you wish to use other model providers like ChatSonic (still GPT3.5 but differ
 For ChatSonic refer to https://docs.writesonic.com/reference/finding-your-api-key
 For BingGPT we use https://rapidapi.com/stefano-pochet-stefano-pochet-default/api/chatgpt-4-bing-ai-chat-api .  You'll need to input your rapidapi key and get you bing_u_cookie.
 The cookie tends to expire but BinGPT is pretty powerfull; it leverages GPT 4 and has internet connectivity.
+
+⚠️ Warning ⚠️
+The rename all sub_* functions will trigger A LOT of queries to openAI. The intent of that feature is to quickly name functions we haven't looked at yet and hopefully
+help the analyst decide what functions are worth ignoring and which ones are worth focusing on.
+This feature should be run as a last step before drilling down during the analysis process.
+Ensure you use other methods at your disposal like lumina, idamagicstrings etc. to bulk rename sub_* functions before you run this. 
+You may also want to run it with the models for which you have a free trial/subscription before using whichever model you pay a subscription for.
 
 ## Usage
 
