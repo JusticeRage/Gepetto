@@ -5,9 +5,11 @@ import re
 import textwrap
 import threading
 import gettext
+import requests
 import tkinter as tk
 import urllib.parse
 
+import idautils
 import idaapi
 import ida_hexrays
 import ida_kernwin
@@ -19,17 +21,16 @@ import openai
 # =============================================================================
 
 # Set your API key here, or put it in the OPENAI_API_KEY environment variable.
-openai.api_key = None
+openai.api_key = "sk-"
 model_to_use = 'gpt-3.5-turbo'
-chatsonic_api_key = None
-bing_u_cookie = None
-rapid_api_key= None
-config_path="C:\\Users\\someone\\idapro\\plugins\\"
-
+chatsonic_api_key = ""
+bing_u_cookie = "---"
+rapid_api_key= ""
 
 # Specify the program language. It can be "fr_FR", "zh_CN", or any folder in gepetto-locales.
 # Defaults to English.
 language = ""
+
 
 # =============================================================================
 # END
@@ -46,22 +47,6 @@ _ = translate.gettext
 # Setup the context menu and hotkey in IDA
 # =============================================================================
 
-def read_config():
-    global bing_u_cookie
-    global model_to_use
-    global chatsonic_api_key
-    global rapid_api_key
-
-    with open(f"{config_path}gepetto-config.json") as f:
-        data = json.load(f)
-
-    openai.api_key = data.get('openai_api_key',None)
-    model_to_use = data.get('model_to_use','gpt-3.5-turbo')
-    chatsonic_api_key = data.get('chatsonic_api_key',None)
-    bing_u_cookie = data.get('bing_u_cookie',None)
-    rapid_api_key = data.get('rapid_api_key',None)
-
-
 class GepettoPlugin(idaapi.plugin_t):
     flags = 0
     explain_action_name = "gepetto:explain_function"
@@ -70,6 +55,8 @@ class GepettoPlugin(idaapi.plugin_t):
     choose_model_menu_path = "Edit/Gepetto/Choose Model"
     rename_action_name = "gepetto:rename_function"
     rename_menu_path = "Edit/Gepetto/Rename variables"
+    rename_function_action_name = "gepetto:rename_sub"
+    rename_function_menu_path = "Edit/Gepetto/Rename function"
     rename_all_sub_action_name="gepetto:rename_all_sub_function"
     rename_all_sub_menu_path="Edit/Gepetto/Rename All sub_ functions"
     vuln_action_name = "gepetto:vuln_function"
@@ -87,26 +74,6 @@ class GepettoPlugin(idaapi.plugin_t):
         if not ida_hexrays.init_hexrays_plugin():
             return idaapi.PLUGIN_SKIP
 
-        # Function explaining action
-        explain_action = idaapi.action_desc_t(self.explain_action_name,
-                                              _('Explain function'),
-                                              ExplainHandler(),
-                                              "Ctrl+Alt+G",
-                                              _('Use gpt-3.5-turbo to explain the currently selected function'),
-                                              199)
-        idaapi.register_action(explain_action)
-        idaapi.attach_action_to_menu(self.explain_menu_path, self.explain_action_name, idaapi.SETMENU_APP)
-
-        # Variable renaming action
-        rename_action = idaapi.action_desc_t(self.rename_action_name,
-                                             _('Rename variables'),
-                                             RenameHandler(),
-                                             "Ctrl+Alt+R",
-                                             _("Use gpt-3.5-turbo to rename this function's variables"),
-                                             199)
-        idaapi.register_action(rename_action)
-        idaapi.attach_action_to_menu(self.rename_menu_path, self.rename_action_name, idaapi.SETMENU_APP)
-
         # Model choosing action
         choose_model_action = idaapi.action_desc_t(self.choose_model_action_name,
                                                    'Choose model',
@@ -117,27 +84,42 @@ class GepettoPlugin(idaapi.plugin_t):
         idaapi.register_action(choose_model_action)
         idaapi.attach_action_to_menu(self.choose_model_menu_path, self.choose_model_action_name, idaapi.SETMENU_APP)
 
-        # TODO: Rename all sub_ functions action
-        # This will rename all small sub_* functions
-        # We can itterate across available models so that if one model is down
-        # or if we don't have tokens left, we can get output from another
+        # Function explaining action
+        explain_action = idaapi.action_desc_t(self.explain_action_name,
+                                              _('Explain function'),
+                                              ExplainHandler(),
+                                              "Ctrl+Alt+G",
+                                              _(f'Use {model_to_use} to explain the currently selected function'),
+                                              199)
+        idaapi.register_action(explain_action)
+        idaapi.attach_action_to_menu(self.explain_menu_path, self.explain_action_name, idaapi.SETMENU_APP)
 
-        rename_all_sub_action = idaapi.action_desc_t(self.rename_all_sub_action_name,
-                                                   'Rename all sub_ functions',
-                                                   RenameAllSubFunction_handler(),
-                                                   None,
-                                                   "Apply renaming to all sub_ functions",
-                                                   199)
-        idaapi.register_action(rename_all_sub_action)
-        idaapi.attach_action_to_menu(self.choose_model_menu_path, self.rename_all_sub_action_name, idaapi.SETMENU_APP)
+        # Variable renaming action
+        rename_action = idaapi.action_desc_t(self.rename_action_name,
+                                             _('Rename variables'),
+                                             RenameHandler(),
+                                             "Ctrl+Alt+R",
+                                             _(f"Use {model_to_use} to rename this function's variables"),
+                                             199)
+        idaapi.register_action(rename_action)
+        idaapi.attach_action_to_menu(self.rename_menu_path, self.rename_action_name, idaapi.SETMENU_APP)
 
+        # Function renaming action
+        rename_function_action = idaapi.action_desc_t(self.rename_function_action_name,
+                                             _('Rename function'),
+                                             RenameFunctionHandler(),
+                                             "Ctrl+Alt+T",
+                                             _(f"Use {model_to_use} to rename this function's variables"),
+                                             199)
+        idaapi.register_action(rename_function_action)
+        idaapi.attach_action_to_menu(self.rename_function_menu_path, self.rename_function_action_name, idaapi.SETMENU_APP)
 
         #Function vulnerability Checker
         vuln_action = idaapi.action_desc_t(self.vuln_action_name,
                                            'Find possible vulnerability in function',
                                            VulnHandler(),
                                            "Ctrl+Alt+V",
-                                           "Use davinci-003 to find possible vulnerability in decompiled function",
+                                           f"Use {model_to_use} to find possible vulnerability in decompiled function",
                                            199)
         idaapi.register_action(vuln_action)
         idaapi.attach_action_to_menu(self.vuln_menu_path, self.vuln_action_name, idaapi.SETMENU_APP)
@@ -147,10 +129,23 @@ class GepettoPlugin(idaapi.plugin_t):
                                               'Create Sample Python Exploit',
                                               ExploitHandler(),
                                               "Ctrl+Alt+X",
-                                              "Use davinci-003 to create a sample exploit script in python",
+                                              f"Use {model_to_use} to create a sample exploit script in python",
                                               199)
         idaapi.register_action(exploit_action)
         idaapi.attach_action_to_menu(self.expl_menu_path, self.expl_action_name, idaapi.SETMENU_APP)
+
+        # This will rename all small sub_* functions
+        # We can itterate across available models so that if one model is down
+        # or if we don't have tokens left, we can get output from another
+
+        rename_all_sub_action = idaapi.action_desc_t(self.rename_all_sub_action_name,
+                                                   'Rename all sub_ functions',
+                                                   RenameAllSubFunction_handler(),
+                                                   None,
+                                                   f"Apply renaming using {model_to_use} to all sub_ functions",
+                                                   199)
+        idaapi.register_action(rename_all_sub_action)
+        idaapi.attach_action_to_menu(self.choose_model_menu_path, self.rename_all_sub_action_name, idaapi.SETMENU_APP)
 
         # Register context menu actions
         self.menu = ContextMenuHooks()
@@ -168,6 +163,7 @@ class GepettoPlugin(idaapi.plugin_t):
         idaapi.detach_action_from_menu(self.rename_all_sub_menu_path, self.rename_all_sub_action_name)
         idaapi.detach_action_from_menu(self.vuln_menu_path, self.vuln_action_name)
         idaapi.detach_action_from_menu(self.expl_menu_path, self.expl_action_name)
+        idaapi.detach_action_from_menu(self.rename_function_menu_path, self.rename_function_action_name)
         if self.menu:
             self.menu.unhook()
         return
@@ -180,6 +176,9 @@ class ContextMenuHooks(idaapi.UI_Hooks):
         if idaapi.get_widget_type(form) == idaapi.BWN_PSEUDOCODE:
             idaapi.attach_action_to_popup(form, popup, GepettoPlugin.explain_action_name, "Gepetto/")
             idaapi.attach_action_to_popup(form, popup, GepettoPlugin.rename_action_name, "Gepetto/")
+            idaapi.attach_action_to_popup(form, popup, GepettoPlugin.rename_function_action_name, "Gepetto/")
+            idaapi.attach_action_to_popup(form, popup, GepettoPlugin.vuln_action_name, "Gepetto/")
+            idaapi.attach_action_to_popup(form, popup, GepettoPlugin.expl_action_name, "Gepetto/")
 
 # -----------------------------------------------------------------------------
 
@@ -227,16 +226,19 @@ class ChooseModelHandler(idaapi.action_handler_t):
         def option1():
             global model_to_use
             model_to_use = 'gpt-3.5-turbo'
+            print(f'Now using {model_to_use}')
             window.destroy()
 
         def option2():
             global model_to_use
-            model_to_use = 'ChatSonic'
+            model_to_use = 'CHATSONIC'
+            print(f'Now using {model_to_use}')
             window.destroy()
 
         def option3():
             global model_to_use
             model_to_use = 'BINGGPT'
+            print(f'Now using {model_to_use}')
             window.destroy()
 
         window = tk.Tk()
@@ -293,6 +295,7 @@ class RenameAllSubFunction_handler(idaapi.action_handler_t):
 
     def activate(self, ctx):
         self.rename_all_funcs(ctx)
+        print(f'Done renaming all sub_* ! Make sure to refresh decompiler views')
         return 1
 
     def rename_all_funcs(self, ctx):
@@ -300,12 +303,12 @@ class RenameAllSubFunction_handler(idaapi.action_handler_t):
         Renames all small functions that start with 'sub_' in the current IDB if the decompiled output is less than 800 characters long.
         """
         for function_ea in idautils.Functions():
-            function_name = idc.GetFunctionName(function_ea)
+            function_name = idaapi.get_func_name(function_ea)
             if function_name.startswith("sub_"):
                 function_decomp = ida_hexrays.decompile(function_ea)
-                if function_decomp and len(function_decomp.code) < 800:
-                    new_name = self.get_new_name(function_ea,function_decomp)
-                    idc.MakeName(function_ea, new_name)
+                if function_decomp and len(str(function_decomp)) < 800:
+                    self.get_new_name(function_ea,function_decomp)
+
 
     def update(self, ctx):
         """
@@ -321,7 +324,7 @@ class RenameAllSubFunction_handler(idaapi.action_handler_t):
                             "\nSuggest a better function name, reply with a JSON array where the key is the original names "
                             "and the value is the proposed names. Do not explain anything, only print the JSON "
                             "dictionary.").format(decompiler_output=str(decompiler_output)),
-                          functools.partial(rename_function_callback, address=function_add))
+                          functools.partial(rename_function_callback, address=function_add,view=None))
         return 1
 
 # -----------------------------------------------------------------------------
@@ -365,8 +368,48 @@ class ExploitHandler(idaapi.action_handler_t):
         return idaapi.AST_ENABLE_ALWAYS
 # -----------------------------------------------------------------------------
 
-# def rename_function_callback(address, response, retries=0)
-
+def rename_function_callback(address, response, view=None, retries=0,):
+    """
+    Callback that extracts a JSON array of old function name and new name from the
+    response and set it for the fucnction.
+    :param address: The address of the function to work on
+    :param view: A handle to the decompiler window
+    :param response: The response from gpt-3.5-turbo
+    :param retries: The number of times that we received invalid JSON
+    """
+    j = re.search(r"\{[^}]*?\}", response)
+    if not j:
+        if retries >= 3:  # Give up obtaining the JSON after 3 times.
+            print(_("Could not obtain valid data from the model, giving up. Dumping the response for manual import:"))
+            print(response)
+            return
+        print(_("Cannot extract valid JSON from the response. Asking the model to fix it..."))
+        query_model_async(f"The JSON document provided in this response is invalid. Can you fix it?\n {response}",
+                              functools.partial(rename_function_callback,
+                                                address=address,
+                                                view=None,
+                                                retries=retries + 1))
+        return
+    try:
+        names = json.loads(j.group(0))
+    except json.decoder.JSONDecodeError:
+        if retries >= 3:  # Give up fixing the JSON after 3 times.
+            print(_("Could not obtain valid data from the model, giving up. Dumping the response for manual import:"))
+            print(response)
+            return
+        print(_("The JSON document returned is invalid. Asking the model to fix it..."))
+        query_model_async(_("Please fix the following JSON document:\n{json}").format(json=j.group(0)),
+                          functools.partial(rename_function_callback,
+                                            address=address,
+                                            view=None,
+                                            retries=retries + 1))
+        return
+    idc.MakeName(address, names[0])
+    idc.SetFunctionName(address, names[0])
+    # Refresh the window to show the new names
+    if view:
+        view.refresh_view(True)
+    print(_(f"{model_to_use} query finished! function at address {address} renamed."))
 
 # -----------------------------------------------------------------------------
 
@@ -445,6 +488,30 @@ class RenameHandler(idaapi.action_handler_t):
                             "and values are the proposed names. Do not explain anything, only print the JSON "
                             "dictionary.").format(decompiler_output=str(decompiler_output)),
                           functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=v))
+        return 1
+
+    # This action is always available.
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
+# -----------------------------------------------------------------------------
+
+class RenameFunctionHandler(idaapi.action_handler_t):
+    """
+    This handler requests new function name from model and updates the
+    decompiler's output.
+    """
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
+        v = ida_hexrays.get_widget_vdui(ctx.widget)
+        query_model_async(_("Analyze the following C function:\n{decompiler_output}"
+                            "\nSuggest a better function name, reply with a JSON array where the key is the original name "
+                            "and the value is the proposed name. Do not explain anything, only print the JSON "
+                            "dictionary.").format(decompiler_output=str(decompiler_output)),
+                          functools.partial(rename_function_callback, address=function_add, view=v))
         return 1
 
     # This action is always available.
@@ -622,7 +689,6 @@ model_lookup = {'gpt-3.5-turbo': query_model,
 # =============================================================================
 
 def PLUGIN_ENTRY():
-    read_config()
     if not openai.api_key:
         openai.api_key = os.getenv("OPENAI_API_KEY")
         if not openai.api_key:
