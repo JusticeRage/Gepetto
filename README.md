@@ -27,6 +27,18 @@ Please note that gpt-3.5-turbo queries are not free (although not very expensive
 Gepetto is now using OpenAI's latest gpt-3.5-turbo model. If you upgraded recently, make sure you're using a recent
 version of the `openai` Python package. The `requirements.txt` file has been upgraded accordingly.
 
+If you wish to use other model providers like ChatSonic (still GPT3.5 but different api provider) or BingGPT, make sure to add the necessary API keys.
+For ChatSonic refer to https://docs.writesonic.com/reference/finding-your-api-key
+For BingGPT we use https://rapidapi.com/stefano-pochet-stefano-pochet-default/api/chatgpt-4-bing-ai-chat-api .  You'll need to input your rapidapi key and get you bing_u_cookie.
+The cookie tends to expire but BinGPT is pretty powerfull; it leverages GPT 4 and has internet connectivity.
+
+⚠️ Warning ⚠️
+The rename all sub_* functions will trigger A LOT of queries to openAI. The intent of that feature is to quickly name functions we haven't looked at yet and hopefully
+help the analyst decide what functions are worth ignoring and which ones are worth focusing on.
+This feature should be run as a last step before drilling down during the analysis process.
+Ensure you use other methods at your disposal like lumina, idamagicstrings etc. to bulk rename sub_* functions before you run this. 
+You may also want to run it with the models for which you have a free trial/subscription before using whichever model you pay a subscription for.
+
 ## Usage
 
 Once the plugin is installed properly, you should be able to invoke it from the context menu of IDA's pseudocode window,

@@ -5,7 +5,11 @@ import re
 import textwrap
 import threading
 import gettext
+import requests
+import tkinter as tk
+import urllib.parse
 
+import idautils
 import idaapi
 import ida_hexrays
 import ida_kernwin
@@ -17,11 +21,16 @@ import openai
 # =============================================================================
 
 # Set your API key here, or put it in the OPENAI_API_KEY environment variable.
-openai.api_key = ""
+openai.api_key = "sk-"
+model_to_use = 'gpt-3.5-turbo'
+chatsonic_api_key = ""
+bing_u_cookie = "---"
+rapid_api_key= ""
 
 # Specify the program language. It can be "fr_FR", "zh_CN", or any folder in gepetto-locales.
 # Defaults to English.
 language = ""
+
 
 # =============================================================================
 # END
@@ -41,12 +50,22 @@ _ = translate.gettext
 class GepettoPlugin(idaapi.plugin_t):
     flags = 0
     explain_action_name = "gepetto:explain_function"
-    explain_menu_path = "Edit/Gepetto/" + _("Explain function")
+    explain_menu_path = "Edit/Gepetto/Explain function"
+    choose_model_action_name= "gepetto:choose_model"
+    choose_model_menu_path = "Edit/Gepetto/Choose Model"
     rename_action_name = "gepetto:rename_function"
-    rename_menu_path = "Edit/Gepetto/" + _("Rename variables")
+    rename_menu_path = "Edit/Gepetto/Rename variables"
+    rename_function_action_name = "gepetto:rename_sub"
+    rename_function_menu_path = "Edit/Gepetto/Rename function"
+    rename_all_sub_action_name="gepetto:rename_all_sub_function"
+    rename_all_sub_menu_path="Edit/Gepetto/Rename All sub_ functions"
+    vuln_action_name = "gepetto:vuln_function"
+    vuln_menu_path = "Edit/Gepetto/Find Possible Vulnerability"
+    expl_action_name = "gepetto:expl_function"
+    expl_menu_path = "Edit/Gepetto/Write Python Exploit Sample Script"
     wanted_name = 'Gepetto'
     wanted_hotkey = ''
-    comment = _("Uses gpt-3.5-turbo to enrich the decompiler's output")
+    comment = _(f"Uses {model_to_use} to enrich the decompiler's output")
     help = _("See usage instructions on GitHub")
     menu = None
 
@@ -55,12 +74,22 @@ class GepettoPlugin(idaapi.plugin_t):
         if not ida_hexrays.init_hexrays_plugin():
             return idaapi.PLUGIN_SKIP
 
+        # Model choosing action
+        choose_model_action = idaapi.action_desc_t(self.choose_model_action_name,
+                                                   'Choose model',
+                                                   ChooseModelHandler(),
+                                                   None,
+                                                   "Choose which model to use: davinci-003 or ChatSonic",
+                                                   199)
+        idaapi.register_action(choose_model_action)
+        idaapi.attach_action_to_menu(self.choose_model_menu_path, self.choose_model_action_name, idaapi.SETMENU_APP)
+
         # Function explaining action
         explain_action = idaapi.action_desc_t(self.explain_action_name,
                                               _('Explain function'),
                                               ExplainHandler(),
                                               "Ctrl+Alt+G",
-                                              _('Use gpt-3.5-turbo to explain the currently selected function'),
+                                              _(f'Use {model_to_use} to explain the currently selected function'),
                                               199)
         idaapi.register_action(explain_action)
         idaapi.attach_action_to_menu(self.explain_menu_path, self.explain_action_name, idaapi.SETMENU_APP)
@@ -70,10 +99,53 @@ class GepettoPlugin(idaapi.plugin_t):
                                              _('Rename variables'),
                                              RenameHandler(),
                                              "Ctrl+Alt+R",
-                                             _("Use gpt-3.5-turbo to rename this function's variables"),
+                                             _(f"Use {model_to_use} to rename this function's variables"),
                                              199)
         idaapi.register_action(rename_action)
         idaapi.attach_action_to_menu(self.rename_menu_path, self.rename_action_name, idaapi.SETMENU_APP)
+
+        # Function renaming action
+        rename_function_action = idaapi.action_desc_t(self.rename_function_action_name,
+                                             _('Rename function'),
+                                             RenameFunctionHandler(),
+                                             "Ctrl+Alt+T",
+                                             _(f"Use {model_to_use} to rename this function's variables"),
+                                             199)
+        idaapi.register_action(rename_function_action)
+        idaapi.attach_action_to_menu(self.rename_function_menu_path, self.rename_function_action_name, idaapi.SETMENU_APP)
+
+        #Function vulnerability Checker
+        vuln_action = idaapi.action_desc_t(self.vuln_action_name,
+                                           'Find possible vulnerability in function',
+                                           VulnHandler(),
+                                           "Ctrl+Alt+V",
+                                           f"Use {model_to_use} to find possible vulnerability in decompiled function",
+                                           199)
+        idaapi.register_action(vuln_action)
+        idaapi.attach_action_to_menu(self.vuln_menu_path, self.vuln_action_name, idaapi.SETMENU_APP)
+
+        #Function Exploit Creator
+        exploit_action = idaapi.action_desc_t(self.expl_action_name,
+                                              'Create Sample Python Exploit',
+                                              ExploitHandler(),
+                                              "Ctrl+Alt+X",
+                                              f"Use {model_to_use} to create a sample exploit script in python",
+                                              199)
+        idaapi.register_action(exploit_action)
+        idaapi.attach_action_to_menu(self.expl_menu_path, self.expl_action_name, idaapi.SETMENU_APP)
+
+        # This will rename all small sub_* functions
+        # We can itterate across available models so that if one model is down
+        # or if we don't have tokens left, we can get output from another
+
+        rename_all_sub_action = idaapi.action_desc_t(self.rename_all_sub_action_name,
+                                                   'Rename all sub_ functions',
+                                                   RenameAllSubFunction_handler(),
+                                                   None,
+                                                   f"Apply renaming using {model_to_use} to all sub_ functions",
+                                                   199)
+        idaapi.register_action(rename_all_sub_action)
+        idaapi.attach_action_to_menu(self.choose_model_menu_path, self.rename_all_sub_action_name, idaapi.SETMENU_APP)
 
         # Register context menu actions
         self.menu = ContextMenuHooks()
@@ -87,6 +159,11 @@ class GepettoPlugin(idaapi.plugin_t):
     def term(self):
         idaapi.detach_action_from_menu(self.explain_menu_path, self.explain_action_name)
         idaapi.detach_action_from_menu(self.rename_menu_path, self.rename_action_name)
+        idaapi.detach_action_from_menu(self.choose_model_menu_path, self.choose_model_action_name)
+        idaapi.detach_action_from_menu(self.rename_all_sub_menu_path, self.rename_all_sub_action_name)
+        idaapi.detach_action_from_menu(self.vuln_menu_path, self.vuln_action_name)
+        idaapi.detach_action_from_menu(self.expl_menu_path, self.expl_action_name)
+        idaapi.detach_action_from_menu(self.rename_function_menu_path, self.rename_function_action_name)
         if self.menu:
             self.menu.unhook()
         return
@@ -99,6 +176,9 @@ class ContextMenuHooks(idaapi.UI_Hooks):
         if idaapi.get_widget_type(form) == idaapi.BWN_PSEUDOCODE:
             idaapi.attach_action_to_popup(form, popup, GepettoPlugin.explain_action_name, "Gepetto/")
             idaapi.attach_action_to_popup(form, popup, GepettoPlugin.rename_action_name, "Gepetto/")
+            idaapi.attach_action_to_popup(form, popup, GepettoPlugin.rename_function_action_name, "Gepetto/")
+            idaapi.attach_action_to_popup(form, popup, GepettoPlugin.vuln_action_name, "Gepetto/")
+            idaapi.attach_action_to_popup(form, popup, GepettoPlugin.expl_action_name, "Gepetto/")
 
 # -----------------------------------------------------------------------------
 
@@ -126,14 +206,64 @@ def comment_callback(address, view, response):
     # Refresh the window so the comment is displayed properly
     if view:
         view.refresh_view(False)
-    print(_("gpt-3.5-turbo query finished!"))
+    print(_(f"{model_to_use} query finished!"))
 
+
+# -----------------------------------------------------------------------------
+
+class ChooseModelHandler(idaapi.action_handler_t):
+    """
+    This handler is tasked with choosing in between different llm models
+    """
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+    def activate(self, ctx):
+        self.popup()
+        return 1
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+    def popup(self):
+        def option1():
+            global model_to_use
+            model_to_use = 'gpt-3.5-turbo'
+            print(f'Now using {model_to_use}')
+            window.destroy()
+
+        def option2():
+            global model_to_use
+            model_to_use = 'CHATSONIC'
+            print(f'Now using {model_to_use}')
+            window.destroy()
+
+        def option3():
+            global model_to_use
+            model_to_use = 'BINGGPT'
+            print(f'Now using {model_to_use}')
+            window.destroy()
+
+        window = tk.Tk()
+        window.title("Choose an model")
+        window.geometry("200x150")
+
+        label = tk.Label(window, text="Choose a model:")
+        label.pack()
+
+        button1 = tk.Button(window, text="gpt-3.5-turbo", command=option1)
+        button1.pack(pady=5)
+
+        button2 = tk.Button(window, text="CHATSONIC", command=option2)
+        button2.pack(pady=5)
+
+        button3 = tk.Button(window, text="BINGGPT", command=option3)
+        button3.pack(pady=5)
+
+        window.mainloop()
 
 # -----------------------------------------------------------------------------
 
 class ExplainHandler(idaapi.action_handler_t):
     """
-    This handler is tasked with querying gpt-3.5-turbo for an explanation of the
+    This handler is tasked with querying a model for an explanation of the
     given function. Once the reply is received, it is added as a function
     comment.
     """
@@ -151,6 +281,135 @@ class ExplainHandler(idaapi.action_handler_t):
     # This action is always available.
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
+
+
+# -----------------------------------------------------------------------------
+
+class RenameAllSubFunction_handler(idaapi.action_handler_t):
+    """
+    Action handler that renames all functions that start with 'sub_' in the current IDB.
+    """
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        self.rename_all_funcs(ctx)
+        print(f'Done renaming all sub_* ! Make sure to refresh decompiler views')
+        return 1
+
+    def rename_all_funcs(self, ctx):
+        """
+        Renames all small functions that start with 'sub_' in the current IDB if the decompiled output is less than 800 characters long.
+        """
+        for function_ea in idautils.Functions():
+            function_name = idaapi.get_func_name(function_ea)
+            if function_name.startswith("sub_"):
+                function_decomp = ida_hexrays.decompile(function_ea)
+                if function_decomp and len(str(function_decomp)) < 800:
+                    self.get_new_name(function_ea,function_decomp)
+
+
+    def update(self, ctx):
+        """
+        This method is called by IDA when the action is to be displayed in a menu or toolbar.
+        """
+        return idaapi.AST_ENABLE_ALWAYS
+
+    def get_new_name(self,function_add,decompiler_output):
+        """
+        Returns a new name for the given decompiler output.
+        """
+        query_model_async(_("Analyze the following C function:\n{decompiler_output}"
+                            "\nSuggest a better function name, reply with a JSON array where the key is the original names "
+                            "and the value is the proposed names. Do not explain anything, only print the JSON "
+                            "dictionary.").format(decompiler_output=str(decompiler_output)),
+                          functools.partial(rename_function_callback, address=function_add,view=None))
+        return 1
+
+# -----------------------------------------------------------------------------
+class VulnHandler(idaapi.action_handler_t):
+    """
+    This handler is tasked with querying davinci-003 for a possible check of vulneranilities on a given function.
+    Once the reply is received its added to the function as a comment.
+    """
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
+        v = ida_hexrays.get_widget_vdui(ctx.widget)
+        query_model_async("Can you find the vulnerabilty in the following C function and suggest the possible way to exploit it?\n"
+        + str(decompiler_output),
+        functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=v))
+        return 1
+
+    # This action is always available.
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+# -----------------------------------------------------------------------------
+class ExploitHandler(idaapi.action_handler_t):
+    """
+    This handler requests a python exploit for the vulnerable function
+    """
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        decompiler_ouput = ida_hexrays.decompile(idaapi.get_screen_ea())
+        v = ida_hexrays.get_widget_vdui(ctx.widget)
+        query_model_async("Find the vulnerability in the following C function:\n" + str(decompiler_ouput) +
+        "\nWrite a python one liner to exploit the function",
+        functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=v))
+        return 1
+
+    # This action is always available.
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+# -----------------------------------------------------------------------------
+
+def rename_function_callback(address, response, view=None, retries=0,):
+    """
+    Callback that extracts a JSON array of old function name and new name from the
+    response and set it for the fucnction.
+    :param address: The address of the function to work on
+    :param view: A handle to the decompiler window
+    :param response: The response from gpt-3.5-turbo
+    :param retries: The number of times that we received invalid JSON
+    """
+    j = re.search(r"\{[^}]*?\}", response)
+    if not j:
+        if retries >= 3:  # Give up obtaining the JSON after 3 times.
+            print(_("Could not obtain valid data from the model, giving up. Dumping the response for manual import:"))
+            print(response)
+            return
+        print(_("Cannot extract valid JSON from the response. Asking the model to fix it..."))
+        query_model_async(f"The JSON document provided in this response is invalid. Can you fix it?\n {response}",
+                              functools.partial(rename_function_callback,
+                                                address=address,
+                                                view=None,
+                                                retries=retries + 1))
+        return
+    try:
+        names = json.loads(j.group(0))
+    except json.decoder.JSONDecodeError:
+        if retries >= 3:  # Give up fixing the JSON after 3 times.
+            print(_("Could not obtain valid data from the model, giving up. Dumping the response for manual import:"))
+            print(response)
+            return
+        print(_("The JSON document returned is invalid. Asking the model to fix it..."))
+        query_model_async(_("Please fix the following JSON document:\n{json}").format(json=j.group(0)),
+                          functools.partial(rename_function_callback,
+                                            address=address,
+                                            view=None,
+                                            retries=retries + 1))
+        return
+    idc.MakeName(address, names[0])
+    idc.SetFunctionName(address, names[0])
+    # Refresh the window to show the new names
+    if view:
+        view.refresh_view(True)
+    print(_(f"{model_to_use} query finished! function at address {address} renamed."))
 
 # -----------------------------------------------------------------------------
 
@@ -170,12 +429,11 @@ def rename_callback(address, view, response, retries=0):
             print(response)
             return
         print(_("Cannot extract valid JSON from the response. Asking the model to fix it..."))
-        query_model_async(_("The JSON document provided in this response is invalid. Can you fix it?\n"
-                            "{response}").format(response=response),
-                          functools.partial(rename_callback,
-                                            address=address,
-                                            view=view,
-                                            retries=retries + 1))
+        query_model_async(f"The JSON document provided in this response is invalid. Can you fix it?\n {response}",
+                              functools.partial(rename_callback,
+                                                address=address,
+                                                view=view,
+                                                retries=retries + 1))
         return
     try:
         names = json.loads(j.group(0))
@@ -210,13 +468,13 @@ def rename_callback(address, view, response, retries=0):
     # Refresh the window to show the new names
     if view:
         view.refresh_view(True)
-    print(_("gpt-3.5-turbo query finished! {replaced} variable(s) renamed.").format(replaced=len(replaced)))
+    print(_(f"{model_to_use} query finished! {replaced} variable(s) renamed.").format(replaced=len(replaced)))
 
 # -----------------------------------------------------------------------------
 
 class RenameHandler(idaapi.action_handler_t):
     """
-    This handler requests new variable names from gpt-3.5-turbo and updates the
+    This handler requests new variable names from model and updates the
     decompiler's output.
     """
     def __init__(self):
@@ -230,6 +488,30 @@ class RenameHandler(idaapi.action_handler_t):
                             "and values are the proposed names. Do not explain anything, only print the JSON "
                             "dictionary.").format(decompiler_output=str(decompiler_output)),
                           functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=v))
+        return 1
+
+    # This action is always available.
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
+# -----------------------------------------------------------------------------
+
+class RenameFunctionHandler(idaapi.action_handler_t):
+    """
+    This handler requests new function name from model and updates the
+    decompiler's output.
+    """
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
+        v = ida_hexrays.get_widget_vdui(ctx.widget)
+        query_model_async(_("Analyze the following C function:\n{decompiler_output}"
+                            "\nSuggest a better function name, reply with a JSON array where the key is the original name "
+                            "and the value is the proposed name. Do not explain anything, only print the JSON "
+                            "dictionary.").format(decompiler_output=str(decompiler_output)),
+                          functools.partial(rename_function_callback, address=function_add, view=v))
         return 1
 
     # This action is always available.
@@ -277,17 +559,130 @@ def query_model(query, cb, max_tokens=2500):
     except Exception as e:
         print(_("General exception encountered while running the query: {error}").format(error=str(e)))
 
+# =============================================================================
+# BING interaction
+# =============================================================================
+def set_bing_u_cookie():
+    global bing_u_cookie
+    bing_u_cookie = ida_kernwin.ask_str("Enter your bing_u cookie")
+
+def query_bing_model(query, cb, max_tokens=2500):
+    """
+    Function which sends a query to BING GPT and calls a callback when the response is available.
+    Blocks until the response is received
+    :param query: The request to send to BING GPT
+    :param cb: Tu function to which the response will be passed to.
+    """
+    try:
+        url = "https://chatgpt-4-bing-ai-chat-api.p.rapidapi.com/chatgpt-4-bing-ai-chat-api/0.2/send-message/"
+
+        # check if the query has previous bing GPT comments in the function
+        if('{"message":' in query and 'Suggest better variable names' in query):
+            # We strip query from that comment
+            query = "{".join(query.split('}')[1:])
+        # Unfortunately, input is limited to 600 chars so we truncate the query
+        # if above
+        if(len(query)>600):
+            query = query[:598]
+
+        payload = f"bing_u_cookie={bing_u_cookie}&question={urllib.parse.quote(query)}"
+        print(payload)
+        headers = {
+            "content-type": "application/x-www-form-urlencoded",
+            "X-RapidAPI-Key": f"{rapid_api_key}",
+            "X-RapidAPI-Host": "chatgpt-4-bing-ai-chat-api.p.rapidapi.com"
+        }
+
+        response = requests.post(url, data=payload, headers=headers)
+        bing_res = response.text
+        if('Input bing_u_cookie is not valid' in bing_res):
+            set_bing_u_cookie()
+            raise Exception
+        if(response.status_code!=200):
+            raise Exception
+        parsed_json = json.loads(bing_res)
+        text_response = parsed_json[0]['text_response']
+        if('Suggest better variable names' in query):
+            # Just grab the json from the response:
+            res_dic = json.loads(response.text)
+            bing_res = res_dic['message']
+
+        print(text_response)
+        ida_kernwin.execute_sync(functools.partial(cb, response=text_response), ida_kernwin.MFF_WRITE)
+
+    except:
+        print(bing_res)
+        print("Bing GPT error")
+
+# =============================================================================
+# chatsonic interaction
+# =============================================================================
+
+def query_sonic_model(query, cb, max_tokens=2500):
+    """
+    Function which sends a query to chatsonic and calls a callback when the response is available.
+    Blocks until the response is received
+    :param query: The request to send to chatsonic
+    :param cb: Tu function to which the response will be passed to.
+    """
+    try:
+        url = "https://api.writesonic.com/v2/business/content/chatsonic?engine=premium&language=en"
+
+        # check if the query has previous chatsonic comments in the function
+        if('{"message":' in query and 'Suggest better variable names' in query):
+            # We strip query from that comment
+            query = "{".join(query.split('}')[1:])
+        # Unfortunately, input is limited to 600 chars so we truncate the query
+        # if above
+        if(len(query)>600):
+            query = query[:598]
+        payload = {
+            "enable_google_results": "true",
+            "enable_memory": False,
+            "input_text": f"{query}"
+        }
+        headers = {
+            "accept": "application/json",
+            "content-type": "application/json",
+            "X-API-KEY": f"{chatsonic_api_key}"
+        }
+
+        print(payload)
+
+        response = requests.post(url, json=payload, headers=headers)
+        chatson_res = response.text
+        if('This feature needs at least 1 word(s) but you only have 0' in chatson_res or response.status_code!=200):
+            raise Exception
+        if('Suggest better variable names' in query):
+            # Just grab the json from the response:
+            res_dic = json.loads(response.text)
+            chatson_res = res_dic['message']
+        print(chatson_res)
+        ida_kernwin.execute_sync(functools.partial(cb, response=chatson_res), ida_kernwin.MFF_WRITE)
+
+    except:
+        print(response.text)
+        print("ChatSonic error")
+
+
 # -----------------------------------------------------------------------------
 
 def query_model_async(query, cb):
     """
-    Function which sends a query to gpt-3.5-turbo and calls a callback when the response is available.
-    :param query: The request to send to gpt-3.5-turbo
-    :param cb: Tu function to which the response will be passed to.
+    Function which sends a query to model and calls a callback when the response is available.
+    :param query: The request to send to model
+    :param cb: The function to which the response will be passed to.
     """
-    print(_("Request to gpt-3.5-turbo sent..."))
-    t = threading.Thread(target=query_model, args=[query, cb])
+    print(_(f"Request to {model_to_use} sent..."))
+    t = threading.Thread(target=model_lookup[model_to_use], args=[query, cb])
     t.start()
+
+# Model map
+
+model_lookup = {'gpt-3.5-turbo': query_model,
+                'CHATSONIC': query_sonic_model,
+                'BINGGPT': query_bing_model
+                }
 
 # =============================================================================
 # Main
@@ -297,7 +692,7 @@ def PLUGIN_ENTRY():
     if not openai.api_key:
         openai.api_key = os.getenv("OPENAI_API_KEY")
         if not openai.api_key:
-            print(_("Please edit this script to insert your OpenAI API key!"))
+            print(_("Please edit the gepetto-config to insert your OpenAI API key!"))
             raise ValueError("No valid OpenAI API key found")
 
     return GepettoPlugin()
