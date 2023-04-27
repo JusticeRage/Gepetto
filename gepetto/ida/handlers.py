@@ -7,11 +7,10 @@ import idaapi
 import ida_hexrays
 import idc
 
-from gepetto.config import translate
-from gepetto.config import model
+import gepetto.config
+from gepetto.models.base import get_model
 
-_ = translate.gettext
-
+_ = gepetto.config.translate.gettext
 
 def comment_callback(address, view, response):
     """
@@ -37,7 +36,7 @@ def comment_callback(address, view, response):
     # Refresh the window so the comment is displayed properly
     if view:
         view.refresh_view(False)
-    print(_("{model} query finished!").format(model=model.model))
+    print(_("{model} query finished!").format(model=str(gepetto.config.model)))
 
 
 # -----------------------------------------------------------------------------
@@ -54,9 +53,10 @@ class ExplainHandler(idaapi.action_handler_t):
     def activate(self, ctx):
         decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
         v = ida_hexrays.get_widget_vdui(ctx.widget)
-        model.query_model_async(_("Can you explain what the following C function does and suggest a better name for "
-                                  "it?\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
-                                functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=v))
+        gepetto.config.model.query_model_async(
+            _("Can you explain what the following C function does and suggest a better name for "
+            "it?\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
+            functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=v))
         return 1
 
     # This action is always available.
@@ -81,12 +81,13 @@ def rename_callback(address, view, response, retries=0):
             print(response)
             return
         print(_("Cannot extract valid JSON from the response. Asking the model to fix it..."))
-        model.query_model_async(_("The JSON document provided in this response is invalid. Can you fix it?\n"
-                                  "{response}").format(response=response),
-                                functools.partial(rename_callback,
-                                                  address=address,
-                                                  view=view,
-                                                  retries=retries + 1))
+        gepetto.config.model.query_model_async(
+            _("The JSON document provided in this response is invalid. Can you fix it?\n"
+            "{response}").format(response=response),
+            functools.partial(rename_callback,
+                              address=address,
+                              view=view,
+                              retries=retries + 1))
         return
     try:
         names = json.loads(j.group(0))
@@ -96,11 +97,12 @@ def rename_callback(address, view, response, retries=0):
             print(response)
             return
         print(_("The JSON document returned is invalid. Asking the model to fix it..."))
-        model.query_model_async(_("Please fix the following JSON document:\n{json}").format(json=j.group(0)),
-                                functools.partial(rename_callback,
-                                                  address=address,
-                                                  view=view,
-                                                  retries=retries + 1))
+        gepetto.config.model.query_model_async(
+            _("Please fix the following JSON document:\n{json}").format(json=j.group(0)),
+            functools.partial(rename_callback,
+                              address=address,
+                              view=view,
+                              retries=retries + 1))
         return
 
     # The rename function needs the start address of the function
@@ -121,7 +123,8 @@ def rename_callback(address, view, response, retries=0):
     # Refresh the window to show the new names
     if view:
         view.refresh_view(True)
-    print(_("{model} query finished! {replaced} variable(s) renamed.").format(model=model.model, replaced=len(replaced)))
+    print(_("{model} query finished! {replaced} variable(s) renamed.").format(model=str(gepetto.config.model),
+                                                                              replaced=len(replaced)))
 
 # -----------------------------------------------------------------------------
 
@@ -136,13 +139,34 @@ class RenameHandler(idaapi.action_handler_t):
     def activate(self, ctx):
         decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
         v = ida_hexrays.get_widget_vdui(ctx.widget)
-        model.query_model_async(_("Analyze the following C function:\n{decompiler_output}"
-                                  "\nSuggest better variable names, reply with a JSON array where keys are the original"
-                                  " names and values are the proposed names. Do not explain anything, only print the "
-                                  "JSON dictionary.").format(decompiler_output=str(decompiler_output)),
-                                functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=v))
+        gepetto.config.model.query_model_async(
+            _("Analyze the following C function:\n{decompiler_output}"
+            "\nSuggest better variable names, reply with a JSON array where keys are the original"
+            " names and values are the proposed names. Do not explain anything, only print the "
+            "JSON dictionary.").format(decompiler_output=str(decompiler_output)),
+            functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=v))
         return 1
 
     # This action is always available.
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
+# -----------------------------------------------------------------------------
+
+class SwapModelHandler(idaapi.action_handler_t):
+    """
+    This handler replaces the model currently in use with another one selected by the user,
+    and updates the configuration.
+    """
+    def __init__(self, new_model, plugin):
+        self.new_model = new_model
+        self.plugin = plugin
+
+    def activate(self, ctx):
+        gepetto.config.model = get_model(self.new_model)
+        gepetto.config.update_config("Gepetto", "MODEL", self.new_model)
+        # Refresh the menus to reflect which model is currently selected.
+        self.plugin.generate_plugin_select_menu()
+
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS

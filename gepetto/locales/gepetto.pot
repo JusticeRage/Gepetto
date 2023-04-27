@@ -20,6 +20,9 @@ msgstr "Explain function"
 msgid "Rename variables"
 msgstr "Rename variables"
 
+msgid "Select model"
+msgstr "Select model"
+
 msgid "Uses {model} to enrich the decompiler's output"
 msgstr "Uses {model} to enrich the decompiler's output"
 

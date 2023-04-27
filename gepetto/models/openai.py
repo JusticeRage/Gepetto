@@ -6,9 +6,9 @@ import ida_kernwin
 import openai
 
 from gepetto.models.base import LanguageModel
-from gepetto.config import translate, model
+import gepetto.config
 
-_ = translate.gettext
+_ = gepetto.config.translate.gettext
 
 
 class GPT(LanguageModel):
@@ -17,6 +17,9 @@ class GPT(LanguageModel):
             print(_("Please edit this script to insert your OpenAI API key!"))
             raise ValueError("No valid OpenAI API key found")
         self.model = model
+
+    def __str__(self):
+        return self.model
 
     def query_model(self, query, cb, max_tokens=6500):
         """
@@ -63,7 +66,7 @@ class GPT(LanguageModel):
         :param query: The request to send to {model}
         :param cb: Tu function to which the response will be passed to.
         """
-        print(_("Request to {model} sent...").format(model=model.model))
+        print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
         t = threading.Thread(target=self.query_model, args=[query, cb])
         t.start()
 
