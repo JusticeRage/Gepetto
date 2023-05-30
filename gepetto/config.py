@@ -33,6 +33,13 @@ def load_config():
         openai.api_key = config.get('OpenAI', 'API_KEY')
         print(f"Key set to {openai.api_key}")
 
+    # Get OPENAPI PROXY
+    if not config.get('OpenAI', 'OPENAI_PROXY'):
+        openai.proxy = None
+    else:
+        openai.proxy = config.get('OpenAI', 'OPENAI_PROXY')
+        print(f"OpenAI Proxy set to {openai.proxy}")
+
     # Select model
     requested_model = config.get('Gepetto', 'MODEL')
     model = get_model(requested_model)
