@@ -110,8 +110,14 @@ def rename_callback(address, view, response, retries=0):
 
     replaced = []
     for n in names:
-        if ida_hexrays.rename_lvar(function_addr, n, names[n]):
-            replaced.append(n)
+        if idaapi.IDA_SDK_VERSION < 760:
+            lvars = {lvar.name: lvar for lvar in view.cfunc.lvars}
+            if n in lvars:
+                if view.rename_lvar(lvars[n], names[n], True):
+                    replaced.append(n)
+        else:
+            if ida_hexrays.rename_lvar(function_addr, n, names[n]):
+                replaced.append(n)
 
     # Update possible names left in the function comment
     comment = idc.get_func_cmt(address, 0)
