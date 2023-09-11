@@ -1,7 +1,7 @@
 import functools
 import re
 import threading
-import os
+# import os
 
 import ida_kernwin
 import openai
@@ -18,7 +18,7 @@ class CodeLLaMa(GPT):
         # We don't need an API key for https://github.com/oobabooga/text-generation-webui/tree/main/extensions/openai
         OPENAI_API_KEY="sk-111111111111111111111111111111111111111111111111"
         openai.api_key = OPENAI_API_KEY
-        openai.api_base = os.environ['OPENAI_API_BASE']           # "http://localhost:5001/v1"
+        # XXX DELETE WHEN IT WORKS ON ITS OWN     openai.api_base = gepetto.config.g   os.environ['OPENAI_API_BASE']           # "http://localhost:5001/v1"
         self.model = model
 
     def __str__(self):
@@ -41,7 +41,7 @@ class CodeLLaMa(GPT):
             ida_kernwin.execute_sync(functools.partial(cb, response=response.choices[0]["message"]["content"]),
                                      ida_kernwin.MFF_WRITE)
         except openai.InvalidRequestError as e:
-            # XXX FIXME: for a local LLM, this error string might be different! Note sure if 
+            # XXX FIXME: for a local LLM, this error string might be different! Note sure if
             # we can rely on searching in the error message. Also: openai might change that error message
             # actually at any time ...
             #
@@ -76,4 +76,3 @@ class CodeLLaMa(GPT):
         print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
         t = threading.Thread(target=self.query_model, args=[query, cb])
         t.start()
-
