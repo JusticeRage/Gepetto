@@ -38,6 +38,7 @@ class CodeLLaMa(GPT):
                     {"role": "user", "content": query}
                 ]
             )
+            print(f'Got answer: {response.choices[0]["message"]["content"]}')
             ida_kernwin.execute_sync(functools.partial(cb, response=response.choices[0]["message"]["content"]),
                                      ida_kernwin.MFF_WRITE)
         except openai.InvalidRequestError as e:
