@@ -41,7 +41,7 @@ def load_config():
         print(f"OpenAI Proxy set to {openai.proxy}")
 
     if "codellama" == config.get('Gepetto', 'MODEL'):
-        openai.api_base = config.get("OPENAI_API_BASE")     # redirect openai's API lib to the local LLM
+        openai.api_base = config.get('OpenAI', "OPENAI_API_BASE")     # redirect openai's API lib to the local LLM
 
     # Select model
     requested_model = config.get('Gepetto', 'MODEL')

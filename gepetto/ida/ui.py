@@ -13,6 +13,7 @@ _ = gepetto.config.translate.gettext
 # Setup the context menu and hotkey in IDA
 # =============================================================================
 
+
 class GepettoPlugin(idaapi.plugin_t):
     flags = 0
     explain_action_name = "gepetto:explain_function"
@@ -23,7 +24,7 @@ class GepettoPlugin(idaapi.plugin_t):
     # Model selection menu
     select_gpt35_action_name = "gepetto:select_gpt35"
     select_gpt4_action_name = "gepetto:select_gpt4"
-    select_gpt4_action_name = "gepetto:select_codellama"
+    select_codellama_action_name = "gepetto:select_codellama"
     select_gpt35_menu_path = "Edit/Gepetto/" + _("Select model") + "/gpt-3.5-turbo"
     select_gpt4_menu_path = "Edit/Gepetto/" + _("Select model") + "/gpt-4"
     select_codellama_menu_path = "Edit/Gepetto/" + _("Select model") + "/codellama"
@@ -141,6 +142,7 @@ class GepettoPlugin(idaapi.plugin_t):
         return
 
 # -----------------------------------------------------------------------------
+
 
 class ContextMenuHooks(idaapi.UI_Hooks):
     def finish_populating_widget_popup(self, form, popup):
