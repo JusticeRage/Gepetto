@@ -23,8 +23,10 @@ class GepettoPlugin(idaapi.plugin_t):
     # Model selection menu
     select_gpt35_action_name = "gepetto:select_gpt35"
     select_gpt4_action_name = "gepetto:select_gpt4"
+    select_gpt4_action_name = "gepetto:select_codellama"
     select_gpt35_menu_path = "Edit/Gepetto/" + _("Select model") + "/gpt-3.5-turbo"
     select_gpt4_menu_path = "Edit/Gepetto/" + _("Select model") + "/gpt-4"
+    select_codellama_menu_path = "Edit/Gepetto/" + _("Select model") + "/codellama"
 
     wanted_name = 'Gepetto'
     wanted_hotkey = ''
@@ -75,14 +77,17 @@ class GepettoPlugin(idaapi.plugin_t):
         # Delete any possible previous entries
         idaapi.unregister_action(self.select_gpt35_action_name)
         idaapi.unregister_action(self.select_gpt4_action_name)
+        idaapi.unregister_action(self.select_codellama_action_name)
         idaapi.detach_action_from_menu(self.select_gpt35_menu_path, self.select_gpt35_action_name)
         idaapi.detach_action_from_menu(self.select_gpt4_menu_path, self.select_gpt4_action_name)
+        idaapi.detach_action_from_menu(self.select_codellama_menu_path, self.select_codellama_action_name)
 
         # For some reason, IDA seems to have a bug when replacing actions by new ones with identical names.
         # The old action object appears to be reused, at least partially, leading to unwanted begavior?
         # The best workaround I have found is to generate random names each time.
         self.select_gpt35_action_name = f"gepetto:{''.join(random.choices(string.ascii_lowercase, k=7))}"
         self.select_gpt4_action_name = f"gepetto:{''.join(random.choices(string.ascii_lowercase, k=7))}"
+        self.select_codellama_action_name = f"gepetto:{''.join(random.choices(string.ascii_lowercase, k=7))}"
 
         # Icon #208 is a check mark.
         select_gpt35_action = idaapi.action_desc_t(self.select_gpt35_action_name,
@@ -107,6 +112,17 @@ class GepettoPlugin(idaapi.plugin_t):
         idaapi.register_action(select_gpt4_action)
         idaapi.attach_action_to_menu(self.select_gpt35_menu_path, self.select_gpt4_action_name, idaapi.SETMENU_APP)
 
+        # Select codellama action
+        select_codellama_action = idaapi.action_desc_t(self.select_codellama_action_name,
+                                                  "codellama",
+                                                  None if str(gepetto.config.model) == "codellama"
+                                                  else SwapModelHandler("codellama", self),
+                                                  "",
+                                                  "",
+                                                  208 if str(gepetto.config.model) == "codellama" else 0)
+        idaapi.register_action(select_codellama_action)
+        idaapi.attach_action_to_menu(self.select_gpt35_menu_path, self.select_codellama_action_name, idaapi.SETMENU_APP)
+
     # -----------------------------------------------------------------------------
 
     def run(self, arg):
@@ -119,6 +135,7 @@ class GepettoPlugin(idaapi.plugin_t):
         idaapi.detach_action_from_menu(self.rename_menu_path, self.rename_action_name)
         idaapi.detach_action_from_menu(self.select_gpt35_menu_path, self.select_gpt35_action_name)
         idaapi.detach_action_from_menu(self.select_gpt4_menu_path, self.select_gpt4_action_name)
+        idaapi.detach_action_from_menu(self.select_codellama_menu_path, self.select_codellama_action_name)
         if self.menu:
             self.menu.unhook()
         return
