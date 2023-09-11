@@ -9,7 +9,7 @@ import openai
 from gepetto.models.base import LanguageModel
 import gepetto.config
 
-from gepetto.models.GPT import GPT
+from gepetto.models.openai import GPT
 _ = gepetto.config.translate.gettext
 
 
