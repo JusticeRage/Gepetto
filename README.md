@@ -1,8 +1,7 @@
 # Gepetto
 
 Gepetto is a Python script which uses OpenAI's gpt-3.5-turbo and gpt-4 models to provide meaning to functions decompiled
-by IDA Pro. At the moment, it can ask gpt-3.5-turbo to explain what a function does, and to automatically rename its 
-variables. Here is a simple example of what results it can provide in mere seconds:
+by IDA Pro. At the moment, it can ask [gpt-3.5-turbo](https://platform.openai.com/docs/models), [gpt-4](https://platform.openai.com/docs/models) as well as a locally hosted [CodeLLama](https://github.com/facebookresearch/codellama) model to explain what a function does, and to automatically rename its variables. Here is a simple example of what results it can provide in mere seconds:
 
 ![](https://github.com/JusticeRage/Gepetto/blob/main/readme/comparison.png?raw=true)
 
@@ -24,6 +23,10 @@ Finally, with the corresponding interpreter, simply run:
 can be found on [this page](https://beta.openai.com/account/api-keys).
 Please note that OpenAI API queries are not free (although not very expensive) and you will need to set up a payment 
 method.
+
+*Note for CodeLLaMa/local LLM models*: You will have to install and run a _local_ CodeLLaMa model on your own and configure the `OPENAI_BASE_API` path accordingly to point to your server.
+The disadvantage of this approach is: it requires resources and is more work to get running. The clear advantage of this approach is that you won't be sending your dissassembly code to OpenAI's API. Which in some cases, is a policy requirement for many large organisations.
+Learn more about how to configure a local CodeLLaMa model [here](https://github.com/oobabooga/text-generation-webui/tree/main/extensions/openai#api-documentation--examples) 
 
 ⚠️ In order to use GPT-4, you will need to get access to the API. It may be requested at 
 [this address](https://openai.com/waitlist/gpt-4-api). If GPT-4 is not available for your account, the API will
@@ -59,6 +62,7 @@ you can always run the command again.
 - The plugin requires access to the HexRays decompiler to function.
 - gpt-3.5-turbo and gpt-4 are general-purpose language models and may very well get things wrong! Always be critical of 
 results returned!
+- in some cases currently the CodeLLaMa model can't properly output JSON yet. This confuses Gepetto. WIP.
 
 ## Translations
 
@@ -78,3 +82,4 @@ you can contribute to the project by adding it yourself! The translation portal 
 - [OpenAI](https://openai.com), for making this incredible chatbot, obviously
 - [Hex Rays](https://hex-rays.com/), the makers of IDA for their lightning fast support
 - [Kaspersky](https://kaspersky.com), for funding all my research
+- [Aaron Kaplan](https://lo-res.org/~aaron/) or [here](https://github.com/aaronkaplan/) for local CodeLLama-2 support.
