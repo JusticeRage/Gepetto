@@ -1,9 +1,11 @@
 import abc
 
+
 class LanguageModel(abc.ABC):
     @abc.abstractmethod
     def query_model_async(self, query, cb):
         pass
+
 
 def get_model(model, *args, **kwargs):
     """
@@ -19,6 +21,6 @@ def get_model(model, *args, **kwargs):
         # and https://github.com/oobabooga/text-generation-webui
         # and https://github.com/oobabooga/text-generation-webui/tree/main/extensions/openai
         from gepetto.models.local_llm import CodeLLaMa
-    return CodeLLaMa(model)
+        return CodeLLaMa(model)
     else:
         raise ValueError(f"Fatal error: {model} does not exist!")
