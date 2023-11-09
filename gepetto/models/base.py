@@ -11,8 +11,10 @@ def get_model(model, *args, **kwargs):
     :param model:
     :return:
     """
-    if model == "gpt-3.5-turbo" or model == "gpt-4":
+    if model == "gpt-3.5-turbo" or model == "gpt-4-1106-preview":
         from gepetto.models.openai import GPT
         return GPT(model)
     else:
-        raise ValueError(f"Fatal error: {model} does not exist!")
+        print(f"Warning:  {model} does not exist! Using default model (gpt-3.5-turbo).")
+        from gepetto.models.openai import GPT
+        return GPT("gpt-3.5-turbo")

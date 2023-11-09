@@ -24,7 +24,7 @@ class GepettoPlugin(idaapi.plugin_t):
     select_gpt35_action_name = "gepetto:select_gpt35"
     select_gpt4_action_name = "gepetto:select_gpt4"
     select_gpt35_menu_path = "Edit/Gepetto/" + _("Select model") + "/gpt-3.5-turbo"
-    select_gpt4_menu_path = "Edit/Gepetto/" + _("Select model") + "/gpt-4"
+    select_gpt4_menu_path = "Edit/Gepetto/" + _("Select model") + "/gpt-4-turbo"
 
     wanted_name = 'Gepetto'
     wanted_hotkey = ''
@@ -98,12 +98,12 @@ class GepettoPlugin(idaapi.plugin_t):
 
         # Select gpt-4 action
         select_gpt4_action = idaapi.action_desc_t(self.select_gpt4_action_name,
-                                                  "gpt-4",
-                                                  None if str(gepetto.config.model) == "gpt-4"
-                                                  else SwapModelHandler("gpt-4", self),
+                                                  "gpt-4-turbo",
+                                                  None if str(gepetto.config.model) == "gpt-4-1106-preview"
+                                                  else SwapModelHandler("gpt-4-1106-preview", self),
                                                   "",
                                                   "",
-                                                  208 if str(gepetto.config.model) == "gpt-4" else 0)
+                                                  208 if str(gepetto.config.model) == "gpt-4-1106-preview" else 0)
         idaapi.register_action(select_gpt4_action)
         idaapi.attach_action_to_menu(self.select_gpt35_menu_path, self.select_gpt4_action_name, idaapi.SETMENU_APP)
 

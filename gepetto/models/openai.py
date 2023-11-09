@@ -33,7 +33,7 @@ class GPT(LanguageModel):
                 model=self.model,
                 messages=[
                     {"role": "user", "content": query}
-                ]
+                ],
             )
             ida_kernwin.execute_sync(functools.partial(cb, response=response.choices[0]["message"]["content"]),
                                      ida_kernwin.MFF_WRITE)

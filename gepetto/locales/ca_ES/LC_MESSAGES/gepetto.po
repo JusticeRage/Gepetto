@@ -13,7 +13,7 @@ msgstr ""
 "POT-Creation-Date: 2023-03-02 15:14+0100\n"
 "PO-Revision-Date: 2023-03-02 14:31+0000\n"
 "Last-Translator: Ivan K., 2023\n"
-"Language-Team: Catalan (Spain) (https://www.transifex.com/gepetto/teams/164045/ca_ES/)\n"
+"Language-Team: Catalan (Spain) (https://app.transifex.com/gepetto/teams/164045/ca_ES/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -26,6 +26,9 @@ msgstr "Explicar la funció"
 msgid "Rename variables"
 msgstr "Reanomenar les variables"
 
+msgid "Select model"
+msgstr ""
+
 msgid "Uses {model} to enrich the decompiler's output"
 msgstr "Utilitza {model} per enriquir la sortida del descompilador"
 
@@ -33,8 +36,7 @@ msgid "See usage instructions on GitHub"
 msgstr "Veure instruccions d'ús a GitHub"
 
 msgid "Use {model} to explain the currently selected function"
-msgstr ""
-"Utilitzar {model} per explicar la funció seleccionada actualment"
+msgstr "Utilitzar {model} per explicar la funció seleccionada actualment"
 
 msgid "Use {model} to rename this function's variables"
 msgstr "Utilitzar {model} per reanomenar les variables d'aquesta funció"
@@ -80,8 +82,7 @@ msgstr ""
 "{response}"
 
 msgid "{model} query finished! {replaced} variable(s) renamed."
-msgstr ""
-"Consulta de {model} acabada! S'han reanomenat {replaced} variable(s)."
+msgstr "Consulta de {model} acabada! S'han reanomenat {replaced} variable(s)."
 
 msgid ""
 "Analyze the following C function:\n"

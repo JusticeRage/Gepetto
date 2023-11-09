@@ -13,7 +13,7 @@ msgstr ""
 "POT-Creation-Date: 2023-03-02 15:14+0100\n"
 "PO-Revision-Date: 2023-03-02 14:31+0000\n"
 "Last-Translator: Ivan K., 2023\n"
-"Language-Team: Spanish (Spain) (https://www.transifex.com/gepetto/teams/164045/es_ES/)\n"
+"Language-Team: Spanish (Spain) (https://app.transifex.com/gepetto/teams/164045/es_ES/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -25,6 +25,9 @@ msgstr "Explicar la función"
 
 msgid "Rename variables"
 msgstr "Renombrar las variables"
+
+msgid "Select model"
+msgstr ""
 
 msgid "Uses {model} to enrich the decompiler's output"
 msgstr "Utiliza {model} para enriquecer la salida del descompilador"
