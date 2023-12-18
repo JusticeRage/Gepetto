@@ -75,6 +75,7 @@ you can contribute to the project by adding it yourself! The translation portal 
 
 ## Acknowledgements
 
-- [OpenAI](https://openai.com), for making this incredible chatbot, obviously
+- [OpenAI](https://openai.com), for making these incredible models, obviously
 - [Hex Rays](https://hex-rays.com/), the makers of IDA for their lightning fast support
-- [Kaspersky](https://kaspersky.com), for funding all my research
+- [Kaspersky](https://kaspersky.com), for initially funding this project
+- [HarfangLab](https://harfanglab.io/), the current backer making this work possible

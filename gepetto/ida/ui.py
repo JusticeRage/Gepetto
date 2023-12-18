@@ -6,6 +6,7 @@ import ida_hexrays
 
 import gepetto.config
 from gepetto.ida.handlers import ExplainHandler, RenameHandler, SwapModelHandler
+from gepetto.models.base import GPT4_MODEL_NAME, GPT3_MODEL_NAME
 
 _ = gepetto.config.translate.gettext
 
@@ -23,8 +24,8 @@ class GepettoPlugin(idaapi.plugin_t):
     # Model selection menu
     select_gpt35_action_name = "gepetto:select_gpt35"
     select_gpt4_action_name = "gepetto:select_gpt4"
-    select_gpt35_menu_path = "Edit/Gepetto/" + _("Select model") + "/gpt-3.5-turbo"
-    select_gpt4_menu_path = "Edit/Gepetto/" + _("Select model") + "/gpt-4-turbo"
+    select_gpt35_menu_path = "Edit/Gepetto/" + _("Select model") + f"/{GPT3_MODEL_NAME}"
+    select_gpt4_menu_path = "Edit/Gepetto/" + _("Select model") + f"/{GPT4_MODEL_NAME}"
 
     wanted_name = 'Gepetto'
     wanted_hotkey = ''
@@ -86,24 +87,24 @@ class GepettoPlugin(idaapi.plugin_t):
 
         # Icon #208 is a check mark.
         select_gpt35_action = idaapi.action_desc_t(self.select_gpt35_action_name,
-                                                   "gpt-3.5-turbo",
-                                                   None if str(gepetto.config.model) == "gpt-3.5-turbo"
-                                                   else SwapModelHandler("gpt-3.5-turbo", self),
+                                                   GPT3_MODEL_NAME,
+                                                   None if str(gepetto.config.model) == GPT3_MODEL_NAME
+                                                   else SwapModelHandler(GPT3_MODEL_NAME, self),
                                                    "",
                                                    "",
-                                                   208 if str(gepetto.config.model) == "gpt-3.5-turbo" else 0)
+                                                   208 if str(gepetto.config.model) == GPT3_MODEL_NAME else 0)
 
         idaapi.register_action(select_gpt35_action)
         idaapi.attach_action_to_menu(self.select_gpt35_menu_path, self.select_gpt35_action_name, idaapi.SETMENU_APP)
 
         # Select gpt-4 action
         select_gpt4_action = idaapi.action_desc_t(self.select_gpt4_action_name,
-                                                  "gpt-4-turbo",
-                                                  None if str(gepetto.config.model) == "gpt-4-1106-preview"
-                                                  else SwapModelHandler("gpt-4-1106-preview", self),
+                                                  GPT4_MODEL_NAME,
+                                                  None if str(gepetto.config.model) == GPT4_MODEL_NAME
+                                                  else SwapModelHandler(GPT4_MODEL_NAME, self),
                                                   "",
                                                   "",
-                                                  208 if str(gepetto.config.model) == "gpt-4-1106-preview" else 0)
+                                                  208 if str(gepetto.config.model) == GPT4_MODEL_NAME else 0)
         idaapi.register_action(select_gpt4_action)
         idaapi.attach_action_to_menu(self.select_gpt35_menu_path, self.select_gpt4_action_name, idaapi.SETMENU_APP)
 
