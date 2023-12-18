@@ -71,20 +71,11 @@ class GPT(LanguageModel):
                                      ida_kernwin.MFF_WRITE)
         except openai.BadRequestError as e:
             # Context length exceeded. Determine the max number of tokens we can ask for and retry.
-            m = re.search(r'maximum context length is (\d+) tokens, however you requested \d+ tokens \((\d+) in your '
-                          r'prompt;', str(e))
-            if not m:
-                print(_("{model} could not complete the request: {error}").format(model=self.model, error=str(e)))
-                return
-            (hard_limit, prompt_tokens) = (int(m.group(1)), int(m.group(2)))
-            max_tokens = hard_limit - prompt_tokens
-            if max_tokens >= 750:
-                print(_("Context length exceeded! Reducing the completion tokens to "
-                        "{max_tokens}...").format(max_tokens=max_tokens))
-                self.query_model(query, cb, max_tokens)
+            m = re.search(r'maximum context length is \d+ tokens, however you requested \d+ tokens', str(e))
+            if m:
+                print(_("Unfortunately, this function is too big to be analyzed with the model's current API limits."))
             else:
-                print("Unfortunately, this function is too big to be analyzed with the model's current API limits.")
-
+                print(_("General exception encountered while running the query: {error}").format(error=str(e)))
         except openai.OpenAIError as e:
             print(_("{model} could not complete the request: {error}").format(model=self.model, error=str(e)))
         except Exception as e:
