@@ -48,6 +48,7 @@ You can also use the following hotkeys:
 
 - Ask the model to explain the function: `Ctrl` + `Alt` + `H`
 - Request better names for the function's variables: `Ctrl` + `Alt` + `R`
+- Request code rewrite for the function's variables: `Ctrl` + `Alt` + `W`
 
 Initial testing shows that asking for better names works better if you ask for an explanation of the function first – I
 assume because the model then uses its own comment to make more accurate suggestions.
