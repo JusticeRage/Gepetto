@@ -57,8 +57,8 @@ class ExplainHandler(idaapi.action_handler_t):
         decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
         v = ida_hexrays.get_widget_vdui(ctx.widget)
         gepetto.config.model.query_model_async(
-            _("Can you explain what the following C function does and suggest a better name for "
-              "it?\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
+            _("Can you explain what the following C function does? "
+              "\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
             functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=v))
         return 1
 
@@ -129,6 +129,33 @@ class RenameHandler(idaapi.action_handler_t):
               "JSON dictionary.").format(decompiler_output=str(decompiler_output)),
             functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=v),
             additional_model_options={"response_format": {"type": "json_object"}})
+        return 1
+
+    # This action is always available.
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+        
+
+# -----------------------------------------------------------------------------
+
+class RewriteHandler(idaapi.action_handler_t):
+    """
+    This handler is tasked with querying the model for a rewrite of the
+    given code. Once the reply is received, it is added as a function
+    comment.
+    """
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
+        v = ida_hexrays.get_widget_vdui(ctx.widget)
+        gepetto.config.model.query_model_async(
+            _("Can you rewrite a better code from this following C function? "
+              "\n{decompiler_output}\n"
+              "Do not explain anything, only print your rewriten code. Optimizaton are appreciated.").format(decompiler_output=str(decompiler_output)),
+            functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=v))
         return 1
 
     # This action is always available.
