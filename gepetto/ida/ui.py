@@ -5,7 +5,7 @@ import idaapi
 import ida_hexrays
 
 import gepetto.config
-from gepetto.ida.handlers import ExplainHandler, RenameHandler, SwapModelHandler
+from gepetto.ida.handlers import ExplainHandler, RenameHandler, RewriteHandler, SwapModelHandler
 from gepetto.models.base import GPT4_MODEL_NAME, GPT3_MODEL_NAME
 
 _ = gepetto.config.translate.gettext
@@ -20,6 +20,8 @@ class GepettoPlugin(idaapi.plugin_t):
     explain_menu_path = "Edit/Gepetto/" + _("Explain function")
     rename_action_name = "gepetto:rename_function"
     rename_menu_path = "Edit/Gepetto/" + _("Rename variables")
+    rewrite_action_name = "gepetto:rewrite_function"
+    rewrite_menu_path = "Edit/Gepetto/" + _("Rewrite code")
 
     # Model selection menu
     select_gpt35_action_name = "gepetto:select_gpt35"
@@ -61,6 +63,17 @@ class GepettoPlugin(idaapi.plugin_t):
                                              201)
         idaapi.register_action(rename_action)
         idaapi.attach_action_to_menu(self.rename_menu_path, self.rename_action_name, idaapi.SETMENU_APP)
+        
+        # Variable rewrite action
+        rewrite_action = idaapi.action_desc_t(self.rewrite_action_name,
+                                             _('Rewrite code'),
+                                             RewriteHandler(),
+                                             "Ctrl+Alt+W",
+                                             _("Use {model} to rewrite this function's code").format(
+                                                 model=str(gepetto.config.model)),
+                                             201)
+        idaapi.register_action(rewrite_action)
+        idaapi.attach_action_to_menu(self.rewrite_menu_path, self.rewrite_action_name, idaapi.SETMENU_APP)
 
         self.generate_plugin_select_menu()
 
@@ -118,6 +131,7 @@ class GepettoPlugin(idaapi.plugin_t):
     def term(self):
         idaapi.detach_action_from_menu(self.explain_menu_path, self.explain_action_name)
         idaapi.detach_action_from_menu(self.rename_menu_path, self.rename_action_name)
+        idaapi.detach_action_from_menu(self.rename_menu_path, self.rewrite_action_name)
         idaapi.detach_action_from_menu(self.select_gpt35_menu_path, self.select_gpt35_action_name)
         idaapi.detach_action_from_menu(self.select_gpt4_menu_path, self.select_gpt4_action_name)
         if self.menu:
@@ -132,3 +146,4 @@ class ContextMenuHooks(idaapi.UI_Hooks):
         if idaapi.get_widget_type(form) == idaapi.BWN_PSEUDOCODE:
             idaapi.attach_action_to_popup(form, popup, GepettoPlugin.explain_action_name, "Gepetto/")
             idaapi.attach_action_to_popup(form, popup, GepettoPlugin.rename_action_name, "Gepetto/")
+            idaapi.attach_action_to_popup(form, popup, GepettoPlugin.rewrite_action_name, "Gepetto/")
