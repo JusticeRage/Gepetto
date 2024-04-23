@@ -106,7 +106,7 @@ class GepettoPlugin(idaapi.plugin_t):
                                                   "",
                                                   208 if str(gepetto.config.model) == GPT4_MODEL_NAME else 0)
         idaapi.register_action(select_gpt4_action)
-        idaapi.attach_action_to_menu(self.select_gpt35_menu_path, self.select_gpt4_action_name, idaapi.SETMENU_APP)
+        idaapi.attach_action_to_menu(self.select_gpt4_menu_path, self.select_gpt4_action_name, idaapi.SETMENU_APP)
 
     # -----------------------------------------------------------------------------
 
