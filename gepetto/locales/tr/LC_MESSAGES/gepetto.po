@@ -115,5 +115,5 @@ msgstr "Sorgu çalıştırılırken genel istisna ile karşılaşıldı: {error}
 msgid "Request to {model} sent..."
 msgstr "{model}'a istek gönderildi..."
 
-msgid "Please edit this script to insert your OpenAI API key!"
-msgstr "OpenAI API anahtarınızı eklemek için lütfen bu betiği düzenleyin!"
+msgid "Please edit the configuration file to insert your {api_provider} API key!"
+msgstr "{api_provider} API anahtarınızı eklemek için lütfen bu betiği düzenleyin!"

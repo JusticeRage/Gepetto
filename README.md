@@ -1,15 +1,15 @@
 # Gepetto
 
-Gepetto is a Python script which uses OpenAI's gpt-3.5-turbo and gpt-4 models to provide meaning to functions decompiled
-by IDA Pro. At the moment, it can ask gpt-3.5-turbo to explain what a function does, and to automatically rename its 
-variables. Here is a simple example of what results it can provide in mere seconds:
+Gepetto is a Python script which uses various large language models to provide meaning to functions 
+decompiled by IDA Pro. At the moment, it can ask them to explain what a function does, and to automatically 
+rename its variables. Here is a simple example of what results it can provide in mere seconds:
 
 ![](https://github.com/JusticeRage/Gepetto/blob/main/readme/comparison.png?raw=true)
 
 ## Setup
 
-Simply drop this script (as well as the `gepetto/` folder) into your IDA plugins folder (`$IDAUSR/plugins`). 
-By default, on Windows, this should be `%AppData%\Hex-Rays\IDA Pro\plugins` (you may need to create the folder).
+Simply drop this script (`gepetto.py`, as well as the `gepetto/` folder) into your IDA plugins folder (`$IDAUSR/plugins`). 
+By default, on Windows, this should be `%AppData%\Hex-Rays\IDA Pro\plugins` (you may need to create it).
 
 You will need to add the required packages to IDA's Python installation for the script to work.
 Find which interpreter IDA is using by checking the following registry key: 
@@ -20,18 +20,25 @@ Finally, with the corresponding interpreter, simply run:
 [/path/to/python] -m pip install -r requirements.txt
 ```
 
-⚠️ You will also need to edit the configuration file (found as `gepetto/config.ini`) and add your own API key, which 
-can be found on [this page](https://beta.openai.com/account/api-keys).
-Please note that OpenAI API queries are not free (although not very expensive) and you will need to set up a payment 
-method.
+⚠️ You will also need to edit the configuration file (found as `gepetto/config.ini`) and add your own API keys. For 
+OpenAI, it can be found on [this page](https://beta.openai.com/account/api-keys).
+Please note that API queries are usually not free (although not very expensive) and you will need to set up a payment 
+method with the corresponding provider.
 
-⚠️ In order to use GPT-4, you will need to get access to the API. It may be requested at 
-[this address](https://openai.com/waitlist/gpt-4-api). If GPT-4 is not available for your account, the API will
-return the following error message:
+## Supported models
 
-```
-The model: `gpt-4` does not exist
-```
+- [OpenAI](https://playground.openai.com/)
+  - gpt-3.5-turbo-1106
+  - gpt-4-turbo
+  - gpt-4o (recommended for beginners)
+- [Groq](https://console.groq.com/playground)
+  -  llama3-70b-8192
+- [Together](https://api.together.ai/)
+  - mistralai/Mixtral-8x22B-Instruct-v0.1 (does not support renaming variables)
+
+Adding support for additional models shouldn't be too difficult, provided whatever provider you're considering exposes
+an API similar to OpenAI's. Look into the `gepetto/models` folder for inspiration, or open an issue if you can't figure
+it out. Also make sure you edit `ida/ui.py` to add the relevant menu entries for your addition.
 
 ## Usage
 
@@ -57,8 +64,8 @@ you can always run the command again.
 ## Limitations
 
 - The plugin requires access to the HexRays decompiler to function.
-- gpt-3.5-turbo and gpt-4 are general-purpose language models and may very well get things wrong! Always be critical of 
-results returned!
+- All supported LLMs are general-purpose and may very well get things wrong! Always be 
+  critical of results returned!
 
 ## Translations
 
@@ -69,9 +76,12 @@ in French, you would simply add:
 [Gepetto]
 LANGUAGE = "fr_FR"
 ```
+
 The chosen locale must match the folder names in `gepetto/locales`. If the desired language isn't available,
-you can contribute to the project by adding it yourself! The translation portal to get involved is on 
-[Transifex](https://app.transifex.com/gepetto/).
+you can contribute to the project by adding it yourself! Create a new folder for the desired locale
+(ex: `gepetto/locales/tr/LC_MESSAGES/de_DE`), and open a new pull request with the updated `.po` file, which you can
+create by copying and editing `gepetto/locales/gepetto.pot` (replace all the lines starting with `msgstr` with the
+localized version).  
 
 ## Acknowledgements
 
@@ -79,3 +89,4 @@ you can contribute to the project by adding it yourself! The translation portal 
 - [Hex Rays](https://hex-rays.com/), the makers of IDA for their lightning fast support
 - [Kaspersky](https://kaspersky.com), for initially funding this project
 - [HarfangLab](https://harfanglab.io/), the current backer making this work possible
+- Everyone who contributed translations: @seifreed, @kot-igor, @ruzgarkanar, @orangetw

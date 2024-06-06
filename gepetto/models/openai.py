@@ -1,5 +1,4 @@
 import functools
-import os
 import re
 import threading
 
@@ -17,25 +16,14 @@ class GPT(LanguageModel):
     def __init__(self, model):
         self.model = model
         # Get API key
-        if not gepetto.config.parsed_ini.get('OpenAI', 'API_KEY'):
-            api_key = os.getenv("OPENAI_API_KEY")
-        else:
-            api_key = gepetto.config.parsed_ini.get('OpenAI', 'API_KEY')
+        api_key = gepetto.config.get_config("OpenAI", "API_KEY", "OPENAI_API_KEY")
         if not api_key:
-            print(_("Please edit the configuration file to insert your OpenAI API key!"))
+            print(_("Please edit the configuration file to insert your {api_provider} API key!")
+                  .format(api_provider="OpenAI"))
             raise ValueError("No valid OpenAI API key found")
 
-        # Get OPENAPI proxy
-        if not gepetto.config.parsed_ini.get('OpenAI', 'OPENAI_PROXY'):
-            proxy = None
-        else:
-            proxy = gepetto.config.parsed_ini.get('OpenAI', 'OPENAI_PROXY')
-
-        # Get BASE_URL
-        if not gepetto.config.parsed_ini.get('OpenAI', 'BASE_URL'):
-            base_url = None
-        else:
-            base_url = gepetto.config.parsed_ini.get('OpenAI', 'BASE_URL')
+        proxy = gepetto.config.get_config("OpenAI", "OPENAI_PROXY")
+        base_url = gepetto.config.get_config("OpenAI", "BASE_URL", "OPENAI_BASE_URL")
 
         self.client = openai.OpenAI(
             api_key=api_key,
@@ -50,9 +38,9 @@ class GPT(LanguageModel):
 
     def query_model(self, query, cb, additional_model_options=None):
         """
-        Function which sends a query to gpt-3.5-turbo or gpt-4 and calls a callback when the response is available.
+        Function which sends a query to a GPT-API-compatible model and calls a callback when the response is available.
         Blocks until the response is received
-        :param query: The request to send to gpt-3.5-turbo or gpt-4
+        :param query: The request to send to the model
         :param cb: The function to which the response will be passed to.
         :param additional_model_options: Additional parameters used when creating the model object. Typically, for
         OpenAI, response_format={"type": "json_object"}.

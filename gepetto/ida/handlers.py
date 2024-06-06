@@ -149,7 +149,11 @@ class SwapModelHandler(idaapi.action_handler_t):
         self.plugin = plugin
 
     def activate(self, ctx):
-        gepetto.config.model = get_model(self.new_model)
+        try:
+            gepetto.config.model = get_model(self.new_model)
+        except ValueError as e:  # Raised if an API key is missing. In which case, don't switch.
+            print(_("Couldn't change model to {model}: {error}").format(model=self.new_model, error=str(e)))
+            return
         gepetto.config.update_config("Gepetto", "MODEL", self.new_model)
         # Refresh the menus to reflect which model is currently selected.
         self.plugin.generate_plugin_select_menu()

@@ -106,5 +106,6 @@ msgstr "執行查詢時遭遇例外錯誤: {error}"
 msgid "Request to {model} sent..."
 msgstr "已向 {model} 送出請求"
 
-msgid "Please edit this script to insert your OpenAI API key!"
-msgstr "請編輯程式碼以新增您的 OpenAI API 金鑰!"
+msgid "Please edit the configuration file to insert your {api_provider} API key!"
+msgstr "請編輯程式碼以新增您的 {api_provider} API 金鑰!"
+

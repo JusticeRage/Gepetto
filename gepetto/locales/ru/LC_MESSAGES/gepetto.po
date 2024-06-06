@@ -114,6 +114,6 @@ msgstr "Общее исключение, возникшее при выполн�
 msgid "Request to {model} sent..."
 msgstr "Запрос к {model} отправлен..."
 
-msgid "Please edit this script to insert your OpenAI API key!"
+msgid "Please edit the configuration file to insert your {api_provider} API key!"
 msgstr ""
-"Пожалуйста, отредактируйте этот скрипт, чтобы добавить свой OpenAI API ключ!"
+"Пожалуйста, отредактируйте этот скрипт, чтобы добавить свой {api_provider} API ключ!"

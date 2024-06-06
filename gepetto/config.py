@@ -31,6 +31,24 @@ def load_config():
     model = get_model(requested_model)
 
 
+def get_config(section, option, environment_variable=None, default=None):
+    """
+    Returns a value from the configuration, by looking successively in the configuration file and the environment
+    variables, returning the default value provided if nothing can be found.
+    :param section: The section containing the option.
+    :param option: The requested option.
+    :param environment_variable: The environment variable possibly containing the value.
+    :param default: Default value to return if nothing can be found.
+    :return: The value of the requested option.
+    """
+    global parsed_ini
+    if parsed_ini and parsed_ini.get(section, option):
+        return parsed_ini.get(section, option)
+    if environment_variable and os.environ.get(environment_variable):
+        return os.environ.get(environment_variable)
+    return default
+
+
 def update_config(section, option, new_value):
     """
     Updates a single entry in the configuration.

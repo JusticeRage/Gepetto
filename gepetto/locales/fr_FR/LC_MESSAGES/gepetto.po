@@ -117,5 +117,8 @@ msgstr ""
 msgid "Request to {model} sent..."
 msgstr "Requête envoyée à {model}..."
 
-msgid "Please edit this script to insert your OpenAI API key!"
-msgstr "Merci d'ajouter votre clé API OpenAI dans ce script !"
+msgid "Please edit the configuration file to insert your {api_provider} API key!"
+msgstr "Merci d'ajouter votre clé API {api_provider} dans le fichier de configuration !"
+
+msgid "Couldn't change model to {model}: {error}"
+msgstr "Impossible de choisir {model} comme modèle : {error}"

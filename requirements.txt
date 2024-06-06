@@ -1,1 +1,3 @@
 openai >= 1.0.0
+groq >= 0.8.0
+together >= 1.2.0
