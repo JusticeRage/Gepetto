@@ -3,8 +3,6 @@ import together
 import gepetto.config
 from gepetto.models.openai import GPT
 
-_ = gepetto.config.translate.gettext
-
 
 class Together(GPT):
     def __init__(self, model):

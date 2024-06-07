@@ -4,8 +4,6 @@ import httpx as _httpx
 import gepetto.config
 from gepetto.models.openai import GPT
 
-_ = gepetto.config.translate.gettext
-
 
 class Groq(GPT):
     def __init__(self, model):

@@ -8,8 +8,6 @@ import gepetto.config
 from gepetto.ida.handlers import ExplainHandler, RenameHandler, SwapModelHandler
 from gepetto.models.base import GPT4_MODEL_NAME, GPT3_MODEL_NAME, GPT4o_MODEL_NAME, GROQ_MODEL_NAME, MISTRAL_MODEL_NAME
 
-_ = gepetto.config.translate.gettext
-
 
 # =============================================================================
 # Setup the context menu and hotkey in IDA

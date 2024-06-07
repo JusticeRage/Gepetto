@@ -9,8 +9,6 @@ import openai
 from gepetto.models.base import LanguageModel
 import gepetto.config
 
-_ = gepetto.config.translate.gettext
-
 
 class GPT(LanguageModel):
     def __init__(self, model):

@@ -10,8 +10,6 @@ import idc
 import gepetto.config
 from gepetto.models.base import get_model
 
-_ = gepetto.config.translate.gettext
-
 
 def comment_callback(address, view, response):
     """
