@@ -1,6 +1,6 @@
 import abc
 
-GPT3_MODEL_NAME = "gpt-3.5-turbo-1106"
+GPT3_MODEL_NAME = "gpt-3.5-turbo-0125"
 GPT4_MODEL_NAME = "gpt-4-turbo"
 GPT4o_MODEL_NAME = "gpt-4o"
 GROQ_MODEL_NAME = "llama3-70b-8192"
@@ -29,6 +29,6 @@ def get_model(model):
         from gepetto.models.together import Together
         return Together(model)
     else:
-        print(f"Warning:  {model} does not exist! Using default model ({GPT3_MODEL_NAME}).")
+        print(f"Warning:  {model} does not exist! Using default model ({GPT4o_MODEL_NAME}).")
         from gepetto.models.openai import GPT
-        return GPT(GPT3_MODEL_NAME)
+        return GPT(GPT4o_MODEL_NAME)

@@ -103,3 +103,6 @@ msgstr ""
 
 msgid "Please edit the configuration file to insert your {api_provider} API key!"
 msgstr ""
+
+msgid "Couldn't change model to {model}: {error}"
+msgstr ""

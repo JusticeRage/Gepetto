@@ -117,3 +117,6 @@ msgstr "Запрос к {model} отправлен..."
 msgid "Please edit the configuration file to insert your {api_provider} API key!"
 msgstr ""
 "Пожалуйста, отредактируйте этот скрипт, чтобы добавить свой {api_provider} API ключ!"
+
+msgid "Couldn't change model to {model}: {error}"
+msgstr ""

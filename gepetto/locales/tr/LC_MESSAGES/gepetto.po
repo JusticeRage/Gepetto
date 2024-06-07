@@ -117,3 +117,6 @@ msgstr "{model}'a istek gönderildi..."
 
 msgid "Please edit the configuration file to insert your {api_provider} API key!"
 msgstr "{api_provider} API anahtarınızı eklemek için lütfen bu betiği düzenleyin!"
+
+msgid "Couldn't change model to {model}: {error}"
+msgstr ""

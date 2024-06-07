@@ -120,3 +120,6 @@ msgstr "Solicitud enviada a {model}..."
 
 msgid "Please edit the configuration file to insert your {api_provider} API key!"
 msgstr "¡Edite este script para insertar su clave de API de {api_provider}!"
+
+msgid "Couldn't change model to {model}: {error}"
+msgstr ""

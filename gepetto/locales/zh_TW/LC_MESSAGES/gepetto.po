@@ -109,3 +109,5 @@ msgstr "已向 {model} 送出請求"
 msgid "Please edit the configuration file to insert your {api_provider} API key!"
 msgstr "請編輯程式碼以新增您的 {api_provider} API 金鑰!"
 
+msgid "Couldn't change model to {model}: {error}"
+msgstr ""
