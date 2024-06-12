@@ -79,7 +79,7 @@ LANGUAGE = "fr_FR"
 
 The chosen locale must match the folder names in `gepetto/locales`. If the desired language isn't available,
 you can contribute to the project by adding it yourself! Create a new folder for the desired locale
-(ex: `gepetto/locales/tr/LC_MESSAGES/de_DE`), and open a new pull request with the updated `.po` file, which you can
+(ex: `gepetto/locales/de_DE/LC_MESSAGES/`), and open a new pull request with the updated `.po` file, which you can
 create by copying and editing `gepetto/locales/gepetto.pot` (replace all the lines starting with `msgstr` with the
 localized version).  
 
