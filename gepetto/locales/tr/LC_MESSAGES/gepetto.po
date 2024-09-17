@@ -120,3 +120,6 @@ msgstr "{api_provider} API anahtarınızı eklemek için lütfen bu betiği düz
 
 msgid "Couldn't change model to {model}: {error}"
 msgstr ""
+
+msgid "Warning: Gepetto's configuration doesn't contain option {option} in section {section}!"
+msgstr "Uyarı: Gepetto'nun yapılandırmasında {section} bölümünde {option} seçeneği yok!"

@@ -122,3 +122,6 @@ msgstr ""
 
 msgid "Couldn't change model to {model}: {error}"
 msgstr ""
+
+msgid "Warning: Gepetto's configuration doesn't contain option {option} in section {section}!"
+msgstr "Advertència: La configuració de Gepetto no conté l'opció {option} a la secció {section}!"

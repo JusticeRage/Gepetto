@@ -111,3 +111,6 @@ msgstr "請編輯程式碼以新增您的 {api_provider} API 金鑰!"
 
 msgid "Couldn't change model to {model}: {error}"
 msgstr ""
+
+msgid "Warning: Gepetto's configuration doesn't contain option {option} in section {section}!"
+msgstr "警告: Gepetto 的配置在 {section} 部分中不包含選項 {option}!"

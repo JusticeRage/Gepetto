@@ -85,3 +85,6 @@ msgstr "Please edit the configuration file to insert your {api_provider} API key
 
 msgid "Couldn't change model to {model}: {error}"
 msgstr "Couldn't change model to {model}: {error}"
+
+msgid "Warning: Gepetto's configuration doesn't contain option {option} in section {section}!"
+msgstr "Warning: Gepetto's configuration doesn't contain option {option} in section {section}!"

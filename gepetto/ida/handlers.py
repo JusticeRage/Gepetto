@@ -8,7 +8,7 @@ import ida_hexrays
 import idc
 
 import gepetto.config
-from gepetto.models.base import get_model
+from gepetto.models.model_manager import instantiate_model
 
 
 def comment_callback(address, view, response):
@@ -67,14 +67,13 @@ class ExplainHandler(idaapi.action_handler_t):
 
 # -----------------------------------------------------------------------------
 
-def rename_callback(address, view, response, retries=0):
+def rename_callback(address, view, response):
     """
     Callback that extracts a JSON array of old names and new names from the
     response and sets them in the pseudocode.
     :param address: The address of the function to work on
     :param view: A handle to the decompiler window
     :param response: The response from the model
-    :param retries: The number of times that we received invalid JSON
     """
     names = json.loads(response)
 
@@ -148,13 +147,13 @@ class SwapModelHandler(idaapi.action_handler_t):
 
     def activate(self, ctx):
         try:
-            gepetto.config.model = get_model(self.new_model)
+            gepetto.config.model = instantiate_model(self.new_model)
         except ValueError as e:  # Raised if an API key is missing. In which case, don't switch.
             print(_("Couldn't change model to {model}: {error}").format(model=self.new_model, error=str(e)))
             return
         gepetto.config.update_config("Gepetto", "MODEL", self.new_model)
         # Refresh the menus to reflect which model is currently selected.
-        self.plugin.generate_plugin_select_menu()
+        self.plugin.generate_model_select_menu()
 
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS

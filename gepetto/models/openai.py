@@ -7,10 +7,23 @@ import ida_kernwin
 import openai
 
 from gepetto.models.base import LanguageModel
+import gepetto.models.model_manager
 import gepetto.config
+
+GPT3_MODEL_NAME = "gpt-3.5-turbo-0125"
+GPT4_MODEL_NAME = "gpt-4-turbo"
+GPT4o_MODEL_NAME = "gpt-4o"
 
 
 class GPT(LanguageModel):
+    @staticmethod
+    def get_menu_name() -> str:
+        return "OpenAI"
+
+    @staticmethod
+    def supported_models():
+        return [GPT3_MODEL_NAME, GPT4_MODEL_NAME, GPT4o_MODEL_NAME]
+
     def __init__(self, model):
         self.model = model
         # Get API key
@@ -79,7 +92,8 @@ class GPT(LanguageModel):
         """
         if additional_model_options is None:
             additional_model_options = {}
-        print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
-        t = threading.Thread(target=self.query_model, args=[query, cb, additional_model_options])
-        t.start()
+            print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
+            t = threading.Thread(target=self.query_model, args=[query, cb, additional_model_options])
+            t.start()
 
+gepetto.models.model_manager.register_model(GPT)

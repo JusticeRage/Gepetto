@@ -2,7 +2,7 @@ import configparser
 import gettext
 import os
 
-from gepetto.models.base import get_model
+from gepetto.models.model_manager import instantiate_model, load_available_models
 
 model = None
 parsed_ini = None
@@ -28,7 +28,8 @@ def load_config():
 
     # Select model
     requested_model = parsed_ini.get('Gepetto', 'MODEL')
-    model = get_model(requested_model)
+    load_available_models()
+    model = instantiate_model(requested_model)
 
 
 def get_config(section, option, environment_variable=None, default=None):
@@ -42,10 +43,16 @@ def get_config(section, option, environment_variable=None, default=None):
     :return: The value of the requested option.
     """
     global parsed_ini
-    if parsed_ini and parsed_ini.get(section, option):
-        return parsed_ini.get(section, option)
-    if environment_variable and os.environ.get(environment_variable):
-        return os.environ.get(environment_variable)
+    try:
+        if parsed_ini and parsed_ini.get(section, option):
+            return parsed_ini.get(section, option)
+        if environment_variable and os.environ.get(environment_variable):
+            return os.environ.get(environment_variable)
+    except (configparser.NoSectionError, configparser.NoOptionError):
+        print(_("Warning: Gepetto's configuration doesn't contain option {option} in section {section}!").format(
+            option=option,
+            section=section
+        ))
     return default
 
 

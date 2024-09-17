@@ -122,3 +122,6 @@ msgstr "Merci d'ajouter votre clé API {api_provider} dans le fichier de configu
 
 msgid "Couldn't change model to {model}: {error}"
 msgstr "Impossible de choisir {model} comme modèle : {error}"
+
+msgid "Warning: Gepetto's configuration doesn't contain option {option} in section {section}!"
+msgstr "Attention: la configuration de Gepetto ne contient pas l'option {option} dans la section {section} !"

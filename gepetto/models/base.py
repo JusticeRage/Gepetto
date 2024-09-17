@@ -1,34 +1,23 @@
 import abc
 
-GPT3_MODEL_NAME = "gpt-3.5-turbo-0125"
-GPT4_MODEL_NAME = "gpt-4-turbo"
-GPT4o_MODEL_NAME = "gpt-4o"
-GROQ_MODEL_NAME = "llama-3.1-70b-versatile"
-MISTRAL_MODEL_NAME = "mistralai/Mixtral-8x22B-Instruct-v0.1"
 
-
-class LanguageModel(abc.ABC):
+class LanguageModel(metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def query_model_async(self, query, cb):
+    def query_model_async(self, query, cb, additional_model_options) -> None:
         pass
 
+    def __eq__(self, other):
+        return self.get_menu_name() == other.get_menu_name()
 
-def get_model(model):
-    """
-    Instantiates a model based on its name
-    :param model: The model to use
-    :return:
-    """
-    if model == GPT3_MODEL_NAME or model == GPT4_MODEL_NAME or model == GPT4o_MODEL_NAME:
-        from gepetto.models.openai import GPT
-        return GPT(model)
-    elif model == GROQ_MODEL_NAME:
-        from gepetto.models.groq import Groq
-        return Groq(model)
-    elif model == MISTRAL_MODEL_NAME:
-        from gepetto.models.together import Together
-        return Together(model)
-    else:
-        print(f"Warning:  {model} does not exist! Using default model ({GPT4o_MODEL_NAME}).")
-        from gepetto.models.openai import GPT
-        return GPT(GPT4o_MODEL_NAME)
+    def __hash__(self):
+        return self.get_menu_name().__hash__()
+
+    @staticmethod
+    @abc.abstractmethod
+    def supported_models() -> list[str]:
+        pass
+
+    @staticmethod
+    @abc.abstractmethod
+    def get_menu_name() -> str:
+        pass

@@ -1,10 +1,20 @@
 import together
 
 import gepetto.config
+import gepetto.models.model_manager
 from gepetto.models.openai import GPT
 
+MISTRAL_MODEL_NAME = "mistralai/Mixtral-8x22B-Instruct-v0.1"
 
 class Together(GPT):
+    @staticmethod
+    def get_menu_name() -> str:
+        return "Together"
+
+    @staticmethod
+    def supported_models():
+        return [MISTRAL_MODEL_NAME]
+
     def __init__(self, model):
         try:
             super().__init__(model)
@@ -23,3 +33,5 @@ class Together(GPT):
         self.client = together.Together(
             api_key=api_key,
             base_url=base_url)
+
+gepetto.models.model_manager.register_model(Together)

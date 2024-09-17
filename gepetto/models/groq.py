@@ -2,10 +2,21 @@ import groq
 import httpx as _httpx
 
 import gepetto.config
+import gepetto.models.model_manager
 from gepetto.models.openai import GPT
 
 
+GROQ_MODEL_NAME = "llama-3.1-70b-versatile"
+
 class Groq(GPT):
+    @staticmethod
+    def get_menu_name() -> str:
+        return "Groq"
+
+    @staticmethod
+    def supported_models():
+        return [GROQ_MODEL_NAME]
+
     def __init__(self, model):
         try:
             super().__init__(model)
@@ -29,3 +40,5 @@ class Groq(GPT):
                 proxies=proxy,
             ) if proxy else None
         )
+
+gepetto.models.model_manager.register_model(Groq)

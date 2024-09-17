@@ -1,12 +1,15 @@
+import functools
 import random
 import string
+import threading
 
 import idaapi
 import ida_hexrays
+import ida_kernwin
 
 import gepetto.config
 from gepetto.ida.handlers import ExplainHandler, RenameHandler, SwapModelHandler
-from gepetto.models.base import GPT4_MODEL_NAME, GPT3_MODEL_NAME, GPT4o_MODEL_NAME, GROQ_MODEL_NAME, MISTRAL_MODEL_NAME
+import gepetto.models.model_manager
 
 
 # =============================================================================
@@ -19,24 +22,12 @@ class GepettoPlugin(idaapi.plugin_t):
     explain_menu_path = "Edit/Gepetto/" + _("Explain function")
     rename_action_name = "gepetto:rename_function"
     rename_menu_path = "Edit/Gepetto/" + _("Rename variables")
-
-    # Model selection menu
-    select_gpt35_action_name = "gepetto:select_gpt35"
-    select_gpt4_action_name = "gepetto:select_gpt4"
-    select_gpt4o_action_name = "gepetto:select_gpt4o"
-    select_groq_action_name = "gepetto:select_groq"
-    select_mistral_action_name = "gepetto:select_mistral"
-    select_gpt35_menu_path = "Edit/Gepetto/" + _("Select model") + f"/OpenAI/{GPT3_MODEL_NAME}"
-    select_gpt4_menu_path = "Edit/Gepetto/" + _("Select model") + f"/OpenAI/{GPT4_MODEL_NAME}"
-    select_gpt4o_menu_path = "Edit/Gepetto/" + _("Select model") + f"/OpenAI/{GPT4o_MODEL_NAME}"
-    select_groq_menu_path = "Edit/Gepetto/" + _("Select model") + f"/Groq/{GROQ_MODEL_NAME}"
-    select_mistral_menu_path = "Edit/Gepetto/" + _("Select model") + f"/Together/{GROQ_MODEL_NAME}"
-
     wanted_name = 'Gepetto'
     wanted_hotkey = ''
     comment = _("Uses {model} to enrich the decompiler's output").format(model=str(gepetto.config.model))
     help = _("See usage instructions on GitHub")
     menu = None
+    model_action_map = {}
 
     # -----------------------------------------------------------------------------
 
@@ -67,7 +58,7 @@ class GepettoPlugin(idaapi.plugin_t):
         idaapi.register_action(rename_action)
         idaapi.attach_action_to_menu(self.rename_menu_path, self.rename_action_name, idaapi.SETMENU_APP)
 
-        self.generate_plugin_select_menu()
+        self.generate_model_select_menu()
 
         # Register context menu actions
         self.menu = ContextMenuHooks()
@@ -93,43 +84,42 @@ class GepettoPlugin(idaapi.plugin_t):
                                       "",
                                       "",
                                       208 if str(gepetto.config.model) == model_name else 0)  # Icon #208 == check mark.
-        idaapi.register_action(action)
-        idaapi.attach_action_to_menu(menu_path, action_name, idaapi.SETMENU_APP)
+        ida_kernwin.execute_sync(functools.partial(idaapi.register_action, action), ida_kernwin.MFF_FAST)
+        ida_kernwin.execute_sync(functools.partial(idaapi.attach_action_to_menu, menu_path, action_name, idaapi.SETMENU_APP),
+                                 ida_kernwin.MFF_FAST)
 
     # -----------------------------------------------------------------------------
 
     def detach_actions(self):
-        idaapi.detach_action_from_menu(self.select_gpt35_menu_path, self.select_gpt35_action_name)
-        idaapi.detach_action_from_menu(self.select_gpt4_menu_path, self.select_gpt4_action_name)
-        idaapi.detach_action_from_menu(self.select_gpt4o_menu_path, self.select_gpt4o_action_name)
-        idaapi.detach_action_from_menu(self.select_groq_menu_path, self.select_groq_action_name)
-        idaapi.detach_action_from_menu(self.select_mistral_menu_path, self.select_mistral_action_name)
+        for provider in gepetto.models.model_manager.list_models():
+            for model in provider.supported_models():
+                if model in self.model_action_map:
+                    ida_kernwin.execute_sync(functools.partial(idaapi.unregister_action, self.model_action_map[model]),
+                                             ida_kernwin.MFF_FAST)
+                    ida_kernwin.execute_sync(functools.partial(idaapi.detach_action_from_menu,
+                                                               "Edit/Gepetto/" + _("Select model") +
+                                                               f"/{provider.get_menu_name()}/{model}",
+                                                               self.model_action_map[model]),
+                                             ida_kernwin.MFF_FAST)
 
     # -----------------------------------------------------------------------------
 
-    def generate_plugin_select_menu(self):
-        # Delete any possible previous entries
-        idaapi.unregister_action(self.select_gpt35_action_name)
-        idaapi.unregister_action(self.select_gpt4_action_name)
-        idaapi.unregister_action(self.select_gpt4o_action_name)
-        idaapi.unregister_action(self.select_groq_action_name)
-        idaapi.unregister_action(self.select_mistral_action_name)
-        self.detach_actions()
+    def generate_model_select_menu(self):
+        def do_generate_model_select_menu():
+            # Delete any possible previous entries
+            self.detach_actions()
 
-        # For some reason, IDA seems to have a bug when replacing actions by new ones with identical names.
-        # The old action object appears to be reused, at least partially, leading to unwanted behavior?
-        # The best workaround I have found is to generate random names each time.
-        self.select_gpt35_action_name = f"gepetto:{''.join(random.choices(string.ascii_lowercase, k=7))}"
-        self.select_gpt4_action_name = f"gepetto:{''.join(random.choices(string.ascii_lowercase, k=7))}"
-        self.select_gpt4o_action_name = f"gepetto:{''.join(random.choices(string.ascii_lowercase, k=7))}"
-        self.select_groq_action_name = f"gepetto:{''.join(random.choices(string.ascii_lowercase, k=7))}"
-        self.select_mistral_action_name = f"gepetto:{''.join(random.choices(string.ascii_lowercase, k=7))}"
-
-        self.bind_model_switch_action(self.select_gpt35_menu_path, self.select_gpt35_action_name, GPT3_MODEL_NAME)
-        self.bind_model_switch_action(self.select_gpt4_menu_path, self.select_gpt4_action_name, GPT4_MODEL_NAME)
-        self.bind_model_switch_action(self.select_gpt4o_menu_path, self.select_gpt4o_action_name, GPT4o_MODEL_NAME)
-        self.bind_model_switch_action(self.select_groq_menu_path, self.select_groq_action_name, GROQ_MODEL_NAME)
-        self.bind_model_switch_action(self.select_mistral_menu_path, self.select_mistral_action_name, MISTRAL_MODEL_NAME)
+            for provider in gepetto.models.model_manager.list_models():
+                for model in provider.supported_models():
+                    # For some reason, IDA seems to have a bug when replacing actions by new ones with identical names.
+                    # The old action object appears to be reused, at least partially, leading to unwanted behavior?
+                    # The best workaround I have found is to generate random names each time.
+                    self.model_action_map[model] = f"gepetto:{model}_{''.join(random.choices(string.ascii_lowercase, k=7))}"
+                    self.bind_model_switch_action("Edit/Gepetto/" + _("Select model") + f"/{provider.get_menu_name()}/{model}",
+                                                  self.model_action_map[model],
+                                                  model)
+        # Building the list of available models can take a few seconds with Ollama, don't hang the UI.
+        threading.Thread(target=do_generate_model_select_menu).start()
 
     # -----------------------------------------------------------------------------
 

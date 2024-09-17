@@ -123,3 +123,6 @@ msgstr "¡Edite este script para insertar su clave de API de {api_provider}!"
 
 msgid "Couldn't change model to {model}: {error}"
 msgstr ""
+
+msgid "Warning: Gepetto's configuration doesn't contain option {option} in section {section}!"
+msgstr "Advertencia: La configuración de Gepetto no contiene la opción {option} en la sección {section}!"
