@@ -123,3 +123,9 @@ msgstr ""
 
 msgid "Warning: Gepetto's configuration doesn't contain option {option} in section {section}!"
 msgstr "Avviso: La configurazione di Gepetto non contiene l'opzione {option} nella sezione {section}!"
+
+msgid "LLM chat"
+msgstr "Conversazione LLM"
+
+msgid  "You are a helpful assistant embedded in IDA Pro. Your role is to facilitate reverse-engineering and answer programming questions."
+msgstr  "Sei un assistente utile integrato in IDA Pro. Il tuo ruolo è facilitare l'ingegneria inversa e rispondere alle domande di programmazione."

@@ -114,3 +114,9 @@ msgstr ""
 
 msgid "Warning: Gepetto's configuration doesn't contain option {option} in section {section}!"
 msgstr "警告: Gepetto 的配置在 {section} 部分中不包含選項 {option}!"
+
+msgid "LLM chat"
+msgstr "LLM 對話"
+
+msgid  "You are a helpful assistant embedded in IDA Pro. Your role is to facilitate reverse-engineering and answer programming questions."
+msgstr  "你是嵌入在 IDA Pro 中的有用助手。你的角色是促進逆向工程並回答程式設計問題。"

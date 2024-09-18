@@ -88,3 +88,9 @@ msgstr "Couldn't change model to {model}: {error}"
 
 msgid "Warning: Gepetto's configuration doesn't contain option {option} in section {section}!"
 msgstr "Warning: Gepetto's configuration doesn't contain option {option} in section {section}!"
+
+msgid "LLM chat"
+msgstr "LLM chat"
+
+msgid  "You are a helpful assistant embedded in IDA Pro. Your role is to facilitate reverse-engineering and answer programming questions."
+msgstr  "You are a helpful assistant embedded in IDA Pro. Your role is to facilitate reverse-engineering and answer programming questions."

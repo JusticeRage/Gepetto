@@ -38,6 +38,23 @@ def comment_callback(address, view, response):
         view.refresh_view(False)
     print(_("{model} query finished!").format(model=str(gepetto.config.model)))
 
+# -----------------------------------------------------------------------------
+
+def conversation_callback(response, memory):
+    """
+    Callback that simply prints the model's response in IDA's output window.
+    :param response: The response returned by the model
+    :param memory: The list of messages exchanged so far, so that it can be updated.
+    :return:
+    """
+    memory.append({"role": "assistant", "content": response})
+
+    print()
+    for line in response.split("\n"):
+        if not line.strip():
+            continue
+        print(f"{str(gepetto.config.model)}> {line}")
+    print()
 
 # -----------------------------------------------------------------------------
 
@@ -58,6 +75,7 @@ class ExplainHandler(idaapi.action_handler_t):
             _("Can you explain what the following C function does and suggest a better name for "
               "it?\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
             functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=v))
+        print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
         return 1
 
     # This action is always available.
@@ -126,6 +144,7 @@ class RenameHandler(idaapi.action_handler_t):
               "JSON dictionary.").format(decompiler_output=str(decompiler_output)),
             functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=v),
             additional_model_options={"response_format": {"type": "json_object"}})
+        print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
         return 1
 
     # This action is always available.

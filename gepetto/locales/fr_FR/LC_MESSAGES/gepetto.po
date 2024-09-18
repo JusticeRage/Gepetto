@@ -125,3 +125,9 @@ msgstr "Impossible de choisir {model} comme modèle : {error}"
 
 msgid "Warning: Gepetto's configuration doesn't contain option {option} in section {section}!"
 msgstr "Attention: la configuration de Gepetto ne contient pas l'option {option} dans la section {section} !"
+
+msgid "LLM chat"
+msgstr "Conversation avec le LLM"
+
+msgid  "You are a helpful assistant embedded in IDA Pro. Your role is to facilitate reverse-engineering and answer programming questions."
+msgstr  "Tu es un assistant serviable intégré dans IDA Pro. Ton rôle est de faciliter la rétro-ingénierie et répondre aux questions liées à la programmation."

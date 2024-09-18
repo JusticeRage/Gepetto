@@ -1,7 +1,7 @@
 # Gepetto
 
-Gepetto is a Python script which uses various large language models to provide meaning to functions 
-decompiled by IDA Pro. At the moment, it can ask them to explain what a function does, and to automatically 
+Gepetto is a Python plugin which uses various large language models to provide meaning to functions 
+decompiled by IDA Pro (≥ 7.4). It can leverage them to explain what a function does, and to automatically 
 rename its variables. Here is a simple example of what results it can provide in mere seconds:
 
 ![](https://github.com/JusticeRage/Gepetto/blob/main/readme/comparison.png?raw=true)
@@ -28,17 +28,19 @@ method with the corresponding provider.
 ## Supported models
 
 - [OpenAI](https://playground.openai.com/)
-  - gpt-3.5-turbo-1106
+  - gpt-3.5-turbo-0125
   - gpt-4-turbo
   - gpt-4o (recommended for beginners)
 - [Groq](https://console.groq.com/playground)
   -  llama3-70b-8192
 - [Together](https://api.together.ai/)
   - mistralai/Mixtral-8x22B-Instruct-v0.1 (does not support renaming variables)
+- [Ollama](https://ollama.com/)
+  - Any local model exposed through Ollama (will not appear if Ollama is not running)
 
 Adding support for additional models shouldn't be too difficult, provided whatever provider you're considering exposes
 an API similar to OpenAI's. Look into the `gepetto/models` folder for inspiration, or open an issue if you can't figure
-it out. Also make sure you edit `ida/ui.py` to add the relevant menu entries for your addition.
+it out.
 
 ## Usage
 
@@ -51,7 +53,14 @@ Switch between models supported by Gepetto from the Edit > Gepetto menu:
 
 ![](https://github.com/JusticeRage/Gepetto/blob/main/readme/select_model.png?raw=true)
 
-You can also use the following hotkeys:
+Gepetto also provides a CLI interface you can use to ask questions to the LLM directly from IDA. Make sure to select
+`Gepetto` in the input bar:
+
+![](https://github.com/JusticeRage/Gepetto/blob/main/readme/cli.png?raw=true)
+
+### Hotkeys
+
+The following hotkeys are available:
 
 - Ask the model to explain the function: `Ctrl` + `Alt` + `H`
 - Request better names for the function's variables: `Ctrl` + `Alt` + `R`

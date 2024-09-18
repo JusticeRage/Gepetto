@@ -40,7 +40,6 @@ class Ollama(LanguageModel):
     def query_model_async(self, query, cb, additional_model_options = None):
         if additional_model_options is None:
             additional_model_options = {}
-        print(_("Request to {model} sent...").format(model=self.model))
         t = threading.Thread(target=self.query_model, args=[query, cb, additional_model_options])
         t.start()
 
@@ -51,11 +50,18 @@ class Ollama(LanguageModel):
             kwargs["format"] = "json"
 
         try:
-            stream = self.client.generate(model=self.model,
-                                          prompt=query,
-                                          stream=False,
-                                          **kwargs)
-            ida_kernwin.execute_sync(functools.partial(cb, response=stream["response"]),
+            if type(query) is str:
+                conversation = [
+                    {"role": "user", "content": query}
+                ]
+            else:
+                conversation = query
+
+            stream = self.client.chat(model=self.model,
+                                      messages=conversation,
+                                      stream=False,
+                                      **kwargs)
+            ida_kernwin.execute_sync(functools.partial(cb, response=stream["message"]["content"]),
                                      ida_kernwin.MFF_WRITE)
         except Exception as e:
             print(e)

@@ -114,3 +114,9 @@ msgstr "{model}로 모델을 변경할 수 없습니다: {error}"
 
 msgid "Warning: Gepetto's configuration doesn't contain option {option} in section {section}!"
 msgstr "경고: Gepetto의 설정에 섹션 {section}에서 옵션 {option}이(가) 포함되어 있지 않습니다!"
+
+msgid "LLM chat"
+msgstr "LLM 대화"
+
+msgid  "You are a helpful assistant embedded in IDA Pro. Your role is to facilitate reverse-engineering and answer programming questions."
+msgstr  "당신은 IDA Pro에 내장된 유용한 도우미입니다. 당신의 역할은 리버스 엔지니어링을 돕고 프로그래밍 질문에 답하는 것입니다."

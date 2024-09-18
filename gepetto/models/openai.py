@@ -5,6 +5,7 @@ import threading
 import httpx as _httpx
 import ida_kernwin
 import openai
+from pyexpat.errors import messages
 
 from gepetto.models.base import LanguageModel
 import gepetto.models.model_manager
@@ -51,7 +52,8 @@ class GPT(LanguageModel):
         """
         Function which sends a query to a GPT-API-compatible model and calls a callback when the response is available.
         Blocks until the response is received
-        :param query: The request to send to the model
+        :param query: The request to send to the model. It can be a single string, or a sequence of messages in a
+        dictionary for a whole conversation.
         :param cb: The function to which the response will be passed to.
         :param additional_model_options: Additional parameters used when creating the model object. Typically, for
         OpenAI, response_format={"type": "json_object"}.
@@ -59,11 +61,16 @@ class GPT(LanguageModel):
         if additional_model_options is None:
             additional_model_options = {}
         try:
+            if type(query) is str:
+                conversation = [
+                    {"role": "user", "content": query}
+                ]
+            else:
+                conversation = query
+
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "user", "content": query}
-                ],
+                messages=conversation,
                 **additional_model_options
             )
             ida_kernwin.execute_sync(functools.partial(cb, response=response.choices[0].message.content),
@@ -92,7 +99,6 @@ class GPT(LanguageModel):
         """
         if additional_model_options is None:
             additional_model_options = {}
-            print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
             t = threading.Thread(target=self.query_model, args=[query, cb, additional_model_options])
             t.start()
 

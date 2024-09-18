@@ -9,11 +9,12 @@ import ida_kernwin
 
 import gepetto.config
 from gepetto.ida.handlers import ExplainHandler, RenameHandler, SwapModelHandler
+from gepetto.ida.cli import register_cli
 import gepetto.models.model_manager
 
 
 # =============================================================================
-# Setup the context menu and hotkey in IDA
+# Setup the menus, hotkeys and cli in IDA
 # =============================================================================
 
 class GepettoPlugin(idaapi.plugin_t):
@@ -63,6 +64,9 @@ class GepettoPlugin(idaapi.plugin_t):
         # Register context menu actions
         self.menu = ContextMenuHooks()
         self.menu.hook()
+
+        # Register CLI
+        register_cli()
 
         return idaapi.PLUGIN_KEEP
 
