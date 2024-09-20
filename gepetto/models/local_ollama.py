@@ -26,7 +26,7 @@ class Ollama(LanguageModel):
         if OLLAMA_MODELS is None:
             try:
                 OLLAMA_MODELS = [m["name"] for m in create_client().list()["models"]]
-            except _httpx.ConnectError:
+            except (_httpx.ConnectError, ollama.ResponseError):
                 OLLAMA_MODELS = []
         return OLLAMA_MODELS
 
