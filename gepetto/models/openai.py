@@ -97,9 +97,7 @@ class GPT(LanguageModel):
         :param additional_model_options: Additional parameters used when creating the model object. Typically, for
         OpenAI, response_format={"type": "json_object"}.
         """
-        if additional_model_options is None:
-            additional_model_options = {}
-            t = threading.Thread(target=self.query_model, args=[query, cb, additional_model_options])
-            t.start()
+        t = threading.Thread(target=self.query_model, args=[query, cb, additional_model_options])
+        t.start()
 
 gepetto.models.model_manager.register_model(GPT)
