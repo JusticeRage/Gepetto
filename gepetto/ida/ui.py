@@ -35,7 +35,9 @@ class GepettoPlugin(idaapi.plugin_t):
     def init(self):
         # Check whether the decompiler is available
         if not ida_hexrays.init_hexrays_plugin():
-            return idaapi.PLUGIN_SKIP
+            # return idaapi.PLUGIN_SKIP
+            idaapi.msg("[Gepetto] Where Hex-Rays is o.O?\n")
+            pass  # just go well
 
         # Function explaining action
         explain_action = idaapi.action_desc_t(self.explain_action_name,
