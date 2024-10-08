@@ -1,7 +1,7 @@
 # Gepetto
 
 Gepetto is a Python script which uses OpenAI's gpt-3.5-turbo and gpt-4 models to provide meaning to functions decompiled
-by IDA Pro. At the moment, it can ask [gpt-3.5-turbo](https://platform.openai.com/docs/models), [gpt-4](https://platform.openai.com/docs/models) as well as a locally hosted [CodeLLama](https://github.com/facebookresearch/codellama) model to explain what a function does, and to automatically rename its variables. Here is a simple example of what results it can provide in mere seconds:
+by IDA Pro. At the moment, it can ask [gpt-3.5-turbo](https://platform.openai.com/docs/models), [gpt-4](https://platform.openai.com/docs/models) as well as a locally hosted models such as [CodeLLama](https://github.com/facebookresearch/codellama)  to explain what a function does, and to automatically rename its variables. Here is a simple example of what results it can provide in mere seconds:
 
 ![](https://github.com/JusticeRage/Gepetto/blob/main/readme/comparison.png?raw=true)
 
