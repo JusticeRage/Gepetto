@@ -120,3 +120,9 @@ msgstr "LLM 對話"
 
 msgid  "You are a helpful assistant embedded in IDA Pro. Your role is to facilitate reverse-engineering and answer programming questions."
 msgstr  "你是嵌入在 IDA Pro 中的有用助手。你的角色是促進逆向工程並回答程式設計問題。"
+
+msgid "Attempting to load the first available model..."
+msgstr "正在嘗試載入第一個可用的模型..."
+
+msgid "No model available. Please edit the configuration file and try again."
+msgstr "沒有可用的模型。請編輯配置檔案後重試。"

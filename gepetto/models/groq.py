@@ -17,6 +17,11 @@ class Groq(GPT):
     def supported_models():
         return [GROQ_MODEL_NAME]
 
+    @staticmethod
+    def is_configured_properly() -> bool:
+        # The plugin is configured properly if the API key is provided, otherwise it should not be shown.
+        return bool(gepetto.config.get_config("Groq", "API_KEY", "GROQ_API_KEY"))
+
     def __init__(self, model):
         try:
             super().__init__(model)
@@ -26,11 +31,10 @@ class Groq(GPT):
         self.model = model
         api_key = gepetto.config.get_config("Groq", "API_KEY", "GROQ_API_KEY")
         if not api_key:
-            print(_("Please edit the configuration file to insert your {api_provider} API key!")
-                  .format(api_provider="Groq"))
-            raise ValueError("No valid Groq API key found")
+            raise ValueError(_("Please edit the configuration file to insert your {api_provider} API key!")
+                             .format(api_provider="Groq"))
 
-        proxy = gepetto.config.get_config("Groq", "GROQ_PROXY")
+        proxy = gepetto.config.get_config("Gepetto", "PROXY")
         base_url = gepetto.config.get_config("Groq", "BASE_URL", "GROQ_BASE_URL")
 
         self.client = groq.Groq(

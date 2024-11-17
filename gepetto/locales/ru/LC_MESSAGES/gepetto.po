@@ -129,3 +129,9 @@ msgstr "Чат LLM"
 
 msgid  "You are a helpful assistant embedded in IDA Pro. Your role is to facilitate reverse-engineering and answer programming questions."
 msgstr  "Вы — полезный помощник, встроенный в IDA Pro. Ваша роль — помогать в реверс-инжиниринге и отвечать на вопросы по программированию."
+
+msgid "Attempting to load the first available model..."
+msgstr "Попытка загрузить первую доступную модель..."
+
+msgid "No model available. Please edit the configuration file and try again."
+msgstr "Модель недоступна. Пожалуйста, измените файл конфигурации и попробуйте снова."

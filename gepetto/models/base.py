@@ -21,3 +21,8 @@ class LanguageModel(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def get_menu_name() -> str:
         pass
+
+    @staticmethod
+    @abc.abstractmethod
+    def is_configured_properly() -> bool:
+        pass

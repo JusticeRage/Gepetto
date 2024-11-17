@@ -30,6 +30,11 @@ class Ollama(LanguageModel):
                 OLLAMA_MODELS = []
         return OLLAMA_MODELS
 
+    @staticmethod
+    def is_configured_properly() -> bool:
+        # The plugin is configured properly if it exposes any model.
+        return len(Ollama.supported_models()) > 0
+
     def __str__(self):
         return self.model
 

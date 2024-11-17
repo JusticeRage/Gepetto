@@ -31,12 +31,15 @@ method with the corresponding provider.
   - gpt-3.5-turbo-0125
   - gpt-4-turbo
   - gpt-4o (recommended for beginners)
+- [Ollama](https://ollama.com/)
+  - Any local model exposed through Ollama (will not appear if Ollama is not running)
 - [Groq](https://console.groq.com/playground)
   -  llama3-70b-8192
 - [Together](https://api.together.ai/)
   - mistralai/Mixtral-8x22B-Instruct-v0.1 (does not support renaming variables)
-- [Ollama](https://ollama.com/)
-  - Any local model exposed through Ollama (will not appear if Ollama is not running)
+- [Novita AI](https://novita.ai/)
+  - meta-llama/llama-3.1-70b-instruct
+  - meta-llama/llama-3.1-405b-instruct
 
 Adding support for additional models shouldn't be too difficult, provided whatever provider you're considering exposes
 an API similar to OpenAI's. Look into the `gepetto/models` folder for inspiration, or open an issue if you can't figure

@@ -129,3 +129,9 @@ msgstr "LLM sohbet"
 
 msgid  "You are a helpful assistant embedded in IDA Pro. Your role is to facilitate reverse-engineering and answer programming questions."
 msgstr  "IDA Pro'ya gömülü yararlı bir asistansınız. Rolünüz, tersine mühendisliği kolaylaştırmak ve programlama sorularını yanıtlamaktır."
+
+msgid "Attempting to load the first available model..."
+msgstr "Kullanılabilir ilk modeli yüklemeye çalışılıyor..."
+
+msgid "No model available. Please edit the configuration file and try again."
+msgstr "Kullanılabilir model yok. Lütfen yapılandırma dosyasını düzenleyin ve tekrar deneyin."
