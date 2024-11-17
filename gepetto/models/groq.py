@@ -6,7 +6,9 @@ import gepetto.models.model_manager
 from gepetto.models.openai import GPT
 
 
-GROQ_MODEL_NAME = "llama-3.1-70b-versatile"
+LLAMA_31_MODEL_NAME = "llama-3.1-70b-versatile"
+LLAMA_32_MODEL_NAME = "llama-3.2-90b-text-preview"
+MIXTRAL_MODEL_NAME = "mixtral-8x7b-32768"
 
 class Groq(GPT):
     @staticmethod
@@ -15,7 +17,7 @@ class Groq(GPT):
 
     @staticmethod
     def supported_models():
-        return [GROQ_MODEL_NAME]
+        return [LLAMA_31_MODEL_NAME, LLAMA_32_MODEL_NAME, MIXTRAL_MODEL_NAME]
 
     @staticmethod
     def is_configured_properly() -> bool:

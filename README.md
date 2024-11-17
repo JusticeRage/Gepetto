@@ -34,7 +34,9 @@ method with the corresponding provider.
 - [Ollama](https://ollama.com/)
   - Any local model exposed through Ollama (will not appear if Ollama is not running)
 - [Groq](https://console.groq.com/playground)
-  -  llama3-70b-8192
+  - llama-3.1-70b-versatile
+  - llama-3.2-90b-text-preview
+  - mixtral-8x7b-32768
 - [Together](https://api.together.ai/)
   - mistralai/Mixtral-8x22B-Instruct-v0.1 (does not support renaming variables)
 - [Novita AI](https://novita.ai/)
