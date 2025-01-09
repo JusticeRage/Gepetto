@@ -25,7 +25,7 @@ class Ollama(LanguageModel):
         global OLLAMA_MODELS
         if OLLAMA_MODELS is None:
             try:
-                OLLAMA_MODELS = [m["name"] for m in create_client().list()["models"]]
+                OLLAMA_MODELS = [m["model"] for m in create_client().list()["models"]]
             except (_httpx.ConnectError, ollama.ResponseError):
                 OLLAMA_MODELS = []
         return OLLAMA_MODELS
