@@ -40,6 +40,9 @@ method with the corresponding provider.
 - [Together](https://api.together.ai/)
   - mistralai/Mixtral-8x22B-Instruct-v0.1 (does not support renaming variables)
 - [Novita AI](https://novita.ai/)
+  - deepseek/deepseek-r1
+  - deepseek/deepseek-v3
+  - meta-llama/llama-3.3-70b-instruct
   - meta-llama/llama-3.1-70b-instruct
   - meta-llama/llama-3.1-405b-instruct
 
