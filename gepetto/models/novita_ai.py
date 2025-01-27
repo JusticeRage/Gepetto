@@ -6,8 +6,13 @@ import gepetto.models.model_manager
 from gepetto.models.openai import GPT
 
 
-NOVITA_MODELS = ["meta-llama/llama-3.1-70b-instruct",
-                 "meta-llama/llama-3.1-405b-instruct"]
+NOVITA_MODELS = [
+  "deepseek/deepseek-r1",
+  "deepseek/deepseek_v3",
+  "meta-llama/llama-3.3-70b-instruct",
+  "meta-llama/llama-3.1-70b-instruct",
+  "meta-llama/llama-3.1-405b-instruct",
+]
 
 class NovitaAI(GPT):
     @staticmethod
