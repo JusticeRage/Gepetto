@@ -27,7 +27,7 @@ class Ollama(LanguageModel):
             try:
                 # User a shorter timeout to avoid hanging IDA at startup is the server is unreachable.
                 OLLAMA_MODELS = [m["model"] for m in create_client(timeout=2).list()["models"]]
-            except (_httpx.ConnectError, ollama.ResponseError):
+            except (_httpx.ConnectError, _httpx.ConnectTimeout, ollama.ResponseError):
                 OLLAMA_MODELS = []
         return OLLAMA_MODELS
 
