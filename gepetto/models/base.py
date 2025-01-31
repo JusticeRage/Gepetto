@@ -14,15 +14,10 @@ class LanguageModel(metaclass=abc.ABCMeta):
 
     @staticmethod
     @abc.abstractmethod
-    def supported_models() -> list[str]:
+    def supported_models():
         pass
 
     @staticmethod
     @abc.abstractmethod
     def get_menu_name() -> str:
-        pass
-
-    @staticmethod
-    @abc.abstractmethod
-    def is_configured_properly() -> bool:
         pass

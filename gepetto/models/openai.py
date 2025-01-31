@@ -14,7 +14,6 @@ import gepetto.config
 GPT3_MODEL_NAME = "gpt-3.5-turbo-0125"
 GPT4_MODEL_NAME = "gpt-4-turbo"
 GPT4o_MODEL_NAME = "gpt-4o"
-GPT4o_MINI_MODEL_NAME = "gpt-4o-mini"
 
 
 class GPT(LanguageModel):
@@ -24,22 +23,18 @@ class GPT(LanguageModel):
 
     @staticmethod
     def supported_models():
-        return [GPT3_MODEL_NAME, GPT4_MODEL_NAME, GPT4o_MODEL_NAME, GPT4o_MINI_MODEL_NAME]
-
-    @staticmethod
-    def is_configured_properly() -> bool:
-        # The plugin is configured properly if the API key is provided, otherwise it should not be shown.
-        return bool(gepetto.config.get_config("OpenAI", "API_KEY", "OPENAI_API_KEY"))
+        return [GPT3_MODEL_NAME, GPT4_MODEL_NAME, GPT4o_MODEL_NAME]
 
     def __init__(self, model):
         self.model = model
         # Get API key
         api_key = gepetto.config.get_config("OpenAI", "API_KEY", "OPENAI_API_KEY")
         if not api_key:
-            raise ValueError(_("Please edit the configuration file to insert your {api_provider} API key!")
-                             .format(api_provider="OpenAI"))
+            print(_("Please edit the configuration file to insert your {api_provider} API key!")
+                  .format(api_provider="OpenAI"))
+            raise ValueError("No valid OpenAI API key found")
 
-        proxy = gepetto.config.get_config("Gepetto", "PROXY")
+        proxy = gepetto.config.get_config("OpenAI", "OPENAI_PROXY")
         base_url = gepetto.config.get_config("OpenAI", "BASE_URL", "OPENAI_BASE_URL")
 
         self.client = openai.OpenAI(

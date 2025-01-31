@@ -2,7 +2,7 @@ import configparser
 import gettext
 import os
 
-from gepetto.models.model_manager import instantiate_model, load_available_models, get_fallback_model
+from gepetto.models.model_manager import instantiate_model, load_available_models
 
 model = None
 parsed_ini = None
@@ -29,17 +29,7 @@ def load_config():
     # Select model
     requested_model = parsed_ini.get('Gepetto', 'MODEL')
     load_available_models()
-    # Attempt to load the requested model, otherwise get the first available one, or don't load Gepetto
-    try:
-        model = instantiate_model(requested_model)
-    except RuntimeError:
-        print(_("Attempting to load the first available model..."))
-        try:
-            model = get_fallback_model()
-            print(f"Defaulted to {str(model)}.")
-        except RuntimeError:
-            print(_("No model available. Please edit the configuration file and try again."))
-            model = None
+    model = instantiate_model(requested_model)
 
 
 def get_config(section, option, environment_variable=None, default=None):

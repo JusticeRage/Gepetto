@@ -6,9 +6,7 @@ import gepetto.models.model_manager
 from gepetto.models.openai import GPT
 
 
-LLAMA_31_MODEL_NAME = "llama-3.1-70b-versatile"
-LLAMA_32_MODEL_NAME = "llama-3.2-90b-text-preview"
-MIXTRAL_MODEL_NAME = "mixtral-8x7b-32768"
+GROQ_MODEL_NAME = "llama-3.1-70b-versatile"
 
 class Groq(GPT):
     @staticmethod
@@ -17,12 +15,7 @@ class Groq(GPT):
 
     @staticmethod
     def supported_models():
-        return [LLAMA_31_MODEL_NAME, LLAMA_32_MODEL_NAME, MIXTRAL_MODEL_NAME]
-
-    @staticmethod
-    def is_configured_properly() -> bool:
-        # The plugin is configured properly if the API key is provided, otherwise it should not be shown.
-        return bool(gepetto.config.get_config("Groq", "API_KEY", "GROQ_API_KEY"))
+        return [GROQ_MODEL_NAME]
 
     def __init__(self, model):
         try:
@@ -33,10 +26,11 @@ class Groq(GPT):
         self.model = model
         api_key = gepetto.config.get_config("Groq", "API_KEY", "GROQ_API_KEY")
         if not api_key:
-            raise ValueError(_("Please edit the configuration file to insert your {api_provider} API key!")
-                             .format(api_provider="Groq"))
+            print(_("Please edit the configuration file to insert your {api_provider} API key!")
+                  .format(api_provider="Groq"))
+            raise ValueError("No valid Groq API key found")
 
-        proxy = gepetto.config.get_config("Gepetto", "PROXY")
+        proxy = gepetto.config.get_config("Groq", "GROQ_PROXY")
         base_url = gepetto.config.get_config("Groq", "BASE_URL", "GROQ_BASE_URL")
 
         self.client = groq.Groq(
