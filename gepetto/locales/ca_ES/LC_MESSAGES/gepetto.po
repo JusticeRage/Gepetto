@@ -131,9 +131,3 @@ msgstr "Conversación de LLM"
 
 msgid  "You are a helpful assistant embedded in IDA Pro. Your role is to facilitate reverse-engineering and answer programming questions."
 msgstr  "Ets un assistent útil integrat a IDA Pro. El teu paper és facilitar la retroenginyeria i respondre preguntes de programació."
-
-msgid "Attempting to load the first available model..."
-msgstr "S'està intentant carregar el primer model disponible..."
-
-msgid "No model available. Please edit the configuration file and try again."
-msgstr "No hi ha cap model disponible. Si us plau, editeu el fitxer de configuració i torneu-ho a intentar."

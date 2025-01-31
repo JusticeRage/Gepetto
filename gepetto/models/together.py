@@ -15,11 +15,6 @@ class Together(GPT):
     def supported_models():
         return [MISTRAL_MODEL_NAME]
 
-    @staticmethod
-    def is_configured_properly() -> bool:
-        # The plugin is configured properly if the API key is provided, otherwise it should not be shown.
-        return bool(gepetto.config.get_config("Together", "API_KEY", "TOGETHER_API_KEY"))
-
     def __init__(self, model):
         try:
             super().__init__(model)
@@ -29,8 +24,9 @@ class Together(GPT):
         self.model = model
         api_key = gepetto.config.get_config("Together", "API_KEY", "TOGETHER_API_KEY")
         if not api_key:
-            raise ValueError(_("Please edit the configuration file to insert your {api_provider} API key!")
-                             .format(api_provider="Together"))
+            print(_("Please edit the configuration file to insert your {api_provider} API key!")
+                  .format(api_provider="Together"))
+            raise ValueError("No valid Together API key found")
 
         base_url = gepetto.config.get_config("Together", "BASE_URL", "TOGETHER_BASE_URL")
 

@@ -120,9 +120,3 @@ msgstr "LLM 대화"
 
 msgid  "You are a helpful assistant embedded in IDA Pro. Your role is to facilitate reverse-engineering and answer programming questions."
 msgstr  "당신은 IDA Pro에 내장된 유용한 도우미입니다. 당신의 역할은 리버스 엔지니어링을 돕고 프로그래밍 질문에 답하는 것입니다."
-
-msgid "Attempting to load the first available model..."
-msgstr "사용 가능한 첫 번째 모델을 로드하는 중입니다..."
-
-msgid "No model available. Please edit the configuration file and try again."
-msgstr "사용 가능한 모델이 없습니다. 구성 파일을 수정하고 다시 시도하세요."

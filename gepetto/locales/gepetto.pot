@@ -94,9 +94,3 @@ msgstr "LLM chat"
 
 msgid  "You are a helpful assistant embedded in IDA Pro. Your role is to facilitate reverse-engineering and answer programming questions."
 msgstr  "You are a helpful assistant embedded in IDA Pro. Your role is to facilitate reverse-engineering and answer programming questions."
-
-msgid "Attempting to load the first available model..."
-msgstr "Attempting to load the first available model..."
-
-msgid "No model available. Please edit the configuration file and try again."
-msgstr "No model available. Please edit the configuration file and try again."

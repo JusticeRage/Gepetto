@@ -36,9 +36,6 @@ class GepettoPlugin(idaapi.plugin_t):
         # Check whether the decompiler is available
         if not ida_hexrays.init_hexrays_plugin():
             return idaapi.PLUGIN_SKIP
-        # Check if Gepetto loaded at least one model properly
-        if not gepetto.config.model:
-            return idaapi.PLUGIN_SKIP
 
         # Function explaining action
         explain_action = idaapi.action_desc_t(self.explain_action_name,

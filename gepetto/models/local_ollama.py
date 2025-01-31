@@ -11,9 +11,9 @@ import gepetto.config
 
 OLLAMA_MODELS = None
 
-def create_client(**kwargs):
+def create_client():
     host = gepetto.config.get_config("Ollama", "HOST", default="http://localhost:11434")
-    return ollama.Client(host=host, **kwargs)
+    return ollama.Client(host=host)
 
 class Ollama(LanguageModel):
     @staticmethod
@@ -25,16 +25,10 @@ class Ollama(LanguageModel):
         global OLLAMA_MODELS
         if OLLAMA_MODELS is None:
             try:
-                # User a shorter timeout to avoid hanging IDA at startup is the server is unreachable.
-                OLLAMA_MODELS = [m["model"] for m in create_client(timeout=2).list()["models"]]
-            except (_httpx.ConnectError, _httpx.ConnectTimeout, ollama.ResponseError):
+                OLLAMA_MODELS = [m["name"] for m in create_client().list()["models"]]
+            except (_httpx.ConnectError, ollama.ResponseError):
                 OLLAMA_MODELS = []
         return OLLAMA_MODELS
-
-    @staticmethod
-    def is_configured_properly() -> bool:
-        # The plugin is configured properly if it exposes any model.
-        return len(Ollama.supported_models()) > 0
 
     def __str__(self):
         return self.model
