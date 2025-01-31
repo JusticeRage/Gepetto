@@ -155,14 +155,15 @@ Additionally, the `Sider` section is added:
 [Sider]
 
 # Only TOKEN is required, other keys are optional
-TOKEN = 
+TOKEN = eyJhbGciOiJIUzI...
 CONTEXT_ID =
 COOKIE =
 ```
 The token can be gained in your browser settings or developer tools if you've logged in [sider.ai](https://sider.ai). 
-For Edge, you can view the cookie and token at [edge://settings/cookies/detail?site=sider.ai](edge://settings/cookies/detail?site=sider.ai)
+For Edge, you can view the cookie and token at [edge://settings/cookies/detail?site=sider.ai](edge://settings/cookies/detail?site=sider.ai). Do NOT include the `Bearer` header.  
 The optional `CONTEXT_ID` is the conversation context ID, since the conversation is stored in the cloud rather than locally.   
 The optional `COOKIE` is the additional cookie to be passed to sider.ai. If not provided, the `sider_ai_api` library will use a default cookie template.  
+For more information about these keys, please refer to my own repository [sider-ai-api](https://github.com/qfcy/sider-ai-api).  
 
 #### Additional changes
 
