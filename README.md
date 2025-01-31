@@ -1,4 +1,6 @@
-# Gepetto
+This is a fork and an upgraded version of the original [Gepetto](https://github.com/JusticeRage/Gepetto) that added the (sider)[https://sider.ai] API support.  
+
+# Description of the original Gepetto
 
 Gepetto is a Python plugin which uses various large language models to provide meaning to functions 
 decompiled by IDA Pro (≥ 7.4). It can leverage them to explain what a function does, and to automatically 
@@ -27,6 +29,26 @@ method with the corresponding provider.
 
 ## Supported models
 
+- [**Sider**](https:///sider.ai)  
+  Basic models:  
+  - sider (Sider Fusion)
+  - gpt-4o-mini
+  - claude-3-haiku
+  - claude-3.5-haiku
+  - gemini-1.5-flash
+  - gemini-2.0-flash
+  - llama-3
+  - llama-3.3-70b
+  - deepseek-chat (DeepSeek V3) 
+
+  Advanced models:
+  - gpt-4o
+  - claude-3.5-sonnet
+  - gemini-1.5-pro
+  - llama-3.1-405b
+  - o1-mini
+  - o1
+  - deepseek-reasoner (DeepSeek R1)
 - [OpenAI](https://playground.openai.com/)
   - gpt-3.5-turbo-0125
   - gpt-4-turbo
@@ -102,9 +124,48 @@ localized version).
 
 ## Acknowledgements
 
+- [Sider](https://sider.ai) that provides alternative access to various models including gpt, claude, gemini, o1, deepseek, etc.
 - [OpenAI](https://openai.com), for making these incredible models, obviously
 - [Hex Rays](https://hex-rays.com/), the makers of IDA for their lightning fast support
 - [Kaspersky](https://kaspersky.com), for initially funding this project
 - [HarfangLab](https://harfanglab.io/), the current backer making this work possible
 - [@vanhauser-thc](https://github.com/vanhauser-thc) for contributing ideas of additional models and providers to support via his [fork](https://github.com/vanhauser-thc/gepetto/)
 - Everyone who contributed translations: @seifreed, @kot-igor, @ruzgarkanar, @orangetw
+
+## Changes in this fork
+
+#### the config.ini
+
+This fork added the `API_PROVIDER` key that specifies the API provider Gepetto uses.  
+For example, if `API_PROVIDER` is set to `sider`, none of API providers except `sider` will be used.  
+```
+[Gepetto]
+MODEL = gpt-4o-mini
+
+# Specify the program language. It can be "fr_FR", "zh_CN", or any folder in locales. Defaults to English.
+LANGUAGE = 
+
+# The name of the python module in `gepetto/models` folder, including sider, openai, etc.
+API_PROVIDER = 
+```
+To implement this, the original `gepetto/models/model_manager.py` has been changed.  
+
+Additionally, the `Sider` section is added:  
+```
+[Sider]
+
+# Only TOKEN is required, other keys are optional
+TOKEN = eyJhbGciOiJIUzI...
+CONTEXT_ID =
+COOKIE =
+```
+The token can be gained in your browser settings or developer tools if you've logged in [sider.ai](https://sider.ai). 
+For Edge, you can view the cookie and token at [edge://settings/cookies/detail?site=sider.ai](edge://settings/cookies/detail?site=sider.ai). Do NOT include the `Bearer` header.  
+The optional `CONTEXT_ID` is the conversation context ID, since the conversation is stored in the cloud rather than locally.   
+The optional `COOKIE` is the additional cookie to be passed to sider.ai. If not provided, the `sider_ai_api` library will use a default cookie template.  
+For more information about these keys, please refer to my own repository [sider-ai-api](https://github.com/qfcy/sider-ai-api).  
+
+#### Additional changes
+
+`gepetto/models/model_manager.py`: To implement the `API_PROVIDER` key in `config.ini`.  
+`requirements.txt`: Added the line of `sider-ai-api`.  
