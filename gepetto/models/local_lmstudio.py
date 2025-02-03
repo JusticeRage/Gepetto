@@ -1,14 +1,7 @@
-import functools
-import re
-import threading
-
 import httpx as _httpx
 from gepetto.models.openai import GPT
-import ida_kernwin
 import openai
-from pyexpat.errors import messages
 
-from gepetto.models.base import LanguageModel
 import gepetto.models.model_manager
 import gepetto.config
 
