@@ -45,6 +45,8 @@ method with the corresponding provider.
   - meta-llama/llama-3.3-70b-instruct
   - meta-llama/llama-3.1-70b-instruct
   - meta-llama/llama-3.1-405b-instruct
+- [LM Studio](https://lmstudio.ai/)
+  - Any local model exposed through LM Studio (will not appear if LM Studio Developer server is not running)
 
 Adding support for additional models shouldn't be too difficult, provided whatever provider you're considering exposes
 an API similar to OpenAI's. Look into the `gepetto/models` folder for inspiration, or open an issue if you can't figure
