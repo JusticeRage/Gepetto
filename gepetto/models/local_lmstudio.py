@@ -37,7 +37,7 @@ class LMStudio(GPT):
 
     @staticmethod
     def is_configured_properly() -> bool:
-        return True
+        return len(LMStudio.supported_models()) > 0
 
     def __init__(self, model):
         try:
