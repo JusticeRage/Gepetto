@@ -100,3 +100,6 @@ msgstr "Attempting to load the first available model..."
 
 msgid "No model available. Please edit the configuration file and try again."
 msgstr "No model available. Please edit the configuration file and try again."
+
+msgid "Failed to fetch models from {base_url}: {status_code}"
+msgstr "Failed to fetch models from {base_url}: {status_code}"
