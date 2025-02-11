@@ -19,7 +19,7 @@ class LMStudio(GPT):
         if LMSTUDIO_MODELS is not None:
             return LMSTUDIO_MODELS
 
-        base_url = gepetto.config.get_config("LMStudio", "BASE_URL", "http://127.0.0.1:1234/v1/")
+        base_url = gepetto.config.get_config("LMStudio", "BASE_URL", default="http://127.0.0.1:1234/v1/")
         try:
             response = _httpx.get(f"{base_url}models", timeout=2)
             if response.status_code == 200:
@@ -44,8 +44,8 @@ class LMStudio(GPT):
             super().__init__(model)
         except ValueError:
             pass
-        
-        base_url = gepetto.config.get_config("LMStudio", "BASE_URL", "http://127.0.0.1:1234/v1/")
+
+        base_url = gepetto.config.get_config("LMStudio", "BASE_URL", default="http://127.0.0.1:1234/v1/")
         proxy = gepetto.config.get_config("Gepetto", "PROXY")
 
         self.model = model
