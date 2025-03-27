@@ -31,6 +31,12 @@ method with the corresponding provider.
   - gpt-3.5-turbo-0125
   - gpt-4-turbo
   - gpt-4o (recommended for beginners)
+- [Azure OpenAI](https://ai.azure.com/)
+  - gpt-35-turbo
+  - gpt-35-turbo-1106
+  - gpt-35-turbo-16k
+  - gpt-4-turbo
+  - gpt-4-turbo-2024-0409-gs
 - [Ollama](https://ollama.com/)
   - Any local model exposed through Ollama (will not appear if Ollama is not running)
 - [Groq](https://console.groq.com/playground)
