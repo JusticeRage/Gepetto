@@ -47,7 +47,7 @@ class NovitaAI(GPT):
             api_key=api_key,
             base_url="https://api.novita.ai/v3/openai",
             http_client=_httpx.Client(
-                proxies=proxy,
+                proxy=proxy,
             ) if proxy else None
         )
 

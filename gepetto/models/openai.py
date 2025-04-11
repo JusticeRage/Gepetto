@@ -46,7 +46,7 @@ class GPT(LanguageModel):
             api_key=api_key,
             base_url=base_url,
             http_client=_httpx.Client(
-                proxies=proxy,
+                proxy=proxy,
             ) if proxy else None
         )
 

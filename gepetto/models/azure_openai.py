@@ -44,7 +44,7 @@ class AzureOpenAI(GPT):
                 api_key=api_key,
                 api_version=self.API_VERSION,
                 http_client=_httpx.Client(
-                    proxies=proxy,
+                    proxy=proxy,
                 ) if proxy else None
             )
         else:
@@ -58,7 +58,7 @@ class AzureOpenAI(GPT):
                 azure_ad_token_provider=token_provider,
                 api_version=self.API_VERSION,
                 http_client=_httpx.Client(
-                    proxies=proxy,
+                    proxy=proxy,
                 ) if proxy else None
             )
 
