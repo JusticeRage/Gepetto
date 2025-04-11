@@ -53,7 +53,7 @@ class LMStudio(GPT):
             api_key="NO_API_KEY",
             base_url=base_url,
             http_client=_httpx.Client(
-                proxies=proxy,
+                proxy=proxy,
             ) if proxy else None
         )
 
