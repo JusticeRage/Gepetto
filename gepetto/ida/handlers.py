@@ -1,6 +1,7 @@
 import functools
 import json
 import re
+import time
 import textwrap
 
 import idaapi
@@ -11,13 +12,14 @@ import gepetto.config
 from gepetto.models.model_manager import instantiate_model
 
 
-def comment_callback(address, view, response):
+def comment_callback(address, view, response, start_time):
     """
     Callback that sets a comment at the given address.
     :param address: The address of the function to comment
     :param view: A handle to the decompiler window
     :param response: The comment to add
     """
+    elapsed_time = time.time() - start_time
     response = "\n".join(textwrap.wrap(response, 80, replace_whitespace=False))
 
     # Add the response as a comment in IDA, but preserve any existing non-Gepetto comment
@@ -36,7 +38,7 @@ def comment_callback(address, view, response):
     # Refresh the window so the comment is displayed properly
     if view:
         view.refresh_view(False)
-    print(_("{model} query finished!").format(model=str(gepetto.config.model)))
+    print(_("{model} query finished in {time:.2f} seconds!").format(model=str(gepetto.config.model), time=elapsed_time))
 
 # -----------------------------------------------------------------------------
 
@@ -69,12 +71,13 @@ class ExplainHandler(idaapi.action_handler_t):
         idaapi.action_handler_t.__init__(self)
 
     def activate(self, ctx):
+        start_time = time.time()
         decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
         v = ida_hexrays.get_widget_vdui(ctx.widget)
         gepetto.config.model.query_model_async(
             _("Can you explain what the following C function does and suggest a better name for "
               "it?\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
-            functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=v))
+            functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=v, start_time=start_time))
         print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
         return 1
 
