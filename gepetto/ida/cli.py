@@ -21,8 +21,24 @@ class GepettoCLI(ida_kernwin.cli_t):
 
     def OnExecuteLine(self, line):
         MESSAGES.append({"role": "user", "content": line})
-        gepetto.config.model.query_model_async(MESSAGES, functools.partial(gepetto.ida.handlers.conversation_callback,
-                                                         memory=MESSAGES))
+        
+        def stream_callback(content, finished=False):
+            """
+            Callback to handle streaming responses from the model.
+            :param chunk: A chunk of the response text.
+            """
+            if content:
+                print(content, end="", flush=True)  # Print each chunk as it arrives
+            elif finished:
+                # the stream finished, so we can print a newline
+                print()
+
+        # Use OpenAI's streaming API to query the model
+        gepetto.config.model.query_model_async(
+            MESSAGES,
+            stream_callback,
+            stream=True,
+        )
         return True
 
     def OnKeydown(self, line, x, sellen, vkey, shift):
