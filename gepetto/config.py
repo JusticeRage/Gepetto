@@ -16,7 +16,7 @@ def load_config():
     """
     global model, parsed_ini
     parsed_ini = configparser.RawConfigParser()
-    parsed_ini.read(os.path.join(os.path.abspath(os.path.dirname(__file__)), "config.ini"))
+    parsed_ini.read(os.path.join(os.path.abspath(os.path.dirname(__file__)), "config.ini"), encoding="utf-8")
 
     # Set up translations
     language = parsed_ini.get('Gepetto', 'LANGUAGE')
@@ -76,7 +76,7 @@ def update_config(section, option, new_value):
     """
     path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "config.ini")
     config = configparser.RawConfigParser()
-    config.read(path)
+    config.read(path, encoding="utf-8")
     config.set(section, option, new_value)
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         config.write(f)
