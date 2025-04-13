@@ -53,7 +53,7 @@ class GPT(LanguageModel):
     def __str__(self):
         return self.model
 
-    def query_model(self, query, cb, additional_model_options=None):
+    def query_model(self, query, cb, stream=False, additional_model_options=None):
         """
         Function which sends a query to a GPT-API-compatible model and calls a callback when the response is available.
         Blocks until the response is received
@@ -76,10 +76,19 @@ class GPT(LanguageModel):
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=conversation,
+                stream=stream,
                 **additional_model_options
             )
-            ida_kernwin.execute_sync(functools.partial(cb, response=response.choices[0].message.content),
-                                     ida_kernwin.MFF_WRITE)
+            if not stream:
+                ida_kernwin.execute_sync(functools.partial(cb, response=response.choices[0].message.content),
+                                         ida_kernwin.MFF_WRITE)
+            else:
+                for chunk in response:
+                    delta = chunk.choices[0].delta
+                    finished = chunk.choices[0].finish_reason
+                    content = delta.content if hasattr(delta, "content") else ""
+                    cb(content, finished)
+
         except openai.BadRequestError as e:
             # Context length exceeded. Determine the max number of tokens we can ask for and retry.
             m = re.search(r'maximum context length is \d+ tokens, however you requested \d+ tokens', str(e))
@@ -94,7 +103,7 @@ class GPT(LanguageModel):
 
     # -----------------------------------------------------------------------------
 
-    def query_model_async(self, query, cb, additional_model_options=None):
+    def query_model_async(self, query, cb, stream=False, additional_model_options=None):
         """
         Function which sends a query to {model} and calls a callback when the response is available.
         :param query: The request to send to {model}
@@ -102,7 +111,7 @@ class GPT(LanguageModel):
         :param additional_model_options: Additional parameters used when creating the model object. Typically, for
         OpenAI, response_format={"type": "json_object"}.
         """
-        t = threading.Thread(target=self.query_model, args=[query, cb, additional_model_options])
+        t = threading.Thread(target=self.query_model, args=[query, cb, stream, additional_model_options])
         t.start()
 
 gepetto.models.model_manager.register_model(GPT)

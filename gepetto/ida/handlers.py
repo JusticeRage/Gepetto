@@ -1,6 +1,7 @@
 import functools
 import json
 import re
+import time
 import textwrap
 
 import idaapi
@@ -11,13 +12,14 @@ import gepetto.config
 from gepetto.models.model_manager import instantiate_model
 
 
-def comment_callback(address, view, response):
+def comment_callback(address, view, response, start_time):
     """
     Callback that sets a comment at the given address.
     :param address: The address of the function to comment
     :param view: A handle to the decompiler window
     :param response: The comment to add
     """
+    elapsed_time = time.time() - start_time
     response = "\n".join(textwrap.wrap(response, 80, replace_whitespace=False))
 
     # Add the response as a comment in IDA, but preserve any existing non-Gepetto comment
@@ -36,7 +38,7 @@ def comment_callback(address, view, response):
     # Refresh the window so the comment is displayed properly
     if view:
         view.refresh_view(False)
-    print(_("{model} query finished!").format(model=str(gepetto.config.model)))
+    print(_("{model} query finished in {time:.2f} seconds!").format(model=str(gepetto.config.model), time=elapsed_time))
 
 # -----------------------------------------------------------------------------
 
@@ -69,12 +71,13 @@ class ExplainHandler(idaapi.action_handler_t):
         idaapi.action_handler_t.__init__(self)
 
     def activate(self, ctx):
+        start_time = time.time()
         decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
         v = ida_hexrays.get_widget_vdui(ctx.widget)
         gepetto.config.model.query_model_async(
             _("Can you explain what the following C function does and suggest a better name for "
               "it?\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
-            functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=v))
+            functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=v, start_time=start_time))
         print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
         return 1
 
@@ -173,6 +176,88 @@ class SwapModelHandler(idaapi.action_handler_t):
         gepetto.config.update_config("Gepetto", "MODEL", self.new_model)
         # Refresh the menus to reflect which model is currently selected.
         self.plugin.generate_model_select_menu()
+
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
+
+class GenerateCCodeHandler(idaapi.action_handler_t):
+    """
+    This handler requests the model to generate executable C code from the given
+    decompiled C function. The generated code is saved to a file.
+    """
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
+        v = ida_hexrays.get_widget_vdui(ctx.widget)
+        if not decompiler_output:
+            return 0
+
+        gepetto.config.model.query_model_async(
+            _("Please generate executable C code based on the following decompiled C code and ensure it includes all necessary header files and other information:\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
+            functools.partial(self._save_c_code, view=v)
+        )
+        print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
+        return 1
+
+    def _save_c_code(self, view, response):
+        """
+        Callback that saves the generated C code to a file.
+        :param view: A handle to the decompiler window
+        :param response: The generated C code from the model
+        """
+        project_name = idaapi.get_root_filename()
+        func_name = idc.get_func_name(idaapi.get_screen_ea())
+        file_name = f"{project_name}_{func_name}.c"
+        with open(file_name, "w", encoding="utf-8") as f:
+            f.write(response)
+
+        if view:
+            view.refresh_view(False)
+        print(_("{model} generated code saved to {file_name}").format(model=str(gepetto.config.model), file_name=file_name))
+
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
+
+class GeneratePythonCodeHandler(idaapi.action_handler_t):
+    """
+    This handler requests the model to generate executable C code from the given
+    decompiled C function. The generated code is saved to a file.
+    """
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
+        v = ida_hexrays.get_widget_vdui(ctx.widget)
+        if not decompiler_output:
+            return 0
+
+        gepetto.config.model.query_model_async(
+            _("Please generate equivalent Python code based on the following decompiled C code, and provide an example of the function call:\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
+            functools.partial(self._save_python_code, view=v)
+        )
+        print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
+        return 1
+
+    def _save_python_code(self, view, response):
+        """
+        Callback that saves the generated python code to a file.
+        :param view: A handle to the decompiler window
+        :param response: The generated python code from the model
+        """
+        project_name = idaapi.get_root_filename()
+        func_name = idc.get_func_name(idaapi.get_screen_ea())
+        file_name = f"{project_name}_{func_name}.py"
+        with open(file_name, "w", encoding="utf-8") as f:
+            f.write(response)
+
+        if view:
+            view.refresh_view(False)
+        print(_("{model} generated code saved to {file_name}").format(model=str(gepetto.config.model), file_name=file_name))
 
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
