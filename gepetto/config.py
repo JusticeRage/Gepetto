@@ -2,10 +2,15 @@ import configparser
 import gettext
 import os
 
-from gepetto.models.model_manager import instantiate_model, load_available_models, get_fallback_model
+from gepetto.models.model_manager import (
+    get_fallback_model,
+    instantiate_model,
+    load_available_models,
+)
 
 model = None
 parsed_ini = None
+translate = None   # to hold reference
 
 
 def load_config():
@@ -14,7 +19,7 @@ def load_config():
     Also prepares an OpenAI client configured accordingly to the user specifications.
     :return:
     """
-    global model, parsed_ini
+    global model, parsed_ini, translate
     parsed_ini = configparser.RawConfigParser()
     parsed_ini.read(os.path.join(os.path.abspath(os.path.dirname(__file__)), "config.ini"), encoding="utf-8")
 
@@ -24,7 +29,7 @@ def load_config():
                                     os.path.join(os.path.abspath(os.path.dirname(__file__)), "locales"),
                                     fallback=True,
                                     languages=[language])
-    translate.install("gepetto")  # Install the _() function in the gepetto namespace.
+    translate.install()
 
     # Select model
     requested_model = parsed_ini.get('Gepetto', 'MODEL')
