@@ -101,7 +101,7 @@ class ExplainHandler(idaapi.action_handler_t):
                 start_time=start_time,
             ),
         )
-        print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
+        print(tr_("Request to {model} sent...").format(model=str(gepetto.config.model)))
         return 1
 
     # This action is always available.
@@ -178,7 +178,7 @@ class RenameHandler(idaapi.action_handler_t):
             functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=v),
             additional_model_options={"response_format": {"type": "json_object"}},
         )
-        print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
+        print(tr_("Request to {model} sent...").format(model=str(gepetto.config.model)))
         return 1
 
     # This action is always available.
@@ -240,7 +240,7 @@ class GenerateCCodeHandler(idaapi.action_handler_t):
             ).format(decompiler_output=str(decompiler_output)),
             functools.partial(self._save_c_code, view=v),
         )
-        print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
+        print(tr_("Request to {model} sent...").format(model=str(gepetto.config.model)))
         return 1
 
     def _save_c_code(self, view, response):
@@ -288,7 +288,7 @@ class GeneratePythonCodeHandler(idaapi.action_handler_t):
             ).format(decompiler_output=str(decompiler_output)),
             functools.partial(self._save_python_code, view=v),
         )
-        print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
+        print(tr_("Request to {model} sent...").format(model=str(gepetto.config.model)))
         return 1
 
     def _save_python_code(self, view, response):
