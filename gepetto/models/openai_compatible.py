@@ -1,14 +1,13 @@
-import openai
 import json
-import httpx as _httpx
 
 import gepetto.config
 import gepetto.models.model_manager
+import httpx as _httpx
+import openai
+from gepetto.config import tr_
 from gepetto.models.openai import GPT
 
-DEFAULT_MODELS = [
-    "default"
-]
+DEFAULT_MODELS = ["default"]
 
 
 class OpenAICompatible(GPT):
@@ -39,8 +38,7 @@ class OpenAICompatible(GPT):
     def is_configured_properly() -> bool:
 
         # The plugin is configured properly if the API key is provided, otherwise it should not be shown.
-        return bool(
-            gepetto.config.get_config("OpenAICompatible", "API_KEY"))
+        return bool(gepetto.config.get_config("OpenAICompatible", "API_KEY"))
 
     def __init__(self, model):
         try:
@@ -50,22 +48,29 @@ class OpenAICompatible(GPT):
             pass  # May throw if the OpenAI API key isn't given, but we don't need any to use DeepSeek.
 
         self.model = model
-        api_key = gepetto.config.get_config("OpenAICompatible", "API_KEY",
-                                            "SILICONFLOW_API_KEY")
+        api_key = gepetto.config.get_config(
+            "OpenAICompatible", "API_KEY", "SILICONFLOW_API_KEY"
+        )
         if not api_key:
             raise ValueError(
-                _("Please edit the configuration file to insert your {api_provider} API key!"
-                  ).format(api_provider=OpenAICompatible.get_menu_name()))
+                tr_(
+                    "Please edit the configuration file to insert your {api_provider} API key!"
+                ).format(api_provider=OpenAICompatible.get_menu_name())
+            )
 
         proxy = gepetto.config.get_config("Gepetto", "PROXY")
-        base_url = gepetto.config.get_config("OpenAICompatible", "BASE_URL",
-                                             "SILICONFLOW_BASE_URL",
-                                             "https://api.siliconflow.cn/v1")
+        base_url = gepetto.config.get_config(
+            "OpenAICompatible",
+            "BASE_URL",
+            "SILICONFLOW_BASE_URL",
+            "https://api.siliconflow.cn/v1",
+        )
 
         self.client = openai.OpenAI(
             api_key=api_key,
             base_url=base_url,
-            http_client=_httpx.Client(proxy=proxy) if proxy else None)
+            http_client=_httpx.Client(proxy=proxy) if proxy else None,
+        )
 
 
 gepetto.models.model_manager.register_model(OpenAICompatible)

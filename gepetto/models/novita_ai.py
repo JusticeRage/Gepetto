@@ -1,18 +1,18 @@
-import openai
-import httpx as _httpx
-
 import gepetto.config
 import gepetto.models.model_manager
+import httpx as _httpx
+import openai
+from gepetto.config import tr_
 from gepetto.models.openai import GPT
 
-
 NOVITA_MODELS = [
-  "deepseek/deepseek-r1",
-  "deepseek/deepseek_v3",
-  "meta-llama/llama-3.3-70b-instruct",
-  "meta-llama/llama-3.1-70b-instruct",
-  "meta-llama/llama-3.1-405b-instruct",
+    "deepseek/deepseek-r1",
+    "deepseek/deepseek_v3",
+    "meta-llama/llama-3.3-70b-instruct",
+    "meta-llama/llama-3.1-70b-instruct",
+    "meta-llama/llama-3.1-405b-instruct",
 ]
+
 
 class NovitaAI(GPT):
     @staticmethod
@@ -26,7 +26,9 @@ class NovitaAI(GPT):
     @staticmethod
     def is_configured_properly() -> bool:
         # The plugin is configured properly if the API key is provided, otherwise it should not be shown.
-        return bool(gepetto.config.get_config("NovitaAI", "API_KEY", "NOVITAAI_API_KEY"))
+        return bool(
+            gepetto.config.get_config("NovitaAI", "API_KEY", "NOVITAAI_API_KEY")
+        )
 
     def __init__(self, model):
         try:
@@ -37,8 +39,11 @@ class NovitaAI(GPT):
         self.model = model
         api_key = gepetto.config.get_config("NovitaAI", "API_KEY", "NOVITAAI_API_KEY")
         if not api_key:
-            print(_("Please edit the configuration file to insert your {api_provider} API key!")
-                  .format(api_provider="Novita AI"))
+            print(
+                tr_(
+                    "Please edit the configuration file to insert your {api_provider} API key!"
+                ).format(api_provider="Novita AI")
+            )
             raise ValueError("No valid Novita AI API key found")
 
         proxy = gepetto.config.get_config("Gepetto", "PROXY")
@@ -46,9 +51,14 @@ class NovitaAI(GPT):
         self.client = openai.OpenAI(
             api_key=api_key,
             base_url="https://api.novita.ai/v3/openai",
-            http_client=_httpx.Client(
-                proxy=proxy,
-            ) if proxy else None
+            http_client=(
+                _httpx.Client(
+                    proxy=proxy,
+                )
+                if proxy
+                else None
+            ),
         )
+
 
 gepetto.models.model_manager.register_model(NovitaAI)

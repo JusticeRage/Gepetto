@@ -1,19 +1,22 @@
 import functools
 import threading
 
-import httpx as _httpx
-import ida_kernwin
-import ollama
-
-from gepetto.models.base import LanguageModel
-import gepetto.models.model_manager
 import gepetto.config
+import gepetto.models.model_manager
+import httpx as _httpx
+import ollama
+from gepetto.config import tr_
+from gepetto.models.base import LanguageModel
+
+import ida_kernwin
 
 OLLAMA_MODELS = None
+
 
 def create_client(**kwargs):
     host = gepetto.config.get_config("Ollama", "HOST", default="http://localhost:11434")
     return ollama.Client(host=host, **kwargs)
+
 
 class Ollama(LanguageModel):
     @staticmethod
@@ -26,8 +29,15 @@ class Ollama(LanguageModel):
         if OLLAMA_MODELS is None:
             try:
                 # User a shorter timeout to avoid hanging IDA at startup is the server is unreachable.
-                OLLAMA_MODELS = [m["model"] for m in create_client(timeout=2).list()["models"]]
-            except (_httpx.ConnectError, _httpx.ConnectTimeout, ollama.ResponseError, ConnectionError):
+                OLLAMA_MODELS = [
+                    m["model"] for m in create_client(timeout=2).list()["models"]
+                ]
+            except (
+                _httpx.ConnectError,
+                _httpx.ConnectTimeout,
+                ollama.ResponseError,
+                ConnectionError,
+            ):
                 OLLAMA_MODELS = []
         return OLLAMA_MODELS
 
@@ -43,36 +53,40 @@ class Ollama(LanguageModel):
         self.model = model
         self.client = create_client()
 
-    def query_model_async(self, query, cb, stream=False, additional_model_options = None):
+    def query_model_async(self, query, cb, stream=False, additional_model_options=None):
         if additional_model_options is None:
             additional_model_options = {}
-        t = threading.Thread(target=self.query_model, args=[query, cb, stream, additional_model_options])
+        t = threading.Thread(
+            target=self.query_model, args=[query, cb, stream, additional_model_options]
+        )
         t.start()
 
     def query_model(self, query, cb, stream=False, additional_model_options=None):
         # Convert the OpenAI json parameter for Ollama
         kwargs = {}
-        if "response_format" in additional_model_options and additional_model_options["response_format"]["type"] == "json_object":
+        if (
+            "response_format" in additional_model_options
+            and additional_model_options["response_format"]["type"] == "json_object"
+        ):
             kwargs["format"] = "json"
 
         try:
             if type(query) is str:
-                conversation = [
-                    {"role": "user", "content": query}
-                ]
+                conversation = [{"role": "user", "content": query}]
             else:
                 conversation = query
 
-            response = self.client.chat(model=self.model,
-                                        messages=conversation,
-                                        stream=stream,
-                                        **kwargs)
+            response = self.client.chat(
+                model=self.model, messages=conversation, stream=stream, **kwargs
+            )
             if not stream:
-                ida_kernwin.execute_sync(functools.partial(cb, response=response["message"]["content"]),
-                                         ida_kernwin.MFF_WRITE)
+                ida_kernwin.execute_sync(
+                    functools.partial(cb, response=response["message"]["content"]),
+                    ida_kernwin.MFF_WRITE,
+                )
             else:
                 for chunk in response:
-                    cb(chunk['message']['content'], finished=chunk['done'])
+                    cb(chunk["message"]["content"], finished=chunk["done"])
         except Exception as e:
             print(e)
 

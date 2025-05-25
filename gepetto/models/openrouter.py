@@ -1,10 +1,10 @@
-import openai
-import httpx as _httpx
 import json
-import os
 
 import gepetto.config
 import gepetto.models.model_manager
+import httpx as _httpx
+import openai
+from gepetto.config import tr_
 from gepetto.models.openai import GPT
 
 # Default models to expose through OpenRouter
@@ -15,6 +15,7 @@ DEFAULT_OPENROUTER_MODELS = [
     "google/gemini-2.0-flash-thinking-exp:free",
     "deepseek/deepseek-r1",
 ]
+
 
 class OpenRouter(GPT):
     @staticmethod
@@ -36,7 +37,9 @@ class OpenRouter(GPT):
     @staticmethod
     def is_configured_properly() -> bool:
         # The plugin is configured properly if the API key is provided
-        return bool(gepetto.config.get_config("OpenRouter", "API_KEY", "OPENROUTER_API_KEY"))
+        return bool(
+            gepetto.config.get_config("OpenRouter", "API_KEY", "OPENROUTER_API_KEY")
+        )
 
     def __init__(self, model):
         try:
@@ -45,20 +48,35 @@ class OpenRouter(GPT):
             pass  # May throw if the OpenAI API key isn't given, but we don't need it
 
         self.model = model
-        api_key = gepetto.config.get_config("OpenRouter", "API_KEY", "OPENROUTER_API_KEY")
+        api_key = gepetto.config.get_config(
+            "OpenRouter", "API_KEY", "OPENROUTER_API_KEY"
+        )
         if not api_key:
-            raise ValueError(_("Please edit the configuration file to insert your {api_provider} API key!")
-                             .format(api_provider="OpenRouter"))
-        
+            raise ValueError(
+                tr_(
+                    "Please edit the configuration file to insert your {api_provider} API key!"
+                ).format(api_provider="OpenRouter")
+            )
+
         proxy = gepetto.config.get_config("Gepetto", "PROXY")
-        base_url = gepetto.config.get_config("OpenRouter", "BASE_URL", "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+        base_url = gepetto.config.get_config(
+            "OpenRouter",
+            "BASE_URL",
+            "OPENROUTER_BASE_URL",
+            "https://openrouter.ai/api/v1",
+        )
 
         self.client = openai.OpenAI(
             api_key=api_key,
             base_url=base_url,
-            http_client=_httpx.Client(
-                proxy=proxy,
-            ) if proxy else None
+            http_client=(
+                _httpx.Client(
+                    proxy=proxy,
+                )
+                if proxy
+                else None
+            ),
         )
+
 
 gepetto.models.model_manager.register_model(OpenRouter)
