@@ -4,7 +4,7 @@
     "name": "Gepetto",
     "entryPoint": "gepetto.py",
     "categories": ["integration-with-third-parties/interoperability"],
-    "logoPath": "",
+    "logoPath": "readme/gepetto_logo.png",
     "idaVersions": ">=7.4",
     "description": "Gepetto is a Python plugin which uses various large language models to provide meaning to functions decompiled by IDA Pro. It can leverage them to explain what a function does, and to automatically rename its variables.",
     "version": "1.4.1"
