@@ -1,9 +1,10 @@
-import openai
 import json
-import httpx as _httpx
 
 import gepetto.config
 import gepetto.models.model_manager
+import httpx as _httpx
+import openai
+from gepetto.config import tr_
 from gepetto.models.openai import GPT
 
 # Define all available Kluster.ai models
@@ -17,8 +18,9 @@ DEFAULT_MODELS = [
     "klusterai/Meta-Llama-3.3-70B-Instruct-Turbo",
     "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
     "meta-llama/Llama-4-Scout-17B-16E-Instruct",
-    "Qwen/Qwen2.5-VL-7B-Instruct"
+    "Qwen/Qwen2.5-VL-7B-Instruct",
 ]
+
 
 class Kluster(GPT):
     @staticmethod
@@ -53,16 +55,21 @@ class Kluster(GPT):
         api_key = gepetto.config.get_config("Kluster", "API_KEY")
         if not api_key:
             raise ValueError(
-                _("Please edit the configuration file to insert your {api_provider} API key!")
-                .format(api_provider=Kluster.get_menu_name()))
+                tr_(
+                    "Please edit the configuration file to insert your {api_provider} API key!"
+                ).format(api_provider=Kluster.get_menu_name())
+            )
 
         proxy = gepetto.config.get_config("Gepetto", "PROXY")
-        base_url = gepetto.config.get_config("Kluster", "BASE_URL",
-                                           default="https://api.kluster.ai/v1")
+        base_url = gepetto.config.get_config(
+            "Kluster", "BASE_URL", default="https://api.kluster.ai/v1"
+        )
 
         self.client = openai.OpenAI(
             api_key=api_key,
             base_url=base_url,
-            http_client=_httpx.Client(proxy=proxy) if proxy else None)
+            http_client=_httpx.Client(proxy=proxy) if proxy else None,
+        )
 
-gepetto.models.model_manager.register_model(Kluster) 
+
+gepetto.models.model_manager.register_model(Kluster)

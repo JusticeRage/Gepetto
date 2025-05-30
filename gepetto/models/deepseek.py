@@ -1,11 +1,12 @@
-import openai
-import httpx as _httpx
-
 import gepetto.config
 import gepetto.models.model_manager
+import httpx as _httpx
+import openai
+from gepetto.config import tr_
 from gepetto.models.openai import GPT
 
 DEEPSEEK_CHAT_NAME = "deepseek-chat"
+
 
 class DeepSeek(GPT):
     @staticmethod
@@ -19,7 +20,9 @@ class DeepSeek(GPT):
     @staticmethod
     def is_configured_properly() -> bool:
         # The plugin is configured properly if the API key is provided, otherwise it should not be shown.
-        return bool(gepetto.config.get_config("DeepSeek", "API_KEY", "DEEPSEEK_API_KEY"))
+        return bool(
+            gepetto.config.get_config("DeepSeek", "API_KEY", "DEEPSEEK_API_KEY")
+        )
 
     def __init__(self, model):
         try:
@@ -30,18 +33,28 @@ class DeepSeek(GPT):
         self.model = model
         api_key = gepetto.config.get_config("DeepSeek", "API_KEY", "DEEPSEEK_API_KEY")
         if not api_key:
-            raise ValueError(_("Please edit the configuration file to insert your {api_provider} API key!")
-                             .format(api_provider="DeepSeek"))
-                             
+            raise ValueError(
+                tr_(
+                    "Please edit the configuration file to insert your {api_provider} API key!"
+                ).format(api_provider="DeepSeek")
+            )
+
         proxy = gepetto.config.get_config("Gepetto", "PROXY")
-        base_url = gepetto.config.get_config("DeepSeek", "BASE_URL", "DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
+        base_url = gepetto.config.get_config(
+            "DeepSeek", "BASE_URL", "DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"
+        )
 
         self.client = openai.OpenAI(
             api_key=api_key,
             base_url=base_url,
-            http_client=_httpx.Client(
-                proxy=proxy,
-            ) if proxy else None
+            http_client=(
+                _httpx.Client(
+                    proxy=proxy,
+                )
+                if proxy
+                else None
+            ),
         )
+
 
 gepetto.models.model_manager.register_model(DeepSeek)

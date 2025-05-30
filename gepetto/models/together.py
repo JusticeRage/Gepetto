@@ -1,10 +1,11 @@
-import together
-
 import gepetto.config
 import gepetto.models.model_manager
+import together
+from gepetto.config import tr_
 from gepetto.models.openai import GPT
 
 MISTRAL_MODEL_NAME = "mistralai/Mixtral-8x22B-Instruct-v0.1"
+
 
 class Together(GPT):
     @staticmethod
@@ -18,7 +19,9 @@ class Together(GPT):
     @staticmethod
     def is_configured_properly() -> bool:
         # The plugin is configured properly if the API key is provided, otherwise it should not be shown.
-        return bool(gepetto.config.get_config("Together", "API_KEY", "TOGETHER_API_KEY"))
+        return bool(
+            gepetto.config.get_config("Together", "API_KEY", "TOGETHER_API_KEY")
+        )
 
     def __init__(self, model):
         try:
@@ -29,13 +32,17 @@ class Together(GPT):
         self.model = model
         api_key = gepetto.config.get_config("Together", "API_KEY", "TOGETHER_API_KEY")
         if not api_key:
-            raise ValueError(_("Please edit the configuration file to insert your {api_provider} API key!")
-                             .format(api_provider="Together"))
+            raise ValueError(
+                tr_(
+                    "Please edit the configuration file to insert your {api_provider} API key!"
+                ).format(api_provider="Together")
+            )
 
-        base_url = gepetto.config.get_config("Together", "BASE_URL", "TOGETHER_BASE_URL")
+        base_url = gepetto.config.get_config(
+            "Together", "BASE_URL", "TOGETHER_BASE_URL"
+        )
 
-        self.client = together.Together(
-            api_key=api_key,
-            base_url=base_url)
+        self.client = together.Together(api_key=api_key, base_url=base_url)
+
 
 gepetto.models.model_manager.register_model(Together)

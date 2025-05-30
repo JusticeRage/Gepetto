@@ -1,27 +1,32 @@
-import functools
-
-import ida_kernwin
-import ida_idaapi
-from pyexpat.errors import messages
 
 import gepetto.config
 import gepetto.ida.handlers
+from gepetto.config import tr_
+
+import ida_idaapi
+import ida_kernwin
 
 CLI: ida_kernwin.cli_t = None
 MESSAGES: list[dict] = [
-    {"role": "system", "content": _("You are a helpful assistant embedded in IDA Pro. Your role is to facilitate "
-                                    "reverse-engineering and answer programming questions.")}
+    {
+        "role": "system",
+        "content": tr_(
+            "You are a helpful assistant embedded in IDA Pro. Your role is to facilitate "
+            "reverse-engineering and answer programming questions."
+        ),
+    }
 ]  # Keep a history of the conversation to simulate LLM memory.
+
 
 class GepettoCLI(ida_kernwin.cli_t):
     flags = 0
     sname = "Gepetto"
-    lname  = "Gepetto - " + _("LLM chat")
+    lname = "Gepetto - " + tr_("LLM chat")
     hint = "Gepetto"
 
     def OnExecuteLine(self, line):
         MESSAGES.append({"role": "user", "content": line})
-        
+
         def stream_callback(content, finished=False):
             """
             Callback to handle streaming responses from the model.
@@ -44,7 +49,9 @@ class GepettoCLI(ida_kernwin.cli_t):
     def OnKeydown(self, line, x, sellen, vkey, shift):
         pass
 
+
 # -----------------------------------------------------------------------------
+
 
 def cli_lifecycle_callback(code, old=0):
     if code == ida_idaapi.NW_OPENIDB:
@@ -52,7 +59,9 @@ def cli_lifecycle_callback(code, old=0):
     elif code == ida_idaapi.NW_CLOSEIDB or code == ida_idaapi.NW_TERMIDA:
         CLI.unregister()
 
+
 # -----------------------------------------------------------------------------
+
 
 def register_cli():
     global CLI
@@ -61,4 +70,7 @@ def register_cli():
         cli_lifecycle_callback(ida_idaapi.NW_TERMIDA)
     CLI = GepettoCLI()
     if CLI.register():
-        ida_idaapi.notify_when(ida_idaapi.NW_TERMIDA | ida_idaapi.NW_OPENIDB | ida_idaapi.NW_CLOSEIDB, cli_lifecycle_callback)
+        ida_idaapi.notify_when(
+            ida_idaapi.NW_TERMIDA | ida_idaapi.NW_OPENIDB | ida_idaapi.NW_CLOSEIDB,
+            cli_lifecycle_callback,
+        )

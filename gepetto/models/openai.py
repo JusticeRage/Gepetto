@@ -2,14 +2,15 @@ import functools
 import re
 import threading
 
+import gepetto.config
+import gepetto.models.model_manager
 import httpx as _httpx
-import ida_kernwin
 import openai
+from gepetto.config import tr_
+from gepetto.models.base import LanguageModel
 from pyexpat.errors import messages
 
-from gepetto.models.base import LanguageModel
-import gepetto.models.model_manager
-import gepetto.config
+import ida_kernwin
 
 GPT3_MODEL_NAME = "gpt-3.5-turbo-0125"
 GPT4_MODEL_NAME = "gpt-4-turbo"
@@ -24,7 +25,12 @@ class GPT(LanguageModel):
 
     @staticmethod
     def supported_models():
-        return [GPT3_MODEL_NAME, GPT4_MODEL_NAME, GPT4o_MODEL_NAME, GPT4o_MINI_MODEL_NAME]
+        return [
+            GPT3_MODEL_NAME,
+            GPT4_MODEL_NAME,
+            GPT4o_MODEL_NAME,
+            GPT4o_MINI_MODEL_NAME,
+        ]
 
     @staticmethod
     def is_configured_properly() -> bool:
@@ -36,8 +42,11 @@ class GPT(LanguageModel):
         # Get API key
         api_key = gepetto.config.get_config("OpenAI", "API_KEY", "OPENAI_API_KEY")
         if not api_key:
-            raise ValueError(_("Please edit the configuration file to insert your {api_provider} API key!")
-                             .format(api_provider="OpenAI"))
+            raise ValueError(
+                tr_(
+                    "Please edit the configuration file to insert your {api_provider} API key!"
+                ).format(api_provider="OpenAI")
+            )
 
         proxy = gepetto.config.get_config("Gepetto", "PROXY")
         base_url = gepetto.config.get_config("OpenAI", "BASE_URL", "OPENAI_BASE_URL")
@@ -45,9 +54,13 @@ class GPT(LanguageModel):
         self.client = openai.OpenAI(
             api_key=api_key,
             base_url=base_url,
-            http_client=_httpx.Client(
-                proxy=proxy,
-            ) if proxy else None
+            http_client=(
+                _httpx.Client(
+                    proxy=proxy,
+                )
+                if proxy
+                else None
+            ),
         )
 
     def __str__(self):
@@ -67,9 +80,7 @@ class GPT(LanguageModel):
             additional_model_options = {}
         try:
             if type(query) is str:
-                conversation = [
-                    {"role": "user", "content": query}
-                ]
+                conversation = [{"role": "user", "content": query}]
             else:
                 conversation = query
 
@@ -80,8 +91,10 @@ class GPT(LanguageModel):
                 **additional_model_options
             )
             if not stream:
-                ida_kernwin.execute_sync(functools.partial(cb, response=response.choices[0].message.content),
-                                         ida_kernwin.MFF_WRITE)
+                ida_kernwin.execute_sync(
+                    functools.partial(cb, response=response.choices[0].message.content),
+                    ida_kernwin.MFF_WRITE,
+                )
             else:
                 for chunk in response:
                     delta = chunk.choices[0].delta
@@ -91,15 +104,34 @@ class GPT(LanguageModel):
 
         except openai.BadRequestError as e:
             # Context length exceeded. Determine the max number of tokens we can ask for and retry.
-            m = re.search(r'maximum context length is \d+ tokens, however you requested \d+ tokens', str(e))
+            m = re.search(
+                r"maximum context length is \d+ tokens, however you requested \d+ tokens",
+                str(e),
+            )
             if m:
-                print(_("Unfortunately, this function is too big to be analyzed with the model's current API limits."))
+                print(
+                    tr_(
+                        "Unfortunately, this function is too big to be analyzed with the model's current API limits."
+                    )
+                )
             else:
-                print(_("General exception encountered while running the query: {error}").format(error=str(e)))
+                print(
+                    tr_(
+                        "General exception encountered while running the query: {error}"
+                    ).format(error=str(e))
+                )
         except openai.OpenAIError as e:
-            print(_("{model} could not complete the request: {error}").format(model=self.model, error=str(e)))
+            print(
+                tr_("{model} could not complete the request: {error}").format(
+                    model=self.model, error=str(e)
+                )
+            )
         except Exception as e:
-            print(_("General exception encountered while running the query: {error}").format(error=str(e)))
+            print(
+                tr_(
+                    "General exception encountered while running the query: {error}"
+                ).format(error=str(e))
+            )
 
     # -----------------------------------------------------------------------------
 
@@ -111,7 +143,10 @@ class GPT(LanguageModel):
         :param additional_model_options: Additional parameters used when creating the model object. Typically, for
         OpenAI, response_format={"type": "json_object"}.
         """
-        t = threading.Thread(target=self.query_model, args=[query, cb, stream, additional_model_options])
+        t = threading.Thread(
+            target=self.query_model, args=[query, cb, stream, additional_model_options]
+        )
         t.start()
+
 
 gepetto.models.model_manager.register_model(GPT)
