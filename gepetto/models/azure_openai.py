@@ -6,6 +6,8 @@ from gepetto.models.openai import GPT
 import gepetto.models.model_manager
 import gepetto.config
 
+_ = gepetto.config._
+
 AZURE_OPENAI_MODELS = [
     "gpt-35-turbo",
     "gpt-35-turbo-1106",

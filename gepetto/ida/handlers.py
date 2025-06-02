@@ -11,6 +11,8 @@ import idc
 import gepetto.config
 from gepetto.models.model_manager import instantiate_model
 
+_ = gepetto.config._
+
 
 def comment_callback(address, view, response, start_time):
     """

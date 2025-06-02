@@ -6,6 +6,8 @@ import gepetto.config
 import gepetto.models.model_manager
 from gepetto.models.openai import GPT
 
+_ = gepetto.config._
+
 DEFAULT_SILICONFLOW_MODELS = [
     "deepseek-ai/DeepSeek-V3",
     "deepseek-ai/DeepSeek-R1",
