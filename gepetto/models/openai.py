@@ -11,6 +11,8 @@ from gepetto.models.base import LanguageModel
 import gepetto.models.model_manager
 import gepetto.config
 
+_ = gepetto.config._
+
 GPT3_MODEL_NAME = "gpt-3.5-turbo-0125"
 GPT4_MODEL_NAME = "gpt-4-turbo"
 GPT4o_MODEL_NAME = "gpt-4o"

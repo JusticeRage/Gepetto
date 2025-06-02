@@ -12,6 +12,8 @@ from gepetto.ida.handlers import ExplainHandler, RenameHandler, SwapModelHandler
 from gepetto.ida.cli import register_cli
 import gepetto.models.model_manager
 
+_ = gepetto.config._
+
 
 # =============================================================================
 # Setup the menus, hotkeys and cli in IDA

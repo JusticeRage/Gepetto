@@ -7,6 +7,7 @@ from pyexpat.errors import messages
 import gepetto.config
 import gepetto.ida.handlers
 
+_ = gepetto.config._
 CLI: ida_kernwin.cli_t = None
 MESSAGES: list[dict] = [
     {"role": "system", "content": _("You are a helpful assistant embedded in IDA Pro. Your role is to facilitate "

@@ -5,6 +5,8 @@ import gepetto.config
 import gepetto.models.model_manager
 from gepetto.models.openai import GPT
 
+_ = gepetto.config._
+
 DEEPSEEK_CHAT_NAME = "deepseek-chat"
 
 class DeepSeek(GPT):

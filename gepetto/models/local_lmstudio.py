@@ -5,6 +5,8 @@ import openai
 import gepetto.models.model_manager
 import gepetto.config
 
+_ = gepetto.config._
+
 LMSTUDIO_MODELS = None
 
 class LMStudio(GPT):

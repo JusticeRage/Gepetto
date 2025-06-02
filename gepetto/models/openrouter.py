@@ -7,6 +7,8 @@ import gepetto.config
 import gepetto.models.model_manager
 from gepetto.models.openai import GPT
 
+_ = gepetto.config._
+
 # Default models to expose through OpenRouter
 # You can override these in config.ini
 DEFAULT_OPENROUTER_MODELS = [

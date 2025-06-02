@@ -4,6 +4,8 @@ import gepetto.config
 import gepetto.models.model_manager
 from gepetto.models.openai import GPT
 
+_ = gepetto.config._
+
 MISTRAL_MODEL_NAME = "mistralai/Mixtral-8x22B-Instruct-v0.1"
 
 class Together(GPT):

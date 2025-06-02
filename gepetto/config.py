@@ -6,6 +6,20 @@ from gepetto.models.model_manager import instantiate_model, load_available_model
 
 model = None
 parsed_ini = None
+_translator = None
+
+
+def _get_translator():
+    global _translator
+    if _translator is None:
+        load_config()
+
+    return _translator
+
+
+def _(message):
+    """Translation function that lazy-loads the translator"""
+    return _get_translator()(message)
 
 
 def load_config():
@@ -14,7 +28,7 @@ def load_config():
     Also prepares an OpenAI client configured accordingly to the user specifications.
     :return:
     """
-    global model, parsed_ini
+    global model, parsed_ini, _translator
     parsed_ini = configparser.RawConfigParser()
     parsed_ini.read(os.path.join(os.path.abspath(os.path.dirname(__file__)), "config.ini"), encoding="utf-8")
 
@@ -24,7 +38,7 @@ def load_config():
                                     os.path.join(os.path.abspath(os.path.dirname(__file__)), "locales"),
                                     fallback=True,
                                     languages=[language])
-    translate.install("gepetto")  # Install the _() function in the gepetto namespace.
+    _translator = translate.gettext
 
     # Select model
     requested_model = parsed_ini.get('Gepetto', 'MODEL')

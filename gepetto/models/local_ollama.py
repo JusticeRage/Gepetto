@@ -9,6 +9,8 @@ from gepetto.models.base import LanguageModel
 import gepetto.models.model_manager
 import gepetto.config
 
+_ = gepetto.config._
+
 OLLAMA_MODELS = None
 
 def create_client(**kwargs):

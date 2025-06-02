@@ -5,6 +5,7 @@ import gepetto.config
 import gepetto.models.model_manager
 from gepetto.models.openai import GPT
 
+_ = gepetto.config._
 
 LLAMA_31_MODEL_NAME = "llama-3.1-70b-versatile"
 LLAMA_32_MODEL_NAME = "llama-3.2-90b-text-preview"
