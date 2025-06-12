@@ -70,8 +70,12 @@ def get_config(section, option, environment_variable=None, default=None):
     try:
         if parsed_ini and parsed_ini.get(section, option):
             return parsed_ini.get(section, option)
-        if environment_variable and os.environ.get(environment_variable):
-            return os.environ.get(environment_variable)
+        if environment_variable is not None:
+            if isinstance(environment_variable, (str)):
+                environment_variable = [environment_variable]
+            for env_var in environment_variable:
+                if os.environ.get(env_var):
+                    return os.environ.get(env_var)
     except (configparser.NoSectionError, configparser.NoOptionError):
         print(_("Warning: Gepetto's configuration doesn't contain option {option} in section {section}!").format(
             option=option,
