@@ -13,10 +13,12 @@ import gepetto.config
 
 _ = gepetto.config._
 
-GPT3_MODEL_NAME = "gpt-3.5-turbo-0125"
 GPT4_MODEL_NAME = "gpt-4-turbo"
 GPT4o_MODEL_NAME = "gpt-4o"
-GPT4o_MINI_MODEL_NAME = "gpt-4o-mini"
+GPTo4_MINI_MODEL_NAME = "o4-mini"
+GPT41_MODEL_NAME = "gpt-4.1"
+GPTo3_MODEL_NAME = "o3"
+GPTo3_PRO_MODEL_NAME = "o3-pro"
 
 
 class GPT(LanguageModel):
@@ -26,7 +28,12 @@ class GPT(LanguageModel):
 
     @staticmethod
     def supported_models():
-        return [GPT3_MODEL_NAME, GPT4_MODEL_NAME, GPT4o_MODEL_NAME, GPT4o_MINI_MODEL_NAME]
+        return [GPT4_MODEL_NAME,
+                GPT4o_MODEL_NAME,
+                GPTo4_MINI_MODEL_NAME,
+                GPT41_MODEL_NAME,
+                GPTo3_MODEL_NAME,
+                GPTo3_PRO_MODEL_NAME]
 
     @staticmethod
     def is_configured_properly() -> bool:
