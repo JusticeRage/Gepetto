@@ -5,8 +5,8 @@ import os
 
 import httpx as _httpx
 import ida_kernwin
-from google.generativeai import GenerativeModel, configure # Assuming google-generativeai library
-from google.generativeai.types import HarmCategory, HarmBlockThreshold # For content safety
+from google import genai
+from google.genai import types # For HarmCategory, HarmBlockThreshold
 
 from gepetto.models.base import LanguageModel
 import gepetto.models.model_manager
@@ -14,8 +14,6 @@ import gepetto.config
 
 _ = gepetto.config._
 
-GEMINI_1_5_FLASH_MODEL_NAME = "gemini-1.5-flash"
-GEMINI_1_5_PRO_MODEL_NAME = "gemini-1.5-pro"
 GEMINI_2_0_FLASH_MODEL_NAME = "gemini-2.0-flash"
 GEMINI_2_5_PRO_MODEL_NAME = "gemini-2.5-pro"
 GEMINI_2_5_FLASH_MODEL_NAME = "gemini-2.5-flash"
@@ -30,8 +28,6 @@ class Gemini(LanguageModel):
     @staticmethod
     def supported_models():
         return [
-            GEMINI_1_5_FLASH_MODEL_NAME,
-            GEMINI_1_5_PRO_MODEL_NAME,
             GEMINI_2_0_FLASH_MODEL_NAME,
             GEMINI_2_5_PRO_MODEL_NAME,
             GEMINI_2_5_FLASH_MODEL_NAME,
@@ -52,11 +48,11 @@ class Gemini(LanguageModel):
             )
 
         # Configure the Google AI client
-        configure(api_key=api_key)
+        genai.configure(api_key=api_key)
 
         # For Gemini, the client (GenerativeModel) is typically instantiated per request or per model
         # We'll instantiate it in query_model for now, or you can pre-initialize if preferred
-        # self.client = GenerativeModel(self.model_name) # Example, might vary
+        # self.client = genai.GenerativeModel(self.model_name) # Example, might vary
 
         # Proxies with google-generativeai might require custom httpx client setup,
         # which is more involved than with OpenAI's library.
@@ -85,16 +81,16 @@ class Gemini(LanguageModel):
 
             # Safety settings - adjust as needed
             safety_settings = {
-                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                types.HarmCategory.HARM_CATEGORY_HARASSMENT: types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                types.HarmCategory.HARM_CATEGORY_HATE_SPEECH: types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
             }
 
             # Initialize the model here or use a pre-initialized one
             # For Gemini, model names are often like 'gemini-1.5-pro-latest'
             # Ensure self.model_name matches the API's expected format
-            client = GenerativeModel(self.model_name)
+            client = genai.GenerativeModel(self.model_name)
 
             if stream:
                 response_stream = client.generate_content(

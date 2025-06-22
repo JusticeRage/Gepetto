@@ -8,7 +8,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 
 from gepetto.models.gemini import (
     Gemini,
-    GEMINI_1_5_FLASH_MODEL_NAME, GEMINI_1_5_PRO_MODEL_NAME,
     GEMINI_2_0_FLASH_MODEL_NAME, GEMINI_2_5_PRO_MODEL_NAME,
     GEMINI_2_5_FLASH_MODEL_NAME, GEMINI_2_5_FLASH_LITE_PREVIEW_MODEL_NAME
 )
@@ -23,11 +22,11 @@ class TestGeminiModel(unittest.TestCase):
         # Default mock behavior: API key is present
         self.mock_get_config.side_effect = lambda section, option, env_var=None, default=None: "test_api_key" if option == "API_KEY" else default
 
-        # Mock the google.generativeai configure and GenerativeModel
-        self.mock_google_configure_patcher = patch('gepetto.models.gemini.configure')
+        # Mock the google.genai configure and GenerativeModel
+        self.mock_google_configure_patcher = patch('gepetto.models.gemini.genai.configure')
         self.mock_google_configure = self.mock_google_configure_patcher.start()
 
-        self.mock_generative_model_patcher = patch('gepetto.models.gemini.GenerativeModel')
+        self.mock_generative_model_patcher = patch('gepetto.models.gemini.genai.GenerativeModel')
         self.mock_generative_model_constructor = self.mock_generative_model_patcher.start()
 
         # Mock instance for the GenerativeModel
@@ -49,7 +48,6 @@ class TestGeminiModel(unittest.TestCase):
 
     def test_supported_models(self):
         expected_models = [
-            GEMINI_1_5_FLASH_MODEL_NAME, GEMINI_1_5_PRO_MODEL_NAME,
             GEMINI_2_0_FLASH_MODEL_NAME, GEMINI_2_5_PRO_MODEL_NAME,
             GEMINI_2_5_FLASH_MODEL_NAME, GEMINI_2_5_FLASH_LITE_PREVIEW_MODEL_NAME
         ]
@@ -65,10 +63,11 @@ class TestGeminiModel(unittest.TestCase):
         self.mock_get_config.side_effect = lambda section, option, env_var=None, default=None: None if option == "API_KEY" else default
         self.assertFalse(Gemini.is_configured_properly())
 
-    def test_init_success(self):
-        gemini_model = Gemini(GEMINI_1_5_FLASH_MODEL_NAME)
-        self.assertEqual(gemini_model.model_name, GEMINI_1_5_FLASH_MODEL_NAME)
-        self.mock_google_configure.assert_called_with(api_key="test_api_key") # Called for each instantiation
+    # This test is now covered by test_init_success_all_models
+    # def test_init_success(self):
+    #     gemini_model = Gemini(GEMINI_2_0_FLASH_MODEL_NAME) # Use an available model
+    #     self.assertEqual(gemini_model.model_name, GEMINI_2_0_FLASH_MODEL_NAME)
+    #     self.mock_google_configure.assert_called_with(api_key="test_api_key")
 
     def test_init_success_all_models(self):
         model_names = Gemini.supported_models()
@@ -83,10 +82,10 @@ class TestGeminiModel(unittest.TestCase):
     def test_init_no_api_key(self):
         self.mock_get_config.side_effect = lambda section, option, env_var=None, default=None: None if option == "API_KEY" else default
         with self.assertRaisesRegex(ValueError, "Please edit the configuration file to insert your Google Gemini API key!"):
-            Gemini(GEMINI_1_5_FLASH_MODEL_NAME)
+            Gemini(GEMINI_2_0_FLASH_MODEL_NAME) # Use an available model
 
     def test_query_model_non_stream(self):
-        gemini_model = Gemini(GEMINI_1_5_FLASH_MODEL_NAME)
+        gemini_model = Gemini(GEMINI_2_0_FLASH_MODEL_NAME) # Use an available model
 
         # Mock the response from client.generate_content
         mock_response = MagicMock()
@@ -100,7 +99,7 @@ class TestGeminiModel(unittest.TestCase):
 
         gemini_model.query_model(query, callback_mock, stream=False)
 
-        self.mock_generative_model_constructor.assert_called_with(GEMINI_1_5_FLASH_MODEL_NAME)
+        self.mock_generative_model_constructor.assert_called_with(GEMINI_2_0_FLASH_MODEL_NAME) # Use an available model
         self.mock_model_instance.generate_content.assert_called_once()
         args, kwargs = self.mock_model_instance.generate_content.call_args
         self.assertEqual(args[0], [{"role": "user", "parts": [{"text": query}]}]) # messages
@@ -108,7 +107,7 @@ class TestGeminiModel(unittest.TestCase):
         callback_mock.assert_called_once_with(response="Test response")
 
     def test_query_model_stream(self):
-        gemini_model = Gemini(GEMINI_1_5_PRO_MODEL_NAME)
+        gemini_model = Gemini(GEMINI_2_0_FLASH_MODEL_NAME) # Use an available model
 
         # Mock the streaming response
         mock_chunk1 = MagicMock()
@@ -128,7 +127,7 @@ class TestGeminiModel(unittest.TestCase):
 
         gemini_model.query_model(query, callback_mock, stream=True)
 
-        self.mock_generative_model_constructor.assert_called_with(GEMINI_1_5_PRO_MODEL_NAME)
+        self.mock_generative_model_constructor.assert_called_with(GEMINI_2_0_FLASH_MODEL_NAME) # Use an available model
         self.mock_model_instance.generate_content.assert_called_once()
         args, kwargs = self.mock_model_instance.generate_content.call_args
         self.assertTrue(kwargs['stream'])
@@ -141,7 +140,7 @@ class TestGeminiModel(unittest.TestCase):
 
     def test_query_model_exception(self):
         # Use one of the valid models for this test
-        gemini_model = Gemini(GEMINI_1_5_FLASH_MODEL_NAME)
+        gemini_model = Gemini(GEMINI_2_0_FLASH_MODEL_NAME) # Use an available model
         self.mock_model_instance.generate_content.side_effect = Exception("API Error")
 
         callback_mock = MagicMock()
