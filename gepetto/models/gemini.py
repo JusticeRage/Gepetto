@@ -62,7 +62,7 @@ class Gemini(LanguageModel):
             additional_model_options = {}
 
         generation_config = {}
-        # Translate the OpenAI-specific response_format to what Gemini expects
+        # map OpenAI-specific keys to what Gemini expects
         if "response_format" in additional_model_options and additional_model_options["response_format"].get("type") == "json_object":
             generation_config["response_mime_type"] = "application/json"
             del additional_model_options["response_format"]
@@ -75,10 +75,10 @@ class Gemini(LanguageModel):
                 messages = query
 
             safety_settings = {
-                types.HarmCategory.HARM_CATEGORY_HARASSMENT: types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                types.HarmCategory.HARM_CATEGORY_HATE_SPEECH: types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-                types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+                types.HarmCategory.HARM_CATEGORY_HARASSMENT: types.HarmBlockThreshold.BLOCK_NONE,
+                types.HarmCategory.HARM_CATEGORY_HATE_SPEECH: types.HarmBlockThreshold.BLOCK_NONE,
+                types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: types.HarmBlockThreshold.BLOCK_NONE,
+                types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: types.HarmBlockThreshold.BLOCK_NONE,
             }
 
             client = genai.GenerativeModel(self.model_name)
