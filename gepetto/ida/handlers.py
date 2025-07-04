@@ -134,22 +134,84 @@ class RenameHandler(idaapi.action_handler_t):
     """
     This handler requests new variable names from the model and updates the
     decompiler's output.
+    It now uses a two-step process:
+    1. Ask the model for an explanation of the function.
+    2. Use that explanation as context to ask for better variable names.
     """
 
     def __init__(self):
         idaapi.action_handler_t.__init__(self)
 
+    def _explanation_callback(self, address, view, decompiler_output, response):
+        """
+        This callback receives the explanation and triggers the second request for renaming.
+        """
+        print(_("--- FUNCTION EXPLANATION ---"))
+        print(response)
+        print(_("--- END EXPLANATION ---"))
+        print(_("Step 2/2: Function explanation received. Now asking for variable names..."))
+        print()
+        # Enhanced rename prompt with better instructions for analysis
+        rename_prompt = (
+            "An expert reverse engineer has provided the following explanation for a C function:\n"
+            "--- EXPLANATION ---\n"
+            f"{response}\n"
+            "--- END EXPLANATION ---\n\n"
+            "Based on that explanation, analyze the original C function below and suggest better variable names.\n\n"
+            "Guidelines for variable naming:\n"
+            "1. Use descriptive names that reflect the variable's purpose and role\n"
+            "2. Consider the variable's type, usage pattern, and context within the function\n"
+            "3. Follow C naming conventions (snake_case or camelCase)\n"
+            "4. For loop counters, use meaningful names like 'index', 'count', 'offset' instead of 'i', 'j'\n"
+            "5. For buffers, include size information like 'buffer_size', 'data_length'\n"
+            "6. For pointers, indicate what they point to like 'current_node', 'next_element'\n"
+            "7. For flags/booleans, use clear names like 'is_valid', 'has_error', 'should_continue'\n"
+            "8. For function parameters, consider their role: 'input_data', 'output_buffer', 'config_params'\n"
+            "9. Only rename variables that would benefit from more descriptive names\n"
+            "10. Keep names reasonably concise but meaningful\n\n"
+            "Reply with a JSON dictionary where keys are the original names and values are the proposed names.\n"
+            "Only include variables that should be renamed for better code readability.\n"
+            "Do not explain anything, only print the JSON dictionary.\n"
+            "Example: {\"v1\": \"buffer_size\", \"a2\": \"input_data\", \"result\": \"decrypted_data\"}\n"
+            "\n\n"
+            "--- C FUNCTION ---\n"
+            f"{decompiler_output}"
+        )
+
+        # Step 2: Call the model again, but this time for the renames.
+        gepetto.config.model.query_model_async(
+            rename_prompt,
+            functools.partial(rename_callback, address=address, view=view),
+            additional_model_options={"response_format": {"type": "json_object"}}
+        )
+
     def activate(self, ctx):
         decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
         v = ida_hexrays.get_widget_vdui(ctx.widget)
+        address = idaapi.get_screen_ea()
+
+        print(_("Step 1/2: Asking for an explanation of the function to improve context..."))
+
+        # Enhanced explanation prompt for better analysis
+        explain_prompt = (
+            "Analyze the following C function and provide a CONCISE summary (maximum 200 words).\n\n"
+            "Focus only on the most important aspects:\n"
+            "1. Main purpose and core functionality\n"
+            "2. Key variables and their roles (especially unclear variable names like v1, v2, a1, etc.)\n"
+            "3. Important data processing or algorithms\n"
+            "4. Critical operations (loops, conditions, transformations)\n\n"
+            "Be brief but include enough detail to understand variable purposes.\n"
+            "DO NOT suggest variable names - only explain what the function does and what each variable represents.\n"
+            "This explanation will be used as context for a separate renaming step.\n\n"
+            "--- C FUNCTION ---\n"
+            f"{decompiler_output}"
+        )
+        
         gepetto.config.model.query_model_async(
-            _("Analyze the following C function:\n{decompiler_output}"
-              "\nSuggest better variable names, reply with a JSON array where keys are the original"
-              " names and values are the proposed names. Do not explain anything, only print the "
-              "JSON dictionary.").format(decompiler_output=str(decompiler_output)),
-            functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=v),
-            additional_model_options={"response_format": {"type": "json_object"}})
-        print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
+            explain_prompt,
+            functools.partial(self._explanation_callback, address=address, view=v, decompiler_output=decompiler_output)
+        )
+        
         return 1
 
     # This action is always available.
