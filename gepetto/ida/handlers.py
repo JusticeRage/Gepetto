@@ -92,40 +92,68 @@ class ExplainHandler(idaapi.action_handler_t):
 
 def rename_callback(address, view, response):
     """
-    Callback that extracts a JSON array of old names and new names from the
-    response and sets them in the pseudocode.
+    Callback that extracts a JSON object of old names and new names from the response,
+    displays a table UI where the user can select which variables to rename,
+    and applies renaming only to selected items.
     :param address: The address of the function to work on
     :param view: A handle to the decompiler window
     :param response: The response from the model
     """
+    import ida_kernwin
+    import json
+    import re
+
     names = json.loads(response)
+    rename_pairs = [ (n, names[n]) for n in names ]
 
-    # The rename function needs the start address of the function
+    class RenameChoose(ida_kernwin.Choose):
+        def __init__(self, rename_pairs):
+            super().__init__(
+                "Select Variables to Rename",
+                [ ["Old Name", 20], ["New Name", 20] ],
+                flags=ida_kernwin.Choose.CH_MULTI
+            )
+            self.items = [ [old, new] for old, new in rename_pairs ]
+            self.selected_indices = []
+
+        def OnGetLine(self, n):
+            return self.items[n]
+
+        def OnGetSize(self):
+            return len(self.items)
+            
+        def OnSelectionChange(self, sel_list):
+            self.selected_indices = sel_list
+
+    chooser = RenameChoose(rename_pairs)
+    if chooser.Show(modal=True) < 0:
+        print("Rename cancelled by user.")
+        return
+
+    # Get all selected rows
+    chosen_pairs = [rename_pairs[i] for i in chooser.selected_indices]
+
     function_addr = idaapi.get_func(address).start_ea
-
     replaced = []
-    for n in names:
+    for old, new in chosen_pairs:
         if idaapi.IDA_SDK_VERSION < 760:
             lvars = {lvar.name: lvar for lvar in view.cfunc.lvars}
-            if n in lvars:
-                if view.rename_lvar(lvars[n], names[n], True):
-                    replaced.append(n)
+            if old in lvars:
+                if view.rename_lvar(lvars[old], new, True):
+                    replaced.append(old)
         else:
-            if ida_hexrays.rename_lvar(function_addr, n, names[n]):
-                replaced.append(n)
+            if ida_hexrays.rename_lvar(function_addr, old, new):
+                replaced.append(old)
 
-    # Update possible names left in the function comment
     comment = idc.get_func_cmt(address, 0)
     if comment and len(replaced) > 0:
         for n in replaced:
             comment = re.sub(r'\b%s\b' % n, names[n], comment)
         idc.set_func_cmt(address, comment, 0)
 
-    # Refresh the window to show the new names
     if view:
         view.refresh_view(True)
-    print(_("{model} query finished! {replaced} variable(s) renamed.").format(model=str(gepetto.config.model),
-                                                                              replaced=len(replaced)))
+    print(f"Done! {len(replaced)} variable(s) renamed.")
 
 
 # -----------------------------------------------------------------------------
