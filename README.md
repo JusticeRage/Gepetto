@@ -94,6 +94,7 @@ Gepetto also provides a CLI interface you can use to ask questions to the LLM di
 The following hotkeys are available:
 
 - Ask the model to explain the function: `Ctrl` + `Alt` + `G`
+- Ask the model to add comments to the code: `Ctrl` + `Alt` + `K`
 - Request better names for the function's variables: `Ctrl` + `Alt` + `R`
 
 Initial testing shows that asking for better names works better if you ask for an explanation of the function first – I
