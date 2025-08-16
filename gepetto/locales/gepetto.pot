@@ -17,6 +17,9 @@ msgstr ""
 msgid "Explain function"
 msgstr "Explain function"
 
+msgid "Comment function"
+msgstr "Comment function"
+
 msgid "Rename variables"
 msgstr "Rename variables"
 
@@ -31,6 +34,9 @@ msgstr "See usage instructions on GitHub"
 
 msgid "Use {model} to explain the currently selected function"
 msgstr "Use {model} to explain the currently selected function"
+
+msgid "Adds comments to lines in the current function using {model}"
+msgstr "Adds comments to lines in the current function using {model}"
 
 msgid "Use {model} to rename this function's variables"
 msgstr "Use {model} to rename this function's variables"

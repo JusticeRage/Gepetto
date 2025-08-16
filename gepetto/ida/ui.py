@@ -64,7 +64,7 @@ class GepettoPlugin(idaapi.plugin_t):
                                               _('Comment function'),
                                               CommentHandler(),
                                               "Ctrl+Alt+K",
-                                              _('Use {model} to add a comment to the currently selected function').format(
+                                              _('Adds comments to lines in the current function using {model}').format(
                                                   model=str(gepetto.config.model)),
                                               453)
         idaapi.register_action(comment_action)
