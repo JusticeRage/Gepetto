@@ -4,9 +4,26 @@ import os
 
 from gepetto.models.model_manager import instantiate_model, load_available_models, get_fallback_model
 
+# =============================================================================
+# Global Fields
+# =============================================================================
+
+# Active language model instance for processing requests
 model = None
+
+# INI configuration file parser object
 parsed_ini = None
+
+# Translator function for message localization
 _translator = None
+
+# Current localization language, loaded from configuration file
+language = None
+
+# Available locales, loaded from the locales directory
+available_locales = None
+
+# =============================================================================
 
 
 def _get_translator():
@@ -28,14 +45,23 @@ def load_config():
     Also prepares an OpenAI client configured accordingly to the user specifications.
     :return:
     """
-    global model, parsed_ini, _translator
+    global model, parsed_ini, _translator, language, available_locales
     parsed_ini = configparser.RawConfigParser()
     parsed_ini.read(os.path.join(os.path.abspath(os.path.dirname(__file__)), "config.ini"), encoding="utf-8")
+
+    # Read available locales from the locales directory
+    locales_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "locales")
+    available_locales = set()
+    if os.path.exists(locales_dir):
+        for item in os.listdir(locales_dir):
+            item_path = os.path.join(locales_dir, item)
+            if os.path.isdir(item_path) and not item.startswith('.'):
+                available_locales.add(item)
 
     # Set up translations
     language = parsed_ini.get('Gepetto', 'LANGUAGE')
     translate = gettext.translation('gepetto',
-                                    os.path.join(os.path.abspath(os.path.dirname(__file__)), "locales"),
+                                    locales_dir,
                                     fallback=True,
                                     languages=[language])
     _translator = translate.gettext
@@ -102,3 +128,19 @@ def update_config(section, option, new_value):
     config.set(section, option, new_value)
     with open(path, "w", encoding="utf-8") as f:
         config.write(f)
+
+
+def get_localization_locale():
+    """
+    Returns a valid language locale. If the current language is not valid,
+    returns 'en_US' as the default.
+    :return: Valid language locale string
+    """
+    global language, available_locales
+    
+    # Check if current language is valid
+    if language and language in available_locales:
+        return language
+    
+    # Return default locale if current language is invalid
+    return 'en_US'

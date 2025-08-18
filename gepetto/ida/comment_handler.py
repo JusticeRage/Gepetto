@@ -29,14 +29,17 @@ class CommentHandler(idaapi.action_handler_t):
 
     def activate(self, ctx):
         start_time = time.time()
+        localization_locale = gepetto.config.get_localization_locale()
         decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
         
         pseudocode_lines = get_commentable_lines(decompiler_output)
         formatted_lines = format_commentable_lines(pseudocode_lines)
         v = ida_hexrays.get_widget_vdui(ctx.widget)
+              
         gepetto.config.model.query_model_async(
-            _(f"""
-                RESPONSE STRICTLY IN THE FORMAT JSON MAP {{ lineNumber: "comment" }}, NOTHING ELSE!!!
+            f"""
+                RESPOND STRICTLY IN THE FORMAT JSON MAP {{ lineNumber: "comment" }}, NOTHING ELSE!!!
+                Respond in [{localization_locale}] locale.
                 Add comments that explain what is happening in this C function.
                 You can ONLY add comments to lines that start with a '+'!
                 DON'T comment trivial or obvious actions; comment on important or non-obvious blocks; read ENTIRE logical blocks before make a comment.
@@ -44,7 +47,7 @@ class CommentHandler(idaapi.action_handler_t):
                 ```C
                 {formatted_lines}
                 ```
-              """),
+              """,
             functools.partial(comment_callback, decompiler_output=decompiler_output, pseudocode_lines=pseudocode_lines, view=v, start_time=start_time),
             additional_model_options={"response_format": {"type": "json_object"}})
         print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
@@ -70,7 +73,6 @@ def comment_callback(decompiler_output, pseudocode_lines, view, response, start_
 
         items = json.loads(response)
         pairs = [(int(line), comment) for line, comment in items.items()]
-        print(f"Pairs: {pairs}")
 
         for line, comment in pairs:
             comment_address = pseudocode_lines[line][2]  # Get the comment address
