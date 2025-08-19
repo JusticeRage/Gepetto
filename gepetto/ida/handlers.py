@@ -77,8 +77,9 @@ class ExplainHandler(idaapi.action_handler_t):
         decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
         v = ida_hexrays.get_widget_vdui(ctx.widget)
         gepetto.config.model.query_model_async(
-            _("Can you explain what the following C function does and suggest a better name for "
-              "it?\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
+            f"Can you explain what the following C function does and suggest a better name for it?\n"
+            f"Your response should use the following locale as a language: {gepetto.config.get_localization_locale()}\n"
+            f"{decompiler_output}",
             functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=v, start_time=start_time))
         print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
         return 1
@@ -171,10 +172,11 @@ class RenameHandler(idaapi.action_handler_t):
         decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
         v = ida_hexrays.get_widget_vdui(ctx.widget)
         gepetto.config.model.query_model_async(
-            _("Analyze the following C function:\n{decompiler_output}"
-              "\nSuggest better variable names, reply with a JSON array where keys are the original"
-              " names and values are the proposed names. Do not explain anything, only print the "
-              "JSON dictionary.").format(decompiler_output=str(decompiler_output)),
+            f"Analyze the following C function:\n{decompiler_output}"
+            f"\nSuggest better variable names, reply with a JSON array where keys are the original"
+            f" names and values are the proposed names. Do not explain anything, only print the "
+            f"JSON dictionary.\n"
+            f"Your response should suggest names in the following locale: {gepetto.config.get_localization_locale()}",
             functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=v),
             additional_model_options={"response_format": {"type": "json_object"}})
         print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))

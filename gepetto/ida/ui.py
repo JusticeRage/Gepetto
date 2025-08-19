@@ -1,4 +1,5 @@
 import functools
+import os
 import random
 import string
 import threading
@@ -44,6 +45,9 @@ class GepettoPlugin(idaapi.plugin_t):
     def init(self):
         # Check whether the decompiler is available
         if not ida_hexrays.init_hexrays_plugin():
+            return idaapi.PLUGIN_SKIP
+        # Only launch in interactive mode
+        if os.environ.get("IDA_IS_INTERACTIVE") != "1":
             return idaapi.PLUGIN_SKIP
         # Check if Gepetto loaded at least one model properly
         if not gepetto.config.model:

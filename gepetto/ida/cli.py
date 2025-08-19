@@ -2,7 +2,6 @@ import functools
 
 import ida_kernwin
 import ida_idaapi
-from pyexpat.errors import messages
 
 import gepetto.config
 import gepetto.ida.handlers

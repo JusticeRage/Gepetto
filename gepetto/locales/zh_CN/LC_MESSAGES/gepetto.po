@@ -47,13 +47,6 @@ msgstr "由 Gepetto 生成的注释"
 msgid "{model} query finished in {time:.2f} seconds!"
 msgstr "{model} 请求完毕，耗时 {time:.2f} 秒！"
 
-msgid ""
-"Can you explain what the following C function does and suggest a better name for it?\n"
-"{decompiler_output}"
-msgstr ""
-"你能解释下面这个 C 函数的功能并为其建议更合适的名称吗？\n"
-"{decompiler_output}"
-
 msgid "Could not obtain valid data from the model, giving up. Dumping the response for manual import:"
 msgstr "无法从模型获取有效数据，放弃操作。正在转储响应以供手动导入："
 
@@ -75,15 +68,6 @@ msgstr ""
 
 msgid "{model} query finished! {replaced} variable(s) renamed."
 msgstr "{model} 请求完成！已重命名 {replaced} 个变量。"
-
-msgid ""
-"Analyze the following C function:\n"
-"{decompiler_output}\n"
-"Suggest better variable names, reply with a JSON array where keys are the original names and values are the proposed names. Do not explain anything, only print the JSON dictionary."
-msgstr ""
-"请分析以下 C 函数：\n"
-"{decompiler_output}\n"
-"建议更好的变量名，使用 JSON 字典格式回复（键为原始名称，值为建议名称）。无需解释，直接输出 JSON 字典。"
 
 msgid "{model} could not complete the request: {error}"
 msgstr "{model} 无法完成请求：{error}"

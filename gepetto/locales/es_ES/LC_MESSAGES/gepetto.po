@@ -48,13 +48,6 @@ msgstr "Comentario generado por Gepetto"
 msgid "{model} query finished!"
 msgstr "Consulta de {model} finalizada!"
 
-msgid ""
-"Can you explain what the following C function does and suggest a better name for it?\n"
-"{decompiler_output}"
-msgstr ""
-"¿Puede explicar qué hace la siguiente función en C y sugerir un mejor nombre para ella?\n"
-"{decompiler_output}"
-
 msgid "Could not obtain valid data from the model, giving up. Dumping the response for manual import:"
 msgstr "No se pudo obtener datos válidos del modelo, abandonando. Volcando la respuesta para la importación manual:"
 
@@ -76,15 +69,6 @@ msgstr ""
 
 msgid "{model} query finished! {replaced} variable(s) renamed."
 msgstr "Consulta de {model} finalizada! Se renombraron {replaced} variable(s)."
-
-msgid ""
-"Analyze the following C function:\n"
-"{decompiler_output}\n"
-"Suggest better variable names, reply with a JSON array where keys are the original names and values are the proposed names. Do not explain anything, only print the JSON dictionary."
-msgstr ""
-"Analizar la siguiente función en C:\n"
-"{decompiler_output}\n"
-"Sugerir mejores nombres de variables, responder con una matriz JSON donde las claves son los nombres originales y los valores son los nombres propuestos. No explique nada, solo imprima el diccionario JSON."
 
 msgid "{model} could not complete the request: {error}"
 msgstr "{model} no pudo completar la solicitud: {error}"
