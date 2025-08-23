@@ -49,8 +49,8 @@ class GepettoCLI(ida_kernwin.cli_t):
     def OnExecuteLine(self, line):
         MESSAGES.append({"role": "user", "content": line})
 
-        def handle_response(message):
-            if hasattr(message, "tool_calls") and message.tool_calls:
+        def handle_response(response):
+            if hasattr(response, "tool_calls") and response.tool_calls:
                 tool_calls = [
                     {
                         "id": tc.id,
@@ -60,16 +60,16 @@ class GepettoCLI(ida_kernwin.cli_t):
                             "arguments": tc.function.arguments,
                         },
                     }
-                    for tc in message.tool_calls
+                    for tc in response.tool_calls
                 ]
                 MESSAGES.append(
                     {
                         "role": "assistant",
-                        "content": message.content or "",
+                        "content": response.content or "",
                         "tool_calls": tool_calls,
                     }
                 )
-                for tc in message.tool_calls:
+                for tc in response.tool_calls:
                     if tc.function.name == "get_screen_ea":
                         # The tool takes no arguments, but parse for forward compatibility.
                         _ = json.loads(tc.function.arguments or "{}")
@@ -88,9 +88,9 @@ class GepettoCLI(ida_kernwin.cli_t):
                     additional_model_options={"tools": TOOLS},
                 )
             else:
-                if message.content:
-                    print(message.content)
-                MESSAGES.append({"role": "assistant", "content": message.content or ""})
+                if response.content:
+                    print(response.content)
+                MESSAGES.append({"role": "assistant", "content": response.content or ""})
 
         gepetto.config.model.query_model_async(
             MESSAGES,
