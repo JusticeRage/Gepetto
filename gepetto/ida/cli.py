@@ -3,12 +3,10 @@ import json
 
 import ida_kernwin
 import ida_idaapi
-import ida_hexrays
 import idaapi
 
 import gepetto.config
 import gepetto.ida.handlers
-from gepetto.ida.comment_handler import get_commentable_lines
 
 _ = gepetto.config._
 CLI: ida_kernwin.cli_t = None
@@ -26,51 +24,21 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "add_comment",
-            "description": "Add a comment to a given line in the currently decompiled function.",
+            "name": "get_screen_ea",
+            "description": "Return the current effective address (EA).",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "line_number": {
-                        "type": "integer",
-                        "description": "Line number in the current function to comment.",
-                    },
-                    "comment": {
-                        "type": "string",
-                        "description": "Text of the comment to set.",
-                    },
-                },
-                "required": ["line_number", "comment"],
+                "properties": {},
             },
         },
     }
 ]
 
 
-def add_comment(line_number: int, comment: str) -> str:
-    """Add a comment to the specified line of the current decompiled function."""
-    try:
-        cfunc = ida_hexrays.decompile(idaapi.get_screen_ea())
-    except Exception:
-        return "No function available for commenting."
-
-    lines = get_commentable_lines(cfunc)
-    if line_number < 0 or line_number >= len(lines):
-        return f"Line {line_number} out of range."
-
-    comment_address = lines[line_number][2]
-    comment_placement = lines[line_number][3]
-    if comment_address is None:
-        return f"Line {line_number} cannot be commented."
-
-    target = idaapi.treeloc_t()
-    target.ea = comment_address
-    target.itp = comment_placement
-    cfunc.set_user_cmt(target, comment)
-    cfunc.save_user_cmts()
-    cfunc.del_orphan_cmts()
-
-    return f"Comment added to line {line_number}."
+def get_screen_ea() -> str:
+    """Return the current effective address as a hexadecimal string."""
+    ea = idaapi.get_screen_ea()
+    return hex(ea)
 
 class GepettoCLI(ida_kernwin.cli_t):
     flags = 0
@@ -102,9 +70,10 @@ class GepettoCLI(ida_kernwin.cli_t):
                     }
                 )
                 for tc in message.tool_calls:
-                    if tc.function.name == "add_comment":
-                        args = json.loads(tc.function.arguments)
-                        result = add_comment(args["line_number"], args["comment"])
+                    if tc.function.name == "get_screen_ea":
+                        # The tool takes no arguments, but parse for forward compatibility.
+                        _ = json.loads(tc.function.arguments or "{}")
+                        result = get_screen_ea()
                         MESSAGES.append(
                             {
                                 "role": "tool",
