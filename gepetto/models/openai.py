@@ -13,6 +13,9 @@ import gepetto.config
 
 _ = gepetto.config._
 
+GPT_5_MODEL_NAME = "gpt-5"
+GPT_5_MINI_MODEL_NAME = "gpt-5-mini"
+GPT_5_NANO_MODEL_NAME = "gpt-5-nano"
 GPT4_MODEL_NAME = "gpt-4-turbo"
 GPT4o_MODEL_NAME = "gpt-4o"
 GPTo4_MINI_MODEL_NAME = "o4-mini"
@@ -28,7 +31,10 @@ class GPT(LanguageModel):
 
     @staticmethod
     def supported_models():
-        return [GPT4_MODEL_NAME,
+        return [GPT_5_MODEL_NAME,
+                GPT_5_MINI_MODEL_NAME,
+                GPT_5_NANO_MODEL_NAME,
+                GPT4_MODEL_NAME,
                 GPT4o_MODEL_NAME,
                 GPTo4_MINI_MODEL_NAME,
                 GPT41_MODEL_NAME,
