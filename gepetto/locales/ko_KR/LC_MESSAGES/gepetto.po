@@ -110,3 +110,6 @@ msgstr "사용 가능한 첫 번째 모델을 로드하는 중입니다..."
 
 msgid "No model available. Please edit the configuration file and try again."
 msgstr "사용 가능한 모델이 없습니다. 구성 파일을 수정하고 다시 시도하세요."
+
+msgid "Please edit the configuration file to insert your {api_provider} base URL!"
+msgstr "구성 파일을 수정하여 {api_provider}의 기본 URL을 입력하세요!"

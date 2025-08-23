@@ -125,3 +125,6 @@ msgstr "Auto Analyze"
 msgid "{model} generated code saved to {file_name}"
 msgstr "{model} generated code saved to {file_name}"
 
+
+msgid "Please edit the configuration file to insert your {api_provider} base URL!"
+msgstr "Please edit the configuration file to insert your {api_provider} base URL!"

@@ -40,29 +40,37 @@ class OpenAICompatible(GPT):
     @staticmethod
     def is_configured_properly() -> bool:
 
-        # The plugin is configured properly if the API key is provided, otherwise it should not be shown.
+        # The plugin is configured properly if the API key and base URL are provided,
+        # otherwise it should not be shown.
         return bool(
-            gepetto.config.get_config("OpenAICompatible", "API_KEY"))
+            gepetto.config.get_config("OpenAICompatible", "API_KEY",
+                                      "OPENAI_COMPATIBLE_API_KEY") and
+            gepetto.config.get_config("OpenAICompatible", "BASE_URL",
+                                      "OPENAI_COMPATIBLE_BASE_URL"))
 
     def __init__(self, model):
         try:
-
             super().__init__(model)
         except ValueError:
-            pass  # May throw if the OpenAI API key isn't given, but we don't need any to use DeepSeek.
+            # Ignore missing OpenAI API key; this plugin manages its own credentials.
+            pass
 
         self.model = model
         api_key = gepetto.config.get_config("OpenAICompatible", "API_KEY",
-                                            "SILICONFLOW_API_KEY")
+                                            "OPENAI_COMPATIBLE_API_KEY")
         if not api_key:
             raise ValueError(
                 _("Please edit the configuration file to insert your {api_provider} API key!"
                   ).format(api_provider=OpenAICompatible.get_menu_name()))
 
-        proxy = gepetto.config.get_config("Gepetto", "PROXY")
         base_url = gepetto.config.get_config("OpenAICompatible", "BASE_URL",
-                                             "SILICONFLOW_BASE_URL",
-                                             "https://api.siliconflow.cn/v1")
+                                             "OPENAI_COMPATIBLE_BASE_URL")
+        if not base_url:
+            raise ValueError(
+                _("Please edit the configuration file to insert your {api_provider} base URL!"
+                  ).format(api_provider=OpenAICompatible.get_menu_name()))
+
+        proxy = gepetto.config.get_config("Gepetto", "PROXY")
 
         self.client = openai.OpenAI(
             api_key=api_key,

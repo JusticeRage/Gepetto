@@ -105,8 +105,7 @@ msgid "Request to {model} sent..."
 msgstr "Запрос к {model} отправлен..."
 
 msgid "Please edit the configuration file to insert your {api_provider} API key!"
-msgstr ""
-"Пожалуйста, отредактируйте этот скрипт, чтобы добавить свой {api_provider} API ключ!"
+msgstr "Пожалуйста, отредактируйте файл конфигурации, чтобы добавить ключ API {api_provider}!"
 
 msgid "Couldn't change model to {model}: {error}"
 msgstr ""
@@ -125,3 +124,6 @@ msgstr "Попытка загрузить первую доступную мод
 
 msgid "No model available. Please edit the configuration file and try again."
 msgstr "Модель недоступна. Пожалуйста, измените файл конфигурации и попробуйте снова."
+
+msgid "Please edit the configuration file to insert your {api_provider} base URL!"
+msgstr "Пожалуйста, отредактируйте файл конфигурации, чтобы указать базовый URL {api_provider}!"

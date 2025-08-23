@@ -100,7 +100,7 @@ msgid "Request to {model} sent..."
 msgstr "{model}'a istek gönderildi..."
 
 msgid "Please edit the configuration file to insert your {api_provider} API key!"
-msgstr "{api_provider} API anahtarınızı eklemek için lütfen bu betiği düzenleyin!"
+msgstr "Lütfen {api_provider} API anahtarını eklemek için yapılandırma dosyasını düzenleyin!"
 
 msgid "Couldn't change model to {model}: {error}"
 msgstr ""
@@ -119,3 +119,5 @@ msgstr "Kullanılabilir ilk modeli yüklemeye çalışılıyor..."
 
 msgid "No model available. Please edit the configuration file and try again."
 msgstr "Kullanılabilir model yok. Lütfen yapılandırma dosyasını düzenleyin ve tekrar deneyin."
+msgid "Please edit the configuration file to insert your {api_provider} base URL!"
+msgstr "Lütfen {api_provider} temel URL'sini eklemek için yapılandırma dosyasını düzenleyin!"

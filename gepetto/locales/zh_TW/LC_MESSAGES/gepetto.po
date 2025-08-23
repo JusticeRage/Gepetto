@@ -91,7 +91,7 @@ msgid "Request to {model} sent..."
 msgstr "已向 {model} 送出請求"
 
 msgid "Please edit the configuration file to insert your {api_provider} API key!"
-msgstr "請編輯程式碼以新增您的 {api_provider} API 金鑰!"
+msgstr "請編輯設定檔以新增 {api_provider} 的 API 金鑰！"
 
 msgid "Couldn't change model to {model}: {error}"
 msgstr ""
@@ -110,3 +110,6 @@ msgstr "正在嘗試載入第一個可用的模型..."
 
 msgid "No model available. Please edit the configuration file and try again."
 msgstr "沒有可用的模型。請編輯配置檔案後重試。"
+
+msgid "Please edit the configuration file to insert your {api_provider} base URL!"
+msgstr "請編輯設定檔以插入 {api_provider} 的基礎 URL！"

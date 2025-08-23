@@ -133,3 +133,6 @@ msgstr "自动分析"
 
 msgid "{model} generated code saved to {file_name}"
 msgstr "{model} 生成的代码保存到了 {file_name} "
+
+msgid "Please edit the configuration file to insert your {api_provider} base URL!"
+msgstr "请编辑配置文件以插入 {api_provider} 的基础 URL！"

@@ -86,7 +86,7 @@ msgid "Request to {model} sent..."
 msgstr "Solicitud enviada a {model}..."
 
 msgid "Please edit the configuration file to insert your {api_provider} API key!"
-msgstr "¡Edite este script para insertar su clave de API de {api_provider}!"
+msgstr "Por favor, edita el archivo de configuración para insertar la clave de API de {api_provider}!"
 
 msgid "Couldn't change model to {model}: {error}"
 msgstr ""
@@ -108,3 +108,6 @@ msgstr "No hay ningún modelo disponible. Por favor, edite el archivo de configu
 
 msgid "Failed to fetch models from {base_url}: {status_code}"
 msgstr "No se pudieron obtener los modelos desde {base_url}: {status_code}"
+
+msgid "Please edit the configuration file to insert your {api_provider} base URL!"
+msgstr "Por favor, edita el archivo de configuración para insertar la URL base de {api_provider}!"

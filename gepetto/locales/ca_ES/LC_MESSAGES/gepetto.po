@@ -101,8 +101,7 @@ msgid "Request to {model} sent..."
 msgstr "Sol·licitud enviada a {model}..."
 
 msgid "Please edit the configuration file to insert your {api_provider} API key!"
-msgstr ""
-"Si us plau, editeu aquest script per inserir la vostra clau d'API de {api_provider}!"
+msgstr "Si us plau, editeu el fitxer de configuració per inserir la vostra clau API de {api_provider}!"
 
 msgid "Couldn't change model to {model}: {error}"
 msgstr ""
@@ -121,3 +120,5 @@ msgstr "S'està intentant carregar el primer model disponible..."
 
 msgid "No model available. Please edit the configuration file and try again."
 msgstr "No hi ha cap model disponible. Si us plau, editeu el fitxer de configuració i torneu-ho a intentar."
+msgid "Please edit the configuration file to insert your {api_provider} base URL!"
+msgstr "Si us plau, editeu el fitxer de configuració per inserir l'URL base de {api_provider}!"

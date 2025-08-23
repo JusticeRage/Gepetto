@@ -121,3 +121,6 @@ msgstr "Tentative de chargement du premier modèle disponible..."
 
 msgid "No model available. Please edit the configuration file and try again."
 msgstr "Aucun modèle disponible. Veuillez modifier le fichier de configuration et réessayer."
+
+msgid "Please edit the configuration file to insert your {api_provider} base URL!"
+msgstr "Veuillez modifier le fichier de configuration pour insérer l'URL de base de {api_provider}!"
