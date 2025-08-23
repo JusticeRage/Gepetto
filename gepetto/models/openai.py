@@ -89,8 +89,14 @@ class GPT(LanguageModel):
                 **additional_model_options
             )
             if not stream:
-                ida_kernwin.execute_sync(functools.partial(cb, response=response.choices[0].message.content),
-                                         ida_kernwin.MFF_WRITE)
+                # Return the full message object so that callers can access
+                # additional data such as tool calls when using the OpenAI
+                # function calling API.
+                message = response.choices[0].message
+                ida_kernwin.execute_sync(
+                    functools.partial(cb, response=message),
+                    ida_kernwin.MFF_WRITE,
+                )
             else:
                 for chunk in response:
                     delta = chunk.choices[0].delta
