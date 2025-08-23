@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 import ida_kernwin
 import ida_idaapi
-import idaapi
 
 import gepetto.config
 import gepetto.ida.handlers
@@ -38,7 +37,7 @@ TOOLS = [
 
 def get_screen_ea() -> str:
     """Return the current effective address as a hexadecimal string."""
-    ea = idaapi.get_screen_ea()
+    ea = ida_kernwin.execute_sync(ida_kernwin.get_screen_ea, ida_kernwin.MFF_READ)
     return hex(ea)
 
 class GepettoCLI(ida_kernwin.cli_t):
