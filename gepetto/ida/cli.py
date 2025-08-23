@@ -1,5 +1,6 @@
 import functools
 import json
+from types import SimpleNamespace
 
 import ida_kernwin
 import ida_idaapi
@@ -81,23 +82,55 @@ class GepettoCLI(ida_kernwin.cli_t):
                                 "content": result,
                             }
                         )
-                gepetto.config.model.query_model_async(
-                    MESSAGES,
-                    handle_response,
-                    stream=False,
-                    additional_model_options={"tools": TOOLS},
-                )
+                stream_and_handle()
             else:
-                if response.content:
-                    print(response.content)
                 MESSAGES.append({"role": "assistant", "content": response.content or ""})
 
-        gepetto.config.model.query_model_async(
-            MESSAGES,
-            handle_response,
-            stream=False,
-            additional_model_options={"tools": TOOLS},
-        )
+        def stream_and_handle():
+            message = SimpleNamespace(content="", tool_calls=[])
+
+            def on_chunk(delta, finish_reason):
+                if isinstance(delta, str):
+                    print(delta, end="", flush=True)
+                    message.content += delta
+                    return
+                if getattr(delta, "content", None):
+                    print(delta.content, end="", flush=True)
+                    message.content += delta.content
+                if getattr(delta, "tool_calls", None):
+                    for tc in delta.tool_calls:
+                        idx = tc.index
+                        while len(message.tool_calls) <= idx:
+                            message.tool_calls.append(
+                                SimpleNamespace(
+                                    id="",
+                                    type="",
+                                    function=SimpleNamespace(name="", arguments=""),
+                                )
+                            )
+                        current = message.tool_calls[idx]
+                        if getattr(tc, "id", None):
+                            current.id = tc.id
+                        if getattr(tc, "type", None):
+                            current.type = tc.type
+                        if getattr(tc, "function", None):
+                            fn = tc.function
+                            if getattr(fn, "name", None):
+                                current.function.name += fn.name
+                            if getattr(fn, "arguments", None):
+                                current.function.arguments += fn.arguments
+                if finish_reason:
+                    print()
+                    handle_response(message)
+
+            gepetto.config.model.query_model_async(
+                MESSAGES,
+                on_chunk,
+                stream=True,
+                additional_model_options={"tools": TOOLS},
+            )
+
+        stream_and_handle()
         return True
 
     def OnKeydown(self, line, x, sellen, vkey, shift):
