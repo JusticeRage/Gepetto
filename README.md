@@ -28,9 +28,15 @@ method with the corresponding provider.
 ## Supported models
 
 - [OpenAI](https://playground.openai.com/)
-  - gpt-3.5-turbo-0125
-  - gpt-4-turbo
-  - gpt-4o (recommended for beginners)
+  - "gpt-5"
+  - "gpt-5-mini"
+  - "gpt-5-nano"
+  - "gpt-4-turbo"
+  - "gpt-4o"
+  - "o4-mini"
+  - "gpt-4.1"
+  - "o3"
+  - "o3-pro"
 - [Google Gemini](https://ai.google.dev/)
   - gemini-2.0-flash
   - gemini-2.5-pro

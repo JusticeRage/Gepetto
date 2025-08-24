@@ -7,38 +7,26 @@ import ida_idaapi
 
 import gepetto.config
 import gepetto.ida.handlers
+from gepetto.ida.tools.tools import TOOLS
+import gepetto.ida.tools.get_screen_ea
+import gepetto.ida.tools.get_function_code
 
 _ = gepetto.config._
 CLI: ida_kernwin.cli_t = None
 MESSAGES: list[dict] = [
     {
         "role": "system",
-        "content": _(
-            "You are a helpful assistant embedded in IDA Pro. Your role is to facilitate "
-            "reverse-engineering and answer programming questions."
-        ),
+        "content":
+            f"You are a helpful assistant embedded in IDA Pro. Your role is to facilitate "
+            f"reverse-engineering and answer programming questions.\n"
+            f"Your response should always be in the following locale: {gepetto.config.get_localization_locale()}\n"
+            f"Never repeat pseudocode back as the user can see it already.\n"
+            f"In the context of a reverse-engineering session, the user will switch from function to function a lot. "
+            f"Between messages, don't assume that the function is still the same and always confirm it by checking the "
+            f"current EA. \"This\" function or the \"current\" function always mean the one at the current EA.",
     }
 ]  # Keep a history of the conversation to simulate LLM memory.
 
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "get_screen_ea",
-            "description": "Return the current effective address (EA).",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-            },
-        },
-    }
-]
-
-
-def get_screen_ea() -> str:
-    """Return the current effective address as a hexadecimal string."""
-    ea = ida_kernwin.execute_sync(ida_kernwin.get_screen_ea, ida_kernwin.MFF_READ)
-    return hex(ea)
 
 class GepettoCLI(ida_kernwin.cli_t):
     flags = 0
@@ -47,6 +35,9 @@ class GepettoCLI(ida_kernwin.cli_t):
     hint = "Gepetto"
 
     def OnExecuteLine(self, line):
+        if not line.strip():  # Don't do anything for empty sends.
+            return True
+
         MESSAGES.append({"role": "user", "content": line})
 
         def handle_response(response):
@@ -71,16 +62,9 @@ class GepettoCLI(ida_kernwin.cli_t):
                 )
                 for tc in response.tool_calls:
                     if tc.function.name == "get_screen_ea":
-                        # The tool takes no arguments, but parse for forward compatibility.
-                        _ = json.loads(tc.function.arguments or "{}")
-                        result = get_screen_ea()
-                        MESSAGES.append(
-                            {
-                                "role": "tool",
-                                "tool_call_id": tc.id,
-                                "content": result,
-                            }
-                        )
+                        gepetto.ida.tools.get_screen_ea.handle_get_screen_ea_tc(tc, MESSAGES)
+                    elif tc.function.name == "get_function_code":
+                        gepetto.ida.tools.get_function_code.handle_get_function_code_tc(tc, MESSAGES)
                 stream_and_handle()
             else:
                 MESSAGES.append({"role": "assistant", "content": response.content or ""})
@@ -119,7 +103,8 @@ class GepettoCLI(ida_kernwin.cli_t):
                             if getattr(fn, "arguments", None):
                                 current.function.arguments += fn.arguments
                 if finish_reason:
-                    print()
+                    if finish_reason != "tool_calls":
+                        print()
                     handle_response(message)
 
             gepetto.config.model.query_model_async(
