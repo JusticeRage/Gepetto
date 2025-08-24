@@ -60,18 +60,20 @@ class CommentHandler(idaapi.action_handler_t):
 # -----------------------------------------------------------------------------
 
 def comment_callback(decompiler_output, pseudocode_lines, view, response, start_time):
-    """
-    Callback that sets a comment at the given address.
-    :param address: The address of the function to comment
-    :param view: A handle to the decompiler window
-    :param response: The comment to add
+    """Callback that sets comments returned by the model at given lines.
+
+    The ``response`` parameter can either be a raw string or a message object
+    returned by the OpenAI API.  This keeps compatibility with older behaviour
+    while enabling tool-based interactions that return message objects.
     """
     try:
         elapsed_time = time.time() - start_time
 
-        print(f"Response: {response}")
+        response_text = response.content if hasattr(response, "content") else response
 
-        items = json.loads(response)
+        print(f"Response: {response_text}")
+
+        items = json.loads(response_text)
         pairs = [(int(line), comment) for line, comment in items.items()]
 
         for line, comment in pairs:
