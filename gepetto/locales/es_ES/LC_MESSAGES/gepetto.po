@@ -138,8 +138,8 @@ msgid "Comment function"
 msgstr "Explicar la función"
 
 #: gepetto/ida/ui.py:31 gepetto/ida/ui.py:78
-msgid "Rename variables"
-msgstr "Renombrar las variables"
+msgid "Auto-rename"
+msgstr "Renombrado automático"
 
 #: gepetto/ida/ui.py:33 gepetto/ida/ui.py:102
 msgid "Generate C Code"
@@ -170,8 +170,8 @@ msgstr "Adds comments to lines in the current function using {model}"
 
 #: gepetto/ida/ui.py:81
 #, python-brace-format
-msgid "Use {model} to rename this function's variables"
-msgstr "Usar {model} para renombrar las variables de esta función"
+msgid "Use {model} to auto-rename this function and its variables"
+msgstr "Usar {model} para renombrar automáticamente esta función y sus variables"
 
 #: gepetto/ida/ui.py:92
 #, fuzzy, python-brace-format
@@ -203,6 +203,11 @@ msgstr ""
 #: gepetto/ida/cli.py:19
 msgid "LLM chat"
 msgstr "Conversación de LLM"
+
+#: gepetto/ida/handlers.py:178
+#, python-brace-format
+msgid "Done! {count} name(s) renamed."
+msgstr "¡Hecho! Se ha(n) renombrado {count} nombre(s)."
 
 #~ msgid ""
 #~ "Could not obtain valid data from the model, giving up. Dumping the response "

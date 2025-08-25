@@ -28,7 +28,7 @@ class GepettoPlugin(idaapi.plugin_t):
     comment_action_name = "gepetto:comment_function"
     comment_menu_path = "Edit/Gepetto/" + _("Comment function")
     rename_action_name = "gepetto:rename_function"
-    rename_menu_path = "Edit/Gepetto/" + _("Rename variables")
+    rename_menu_path = "Edit/Gepetto/" + _("Auto-rename")
     c_code_action_name = "gepetto:generate_c_code"
     c_code_menu_path = "Edit/Gepetto/" + _("Generate C Code")
     python_code_action_name = "gepetto:generate_python_code"
@@ -73,12 +73,12 @@ class GepettoPlugin(idaapi.plugin_t):
                                               453)
         idaapi.register_action(comment_action)
 
-        # Variable renaming action
+        # Variable and function renaming action
         rename_action = idaapi.action_desc_t(self.rename_action_name,
-                                             _('Rename variables'),
+                                             _('Auto-rename'),
                                              RenameHandler(),
                                              "Ctrl+Alt+R",
-                                             _("Use {model} to rename this function's variables").format(
+                                             _("Use {model} to auto-rename this function and its variables").format(
                                                  model=str(gepetto.config.model)),
                                              19)
         idaapi.register_action(rename_action)
