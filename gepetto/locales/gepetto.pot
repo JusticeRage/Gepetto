@@ -122,7 +122,7 @@ msgid "Comment function"
 msgstr ""
 
 #: gepetto/ida/ui.py:31 gepetto/ida/ui.py:78
-msgid "Rename variables"
+msgid "Auto-rename"
 msgstr ""
 
 #: gepetto/ida/ui.py:33 gepetto/ida/ui.py:102
@@ -154,7 +154,7 @@ msgstr ""
 
 #: gepetto/ida/ui.py:81
 #, python-brace-format
-msgid "Use {model} to rename this function's variables"
+msgid "Use {model} to auto-rename this function and its variables"
 msgstr ""
 
 #: gepetto/ida/ui.py:92
@@ -180,4 +180,9 @@ msgstr ""
 
 #: gepetto/ida/cli.py:19
 msgid "LLM chat"
+msgstr ""
+
+#: gepetto/ida/handlers.py:178
+#, python-brace-format
+msgid "Done! {count} name(s) renamed."
 msgstr ""

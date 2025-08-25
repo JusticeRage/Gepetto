@@ -130,8 +130,8 @@ msgid "Comment function"
 msgstr "解释函数"
 
 #: gepetto/ida/ui.py:31 gepetto/ida/ui.py:78
-msgid "Rename variables"
-msgstr "重命名变量"
+msgid "Auto-rename"
+msgstr "自动重命名"
 
 #: gepetto/ida/ui.py:33 gepetto/ida/ui.py:102
 msgid "Generate C Code"
@@ -162,8 +162,8 @@ msgstr "使用 {model} 从当前选择的函数生成 python 代码"
 
 #: gepetto/ida/ui.py:81
 #, python-brace-format
-msgid "Use {model} to rename this function's variables"
-msgstr "使用 {model} 重命名函数的变量"
+msgid "Use {model} to auto-rename this function and its variables"
+msgstr "使用 {model} 自动重命名此函数及其变量"
 
 #: gepetto/ida/ui.py:92
 #, python-brace-format
@@ -191,6 +191,11 @@ msgstr "您是内置于 IDA Pro 的智能助手，主要职责是协助逆向工
 #: gepetto/ida/cli.py:19
 msgid "LLM chat"
 msgstr "LLM 对话"
+
+#: gepetto/ida/handlers.py:178
+#, python-brace-format
+msgid "Done! {count} name(s) renamed."
+msgstr "完成！已重命名 {count} 个名称。"
 
 #~ msgid ""
 #~ "Could not obtain valid data from the model, giving up. Dumping the response "

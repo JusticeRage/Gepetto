@@ -130,8 +130,8 @@ msgid "Comment function"
 msgstr "함수 설명"
 
 #: gepetto/ida/ui.py:31 gepetto/ida/ui.py:78
-msgid "Rename variables"
-msgstr "변수 이름 변경"
+msgid "Auto-rename"
+msgstr "자동 이름 바꾸기"
 
 #: gepetto/ida/ui.py:33 gepetto/ida/ui.py:102
 msgid "Generate C Code"
@@ -162,8 +162,8 @@ msgstr "Adds comments to lines in the current function using {model}"
 
 #: gepetto/ida/ui.py:81
 #, python-brace-format
-msgid "Use {model} to rename this function's variables"
-msgstr "{model}을(를) 사용하여 이 함수의 변수 이름을 변경합니다"
+msgid "Use {model} to auto-rename this function and its variables"
+msgstr "{model}을(를) 사용하여 이 함수와 그 변수의 이름을 자동으로 바꿉니다"
 
 #: gepetto/ida/ui.py:92
 #, fuzzy, python-brace-format
@@ -194,6 +194,11 @@ msgstr ""
 #: gepetto/ida/cli.py:19
 msgid "LLM chat"
 msgstr "LLM 대화"
+
+#: gepetto/ida/handlers.py:178
+#, python-brace-format
+msgid "Done! {count} name(s) renamed."
+msgstr "완료! {count}개의 이름이 변경되었습니다."
 
 #~ msgid ""
 #~ "Could not obtain valid data from the model, giving up. Dumping the response "

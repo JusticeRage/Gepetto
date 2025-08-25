@@ -102,7 +102,7 @@ class ExplainHandler(idaapi.action_handler_t):
 def rename_callback(address, view, response):
     """
     Callback that extracts a JSON object of old names and new names from the response,
-    displays a table UI where the user can select which variables to rename,
+    displays a table UI where the user can select which identifiers to rename,
     and applies renaming only to selected items.
     :param address: The address of the function to work on
     :param view: A handle to the decompiler window
@@ -114,16 +114,25 @@ def rename_callback(address, view, response):
 
     response_text = response.content if hasattr(response, "content") else response
     names = json.loads(response_text)
-    rename_pairs = [ (n, names[n]) for n in names ]
+
+    function_addr = idaapi.get_func(address).start_ea
+    func_name = idc.get_func_name(function_addr)
+    func_new_name = names.pop("__function__", None)
+
+    rename_pairs = []
+    if func_new_name and func_name.startswith("sub_"):
+        rename_pairs.append((func_name, func_new_name))
+    rename_pairs.extend((n, names[n]) for n in names)
+    rename_mapping = {old: new for old, new in rename_pairs}
 
     class RenameChoose(ida_kernwin.Choose):
         def __init__(self, rename_pairs):
             super().__init__(
-                "Select Variables to Rename",
-                [ ["Old Name", 20], ["New Name", 20] ],
-                flags=ida_kernwin.Choose.CH_MULTI
+                "Select names to rename",
+                [["Old Name", 20], ["New Name", 20]],
+                flags=ida_kernwin.Choose.CH_MULTI,
             )
-            self.items = [ [old, new] for old, new in rename_pairs ]
+            self.items = [[old, new] for old, new in rename_pairs]
             self.selected_indices = []
 
         def OnGetLine(self, n):
@@ -143,35 +152,38 @@ def rename_callback(address, view, response):
     # Get all selected rows
     chosen_pairs = [rename_pairs[i] for i in chooser.selected_indices]
 
-    function_addr = idaapi.get_func(address).start_ea
     replaced = []
     for old, new in chosen_pairs:
-        if idaapi.IDA_SDK_VERSION < 760:
-            lvars = {lvar.name: lvar for lvar in view.cfunc.lvars}
-            if old in lvars:
-                if view.rename_lvar(lvars[old], new, True):
-                    replaced.append(old)
-        else:
-            if ida_hexrays.rename_lvar(function_addr, old, new):
+        if old == func_name:
+            if idc.set_name(function_addr, new, idaapi.SN_FORCE):
                 replaced.append(old)
+        else:
+            if idaapi.IDA_SDK_VERSION < 760:
+                lvars = {lvar.name: lvar for lvar in view.cfunc.lvars}
+                if old in lvars and view.rename_lvar(lvars[old], new, True):
+                    replaced.append(old)
+            else:
+                if ida_hexrays.rename_lvar(function_addr, old, new):
+                    replaced.append(old)
 
     comment = idc.get_func_cmt(address, 0)
     if comment and len(replaced) > 0:
         for n in replaced:
-            comment = re.sub(r'\b%s\b' % n, names[n], comment)
+            if n in rename_mapping:
+                comment = re.sub(r'\b%s\b' % n, rename_mapping[n], comment)
         idc.set_func_cmt(address, comment, 0)
 
     if view:
         view.refresh_view(True)
-    print(f"Done! {len(replaced)} variable(s) renamed.")
+    print(_("Done! {count} name(s) renamed.").format(count=len(replaced)))
 
 
 # -----------------------------------------------------------------------------
 
 class RenameHandler(idaapi.action_handler_t):
     """
-    This handler requests new variable names from the model and updates the
-    decompiler's output.
+    This handler requests new names for the function and its variables from the model
+    and updates the decompiler's output.
     """
 
     def __init__(self):
@@ -182,9 +194,11 @@ class RenameHandler(idaapi.action_handler_t):
         v = ida_hexrays.get_widget_vdui(ctx.widget)
         gepetto.config.model.query_model_async(
             f"Analyze the following C function:\n{decompiler_output}"
-            f"\nSuggest better variable names, reply with a JSON array where keys are the original"
-            f" names and values are the proposed names. Do not explain anything, only print the "
-            f"JSON dictionary.\n"
+            f"\nSuggest better names for the variables and, if helpful, the function itself."
+            f" Return a JSON object where keys are the original names and values are the suggested ones."
+            f" Only include an entry when the proposed name is at least marginally better than the original."
+            f" Use the special key '__function__' to rename the function. Do not provide any explanation,"
+            f" only the JSON object.\n"
             f"Your response should suggest names in the following locale: {gepetto.config.get_localization_locale()}",
             functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=v),
             additional_model_options={"response_format": {"type": "json_object"}})
