@@ -12,6 +12,7 @@ import gepetto.ida.tools.get_screen_ea
 import gepetto.ida.tools.get_function_code
 import gepetto.ida.tools.rename_lvar
 import gepetto.ida.tools.rename_function
+import gepetto.ida.tools.get_xrefs
 
 _ = gepetto.config._
 CLI: ida_kernwin.cli_t = None
@@ -71,6 +72,8 @@ class GepettoCLI(ida_kernwin.cli_t):
                         gepetto.ida.tools.rename_lvar.handle_rename_lvar_tc(tc, MESSAGES)
                     elif tc.function.name == "rename_function":
                         gepetto.ida.tools.rename_function.handle_rename_function_tc(tc, MESSAGES)
+                    elif tc.function.name == "get_xrefs":
+                        gepetto.ida.tools.get_xrefs.handle_get_xrefs_tc(tc, MESSAGES)
                 stream_and_handle()
             else:
                 MESSAGES.append({"role": "assistant", "content": response.content or ""})

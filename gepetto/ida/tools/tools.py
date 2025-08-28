@@ -84,4 +84,25 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_xrefs",
+            "description": "Return cross-references to or from an address.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ea": {
+                        "type": "integer",
+                        "description": "Effective address (EA) to inspect, in decimal or hex.",
+                    },
+                    "direction": {
+                        "type": "string",
+                        "enum": ["to", "from"],
+                        "description": "Direction of cross-references: 'to' for incoming, 'from' for outgoing.",
+                    },
+                },
+            },
+        },
+    },
 ]
