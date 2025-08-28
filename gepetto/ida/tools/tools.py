@@ -60,4 +60,28 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "rename_function",
+            "description": "Rename a function.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ea": {
+                        "type": "integer",
+                        "description": "Effective address (EA) inside the target function, in either decimal or hex.",
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Existing function name if EA is not provided.",
+                    },
+                    "new_name": {
+                        "type": "string",
+                        "description": "Desired new name for the function.",
+                    },
+                },
+            },
+        },
+    },
 ]
