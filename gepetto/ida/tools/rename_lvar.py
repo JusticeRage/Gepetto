@@ -1,0 +1,77 @@
+import json
+from typing import Optional
+
+import ida_hexrays
+import ida_kernwin
+
+from .function_utils import (
+    parse_ea as _parse_ea,
+    resolve_ea as _resolve_ea,
+    resolve_func as _resolve_func,
+    get_func_name as _get_func_name,
+)
+
+
+def handle_rename_lvar_tc(tc, messages):
+    """Handle a tool call to rename a local variable."""
+    try:
+        args = json.loads(tc.function.arguments or "{}")
+    except Exception:
+        args = {}
+
+    ea = args.get("ea")
+    if ea is not None:
+        ea = _parse_ea(ea)
+    func_name = args.get("func_name")
+    old_name = args.get("old_name")
+    new_name = args.get("new_name")
+
+    try:
+        result = rename_lvar(ea=ea, func_name=func_name, old_name=old_name, new_name=new_name)
+    except Exception as ex:
+        result = {"ok": False, "error": str(ex)}
+
+    messages.append(
+        {
+            "role": "tool",
+            "tool_call_id": tc.id,
+            "content": json.dumps(result, ensure_ascii=False),
+        }
+    )
+
+
+# -----------------------------------------------------------------------------
+
+def rename_lvar(
+    ea: Optional[int] = None,
+    func_name: Optional[str] = None,
+    old_name: Optional[str] = None,
+    new_name: Optional[str] = None,
+) -> dict:
+    """Rename a local variable in a function."""
+    if not old_name or not new_name:
+        raise ValueError("old_name and new_name are required")
+
+    f = _resolve_func(ea=ea, name=func_name)
+    func_name = func_name or _get_func_name(f)
+    if ea is None:
+        ea = _resolve_ea(func_name)
+
+    out = {"ok": False, "ea": int(f.start_ea), "func_name": func_name, "old_name": old_name, "new_name": new_name}
+
+    def _do():
+        try:
+            if not ida_hexrays.rename_lvar(ea, old_name, new_name):
+                out["error"] = f"Failed to rename lvar {old_name!r}"
+                return 0
+            out["ok"] = True
+            return 1
+        except Exception as e:
+            out["error"] = str(e)
+            return 0
+
+    ida_kernwin.execute_sync(_do, ida_kernwin.MFF_WRITE)
+
+    if not out["ok"]:
+        raise ValueError(out.get("error", "Failed to rename lvar"))
+    return out
