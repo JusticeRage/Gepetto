@@ -31,5 +31,33 @@ TOOLS = [
                 }
             }
         }
-    }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "rename_lvar",
+            "description": "Rename a local variable within a function.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ea": {
+                        "type": "integer",
+                        "description": "Effective address (EA) inside the target function, in either decimal or hex.",
+                    },
+                    "func_name": {
+                        "type": "string",
+                        "description": "Name of the function if EA is not provided.",
+                    },
+                    "old_name": {
+                        "type": "string",
+                        "description": "Current local variable name to be changed.",
+                    },
+                    "new_name": {
+                        "type": "string",
+                        "description": "Desired new name for the local variable.",
+                    },
+                },
+            },
+        },
+    },
 ]
