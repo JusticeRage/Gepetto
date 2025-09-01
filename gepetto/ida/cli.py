@@ -10,6 +10,7 @@ import gepetto.ida.handlers
 from gepetto.ida.tools.tools import TOOLS
 import gepetto.ida.tools.cast
 import gepetto.ida.tools.call_graph
+import gepetto.ida.tools.get_ea
 import gepetto.ida.tools.get_function_code
 import gepetto.ida.tools.get_screen_ea
 import gepetto.ida.tools.get_xrefs
@@ -72,6 +73,8 @@ class GepettoCLI(ida_kernwin.cli_t):
                 for tc in response.tool_calls:
                     if tc.function.name == "get_screen_ea":
                         gepetto.ida.tools.get_screen_ea.handle_get_screen_ea_tc(tc, MESSAGES)
+                    elif tc.function.name == "get_ea":
+                        gepetto.ida.tools.get_ea.handle_get_ea_tc(tc, MESSAGES)
                     elif tc.function.name == "get_function_code":
                         gepetto.ida.tools.get_function_code.handle_get_function_code_tc(tc, MESSAGES)
                     elif tc.function.name == "rename_lvar":
