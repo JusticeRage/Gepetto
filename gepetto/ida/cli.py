@@ -14,6 +14,7 @@ import gepetto.ida.tools.get_ea
 import gepetto.ida.tools.get_function_code
 import gepetto.ida.tools.get_screen_ea
 import gepetto.ida.tools.get_xrefs
+import gepetto.ida.tools.list_symbols
 import gepetto.ida.tools.refresh_view
 import gepetto.ida.tools.rename_lvar
 import gepetto.ida.tools.rename_function
@@ -83,6 +84,8 @@ class GepettoCLI(ida_kernwin.cli_t):
                         gepetto.ida.tools.rename_function.handle_rename_function_tc(tc, MESSAGES)
                     elif tc.function.name == "get_xrefs":
                         gepetto.ida.tools.get_xrefs.handle_get_xrefs_tc(tc, MESSAGES)
+                    elif tc.function.name == "list_symbols":
+                        gepetto.ida.tools.list_symbols.handle_list_symbols_tc(tc, MESSAGES)
                     elif tc.function.name == "get_callers":
                         gepetto.ida.tools.call_graph.handle_get_callers_tc(tc, MESSAGES)
                     elif tc.function.name == "get_callees":

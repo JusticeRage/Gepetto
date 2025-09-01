@@ -188,6 +188,31 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "list_symbols",
+            "description": (
+                "Return names and EAs for functions, optionally including globals. "
+                "Supports prefix filtering."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prefix": {
+                        "type": "string",
+                        "description": "Only include symbols whose name starts with this prefix.",
+                    },
+                    "include_globals": {
+                        "type": "boolean",
+                        "description": "Include global (non-function) symbols.",
+                        "default": False,
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_callers",
             "description": "Return the unique caller functions of a target function (by EA or name).",
             "parameters": {
