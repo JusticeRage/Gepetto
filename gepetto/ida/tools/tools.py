@@ -213,6 +213,32 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "search",
+            "description": "Search for text strings or hex byte patterns and return matching EAs.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "ASCII text to look for.",
+                    },
+                    "hex": {
+                        "type": "string",
+                        "description": "Hex pattern like '90 90 ?? FF'.",
+                    },
+                    "case_sensitive": {
+                        "type": "boolean",
+                        "description": "Case-sensitive text search.",
+                        "default": False,
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_callers",
             "description": "Return the unique caller functions of a target function (by EA or name).",
             "parameters": {

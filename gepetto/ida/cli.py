@@ -18,6 +18,7 @@ import gepetto.ida.tools.list_symbols
 import gepetto.ida.tools.refresh_view
 import gepetto.ida.tools.rename_lvar
 import gepetto.ida.tools.rename_function
+import gepetto.ida.tools.search
 
 _ = gepetto.config._
 CLI: ida_kernwin.cli_t = None
@@ -86,6 +87,8 @@ class GepettoCLI(ida_kernwin.cli_t):
                         gepetto.ida.tools.get_xrefs.handle_get_xrefs_tc(tc, MESSAGES)
                     elif tc.function.name == "list_symbols":
                         gepetto.ida.tools.list_symbols.handle_list_symbols_tc(tc, MESSAGES)
+                    elif tc.function.name == "search":
+                        gepetto.ida.tools.search.handle_search_tc(tc, MESSAGES)
                     elif tc.function.name == "get_callers":
                         gepetto.ida.tools.call_graph.handle_get_callers_tc(tc, MESSAGES)
                     elif tc.function.name == "get_callees":
