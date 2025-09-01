@@ -1,3 +1,5 @@
+import json
+
 import ida_kernwin
 
 TOOLS = [
@@ -84,4 +86,99 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_xrefs",
+            "description": (
+                "Return cross-references (code/data) for an address, a whole function, "
+                "or a named symbol. Supports incoming, outgoing, or both directions, "
+                "with practical filters (only_code/only_calls/exclude_flow) and "
+                "deduping (collapse_by)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "scope": {
+                        "type": "string",
+                        "description": "Scope of the query: single EA, the whole function, or a name.",
+                        "enum": ["ea", "function", "name"],
+                        "default": "ea"
+                    },
+                    "subject": {
+                        "type": "string",
+                        "description": (
+                            "Subject to inspect. If scope=='ea' or 'function', this may be an EA "
+                            "as decimal or hex string ('0x401000', '401000h'). "
+                            "If scope=='name', this must be a symbol name."
+                        )
+                    },
+                    "direction": {
+                        "type": "string",
+                        "description": "Which direction of xrefs to return.",
+                        "enum": ["to", "from", "both"],
+                        "default": "both"
+                    },
+                    "only_code": {
+                        "type": "boolean",
+                        "description": "Limit to code xrefs only.",
+                        "default": False
+                    },
+                    "only_data": {
+                        "type": "boolean",
+                        "description": "Limit to data xrefs only.",
+                        "default": False
+                    },
+                    "only_calls": {
+                        "type": "boolean",
+                        "description": "For code xrefs, keep only call sites.",
+                        "default": False
+                    },
+                    "exclude_flow": {
+                        "type": "boolean",
+                        "description": "Exclude simple flow xrefs (falls-through/jumps).",
+                        "default": False
+                    },
+                    "collapse_by": {
+                        "type": "string",
+                        "description": (
+                            "Dedup granularity: 'site' (no dedup), 'pair' (from_ea→to_ea), "
+                            "'from_func' (collapse by caller function), or 'to_func' (callee function)."
+                        ),
+                        "enum": ["site", "pair", "from_func", "to_func"],
+                        "default": "site"
+                    },
+                    "enrich_names": {
+                        "type": "boolean",
+                        "description": "Add best-effort names for endpoints (functions/data).",
+                        "default": True
+                    },
+
+                    # Back-compat shims (optional): callers may still pass these
+                    "ea": {
+                        "type": "string",
+                        "description": "Deprecated: EA as decimal/hex string if not using 'subject'."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Deprecated: symbol name if not using 'subject'."
+                    }
+                },
+                "required": []
+            }
+        }
+    }
 ]
+
+def add_result_to_messages(messages, tc, result):
+    tc_id = getattr(tc, "id", None) or tc.get("id")
+    fn_name = getattr(getattr(tc, "function", None), "name", None) \
+              or (tc.get("function") or {}).get("name", "get_xrefs")
+    messages.append(
+        {
+            "role": "tool",
+            "tool_call_id": tc_id,
+            "name": fn_name,
+            "content": json.dumps(result, ensure_ascii=False),
+        }
+    )

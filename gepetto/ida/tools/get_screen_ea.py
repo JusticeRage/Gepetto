@@ -2,6 +2,9 @@ import json
 import idaapi
 import ida_kernwin
 
+from gepetto.ida.tools.tools import add_result_to_messages
+
+
 def handle_get_screen_ea_tc(tc, messages):
     # The tool takes no arguments, but parse for forward compatibility.
     try:
@@ -19,14 +22,7 @@ def handle_get_screen_ea_tc(tc, messages):
             "error": "The cursor isn't set to a valid address. Click in a disassembly view first."
         }
 
-    messages.append(
-        {
-            "role": "tool",
-            "tool_call_id": tc.id,
-            # Tool content MUST be a string
-            "content": json.dumps(payload, ensure_ascii=False),
-        }
-    )
+    add_result_to_messages(messages, tc, payload)
 
 def get_screen_ea() -> str | None:
     """Return the current effective address, or None if no valid EA."""

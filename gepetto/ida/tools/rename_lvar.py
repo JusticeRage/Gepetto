@@ -4,12 +4,9 @@ from typing import Optional
 import ida_hexrays
 import ida_kernwin
 
-from .function_utils import (
-    parse_ea as _parse_ea,
-    resolve_ea as _resolve_ea,
-    resolve_func as _resolve_func,
-    get_func_name as _get_func_name,
-)
+from gepetto.ida.tools.function_utils import parse_ea, resolve_ea, resolve_func, get_func_name
+from gepetto.ida.tools.tools import add_result_to_messages
+
 
 
 def handle_rename_lvar_tc(tc, messages):
@@ -21,7 +18,7 @@ def handle_rename_lvar_tc(tc, messages):
 
     ea = args.get("ea")
     if ea is not None:
-        ea = _parse_ea(ea)
+        ea = parse_ea(ea)
     func_name = args.get("func_name")
     old_name = args.get("old_name")
     new_name = args.get("new_name")
@@ -31,13 +28,7 @@ def handle_rename_lvar_tc(tc, messages):
     except Exception as ex:
         result = {"ok": False, "error": str(ex)}
 
-    messages.append(
-        {
-            "role": "tool",
-            "tool_call_id": tc.id,
-            "content": json.dumps(result, ensure_ascii=False),
-        }
-    )
+    add_result_to_messages(messages, tc, result)
 
 
 # -----------------------------------------------------------------------------
@@ -52,10 +43,10 @@ def rename_lvar(
     if not old_name or not new_name:
         raise ValueError("old_name and new_name are required")
 
-    f = _resolve_func(ea=ea, name=func_name)
-    func_name = func_name or _get_func_name(f)
+    f = resolve_func(ea=ea, name=func_name)
+    func_name = func_name or get_func_name(f)
     if ea is None:
-        ea = _resolve_ea(func_name)
+        ea = resolve_ea(func_name)
 
     out = {"ok": False, "ea": int(f.start_ea), "func_name": func_name, "old_name": old_name, "new_name": new_name}
 

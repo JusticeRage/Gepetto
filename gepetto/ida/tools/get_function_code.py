@@ -7,12 +7,8 @@ import ida_hexrays
 import ida_kernwin
 import ida_name
 
-from .function_utils import (
-    parse_ea as _parse_ea,
-    resolve_ea as _resolve_ea,
-    resolve_func as _resolve_func,
-    get_func_name as _get_func_name,
-)
+from gepetto.ida.tools.function_utils import parse_ea, resolve_ea, resolve_func, get_func_name
+from gepetto.ida.tools.tools import add_result_to_messages
 
 
 def handle_get_function_code_tc(tc, messages):
@@ -24,7 +20,7 @@ def handle_get_function_code_tc(tc, messages):
 
     ea = args.get("ea", None)
     if ea is not None:
-        ea = _parse_ea(ea)
+        ea = parse_ea(ea)
     name = args.get("name", None)
 
     try:
@@ -39,14 +35,7 @@ def handle_get_function_code_tc(tc, messages):
             "pseudocode": None,
         }
 
-    # Tool messages must be strings; serialize the result dict.
-    messages.append(
-        {
-            "role": "tool",
-            "tool_call_id": tc.id,
-            "content": json.dumps(result, ensure_ascii=False),
-        }
-    )
+    add_result_to_messages(messages, tc, result)
 
 # -----------------------------------------------------------------------------
 
@@ -108,10 +97,10 @@ def get_function_code(ea: Optional[int] = None,
     }
 
     try:
-        f = _resolve_func(ea=ea, name=name)
-        func_name = name or _get_func_name(f)
+        f = resolve_func(ea=ea, name=name)
+        func_name = name or get_func_name(f)
         if not ea:
-            ea = _resolve_ea(func_name)
+            ea = resolve_ea(func_name)
         pseudocode = _decompile_func(ea)
 
         result.update(

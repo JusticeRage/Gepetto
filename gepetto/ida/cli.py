@@ -12,6 +12,7 @@ import gepetto.ida.tools.get_screen_ea
 import gepetto.ida.tools.get_function_code
 import gepetto.ida.tools.rename_lvar
 import gepetto.ida.tools.rename_function
+import gepetto.ida.tools.get_xrefs
 
 _ = gepetto.config._
 CLI: ida_kernwin.cli_t = None
@@ -25,7 +26,8 @@ MESSAGES: list[dict] = [
             f"Never repeat pseudocode back as the user can see it already.\n"
             f"In the context of a reverse-engineering session, the user will switch from function to function a lot. "
             f"Between messages, don't assume that the function is still the same and always confirm it by checking the "
-            f"current EA. \"This\" function or the \"current\" function always mean the one at the current EA.",
+            f"current EA. \"This\" function or the \"current\" function always mean the one at the current EA.\n"
+            f"When asked to perform an operation (such as renaming something), don't ask for confirmation. Just do it!",
     }
 ]  # Keep a history of the conversation to simulate LLM memory.
 
@@ -71,6 +73,8 @@ class GepettoCLI(ida_kernwin.cli_t):
                         gepetto.ida.tools.rename_lvar.handle_rename_lvar_tc(tc, MESSAGES)
                     elif tc.function.name == "rename_function":
                         gepetto.ida.tools.rename_function.handle_rename_function_tc(tc, MESSAGES)
+                    elif tc.function.name == "get_xrefs":
+                        gepetto.ida.tools.get_xrefs.handle_get_xrefs_tc(tc, MESSAGES)
                 stream_and_handle()
             else:
                 MESSAGES.append({"role": "assistant", "content": response.content or ""})
@@ -110,7 +114,7 @@ class GepettoCLI(ida_kernwin.cli_t):
                                 current.function.arguments += fn.arguments
                 if finish_reason:
                     if finish_reason != "tool_calls":
-                        print()
+                        print("\n\n")  # Add a blank line after the model's reply for readability.
                     handle_response(message)
 
             gepetto.config.model.query_model_async(
@@ -120,6 +124,7 @@ class GepettoCLI(ida_kernwin.cli_t):
                 additional_model_options={"tools": TOOLS},
             )
 
+        print()  # Add a line break before the model's response to improve readability
         stream_and_handle()
         return True
 

@@ -7,11 +7,8 @@ from typing import Optional
 import ida_name
 import ida_kernwin
 
-from .function_utils import (
-    parse_ea as _parse_ea,
-    resolve_func as _resolve_func,
-    get_func_name as _get_func_name,
-)
+from gepetto.ida.tools.function_utils import parse_ea, resolve_ea, resolve_func, get_func_name
+from gepetto.ida.tools.tools import add_result_to_messages
 
 
 def handle_rename_function_tc(tc, messages):
@@ -23,7 +20,7 @@ def handle_rename_function_tc(tc, messages):
 
     ea = args.get("ea")
     if ea is not None:
-        ea = _parse_ea(ea)
+        ea = parse_ea(ea)
     name = args.get("name")
     new_name = args.get("new_name")
 
@@ -31,14 +28,7 @@ def handle_rename_function_tc(tc, messages):
         result = rename_function(ea=ea, name=name, new_name=new_name)
     except Exception as ex:
         result = {"ok": False, "error": str(ex)}
-
-    messages.append(
-        {
-            "role": "tool",
-            "tool_call_id": tc.id,
-            "content": json.dumps(result, ensure_ascii=False),
-        }
-    )
+    add_result_to_messages(messages, tc, result)
 
 
 # -----------------------------------------------------------------------------
@@ -53,8 +43,8 @@ def rename_function(
     if not new_name:
         raise ValueError("new_name is required")
 
-    f = _resolve_func(ea=ea, name=name)
-    old_name = name or _get_func_name(f)
+    f = resolve_func(ea=ea, name=name)
+    old_name = name or get_func_name(f)
     ea = int(f.start_ea)
 
     out = {"ok": False, "ea": ea, "old_name": old_name, "new_name": new_name}
