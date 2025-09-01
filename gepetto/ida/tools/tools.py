@@ -51,6 +51,45 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_disasm",
+            "description": "Return disassembly for an effective address.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ea": {
+                        "type": "integer",
+                        "description": "Effective address to disassemble.",
+                    },
+                },
+                "required": ["ea"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_bytes",
+            "description": "Return raw bytes for an effective address.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ea": {
+                        "type": "integer",
+                        "description": "Effective address to read from.",
+                    },
+                    "size": {
+                        "type": "integer",
+                        "description": "Number of bytes to retrieve starting at the address.",
+                        "default": 32,
+                    },
+                },
+                "required": ["ea"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_function_code",
             "description": "Return Hex-Rays pseudocode for a function, resolved by EA or by name.",
             "parameters": {

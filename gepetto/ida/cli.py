@@ -20,6 +20,8 @@ import gepetto.ida.tools.rename_lvar
 import gepetto.ida.tools.rename_function
 import gepetto.ida.tools.search
 import gepetto.ida.tools.to_hex
+import gepetto.ida.tools.get_disasm
+import gepetto.ida.tools.get_bytes
 
 _ = gepetto.config._
 CLI: ida_kernwin.cli_t = None
@@ -93,6 +95,10 @@ class GepettoCLI(ida_kernwin.cli_t):
                         gepetto.ida.tools.search.handle_search_tc(tc, MESSAGES)
                     elif tc.function.name == "to_hex":
                         gepetto.ida.tools.to_hex.handle_to_hex_tc(tc, MESSAGES)
+                    elif tc.function.name == "get_disasm":
+                        gepetto.ida.tools.get_disasm.handle_get_disasm_tc(tc, MESSAGES)
+                    elif tc.function.name == "get_bytes":
+                        gepetto.ida.tools.get_bytes.handle_get_bytes_tc(tc, MESSAGES)
                     elif tc.function.name == "get_callers":
                         gepetto.ida.tools.call_graph.handle_get_callers_tc(tc, MESSAGES)
                     elif tc.function.name == "get_callees":
