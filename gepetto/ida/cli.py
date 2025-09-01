@@ -13,6 +13,7 @@ import gepetto.ida.tools.call_graph
 import gepetto.ida.tools.get_function_code
 import gepetto.ida.tools.get_screen_ea
 import gepetto.ida.tools.get_xrefs
+import gepetto.ida.tools.refresh_view
 import gepetto.ida.tools.rename_lvar
 import gepetto.ida.tools.rename_function
 
@@ -29,7 +30,9 @@ MESSAGES: list[dict] = [
             f"In the context of a reverse-engineering session, the user will switch from function to function a lot. "
             f"Between messages, don't assume that the function is still the same and always confirm it by checking the "
             f"current EA. \"This\" function or the \"current\" function always mean the one at the current EA.\n"
-            f"When asked to perform an operation (such as renaming something), don't ask for confirmation. Just do it!",
+            f"When asked to perform an operation (such as renaming something), don't ask for confirmation. Just do it!\n"
+            f"Always refresh the disassembly view after making a change in the IDB (renaming, etc.), so it is shown to"
+            f"the user (no need to mention when you do it).",
     }
 ]  # Keep a history of the conversation to simulate LLM memory.
 
@@ -81,6 +84,8 @@ class GepettoCLI(ida_kernwin.cli_t):
                         gepetto.ida.tools.call_graph.handle_get_callers_tc(tc, MESSAGES)
                     elif tc.function.name == "get_callees":
                         gepetto.ida.tools.call_graph.handle_get_callees_tc(tc, MESSAGES)
+                    elif tc.function.name == "refresh_view":
+                        gepetto.ida.tools.refresh_view.handle_refresh_view_tc(tc, MESSAGES)
                 stream_and_handle()
             else:
                 MESSAGES.append({"role": "assistant", "content": response.content or ""})

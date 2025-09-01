@@ -198,6 +198,17 @@ TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "refresh_view",
+            "description": "Refresh the current IDA disassembly view to show recent changes.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+    },
 ]
 
 def add_result_to_messages(messages, tc, result):
