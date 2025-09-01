@@ -167,7 +167,37 @@ TOOLS = [
                 "required": []
             }
         }
-    }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_callers",
+            "description": "Return the unique caller functions of a target function (by EA or name).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ea": {"type": "integer", "description": "EA inside the target function."},
+                    "name": {"type": "string", "description": "Function name to resolve."},
+                    "include_thunks": {"type": "boolean", "default": True, "description": "Treat thunks as their targets."}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_callees",
+            "description": "Return the unique callee functions reached from the target function.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ea": {"type": "integer"},
+                    "name": {"type": "string"},
+                    "only_direct": {"type": "boolean", "default": True, "description": "Direct calls only (not xrefs through data)."}
+                }
+            }
+        }
+    },
 ]
 
 def add_result_to_messages(messages, tc, result):
