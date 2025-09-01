@@ -17,6 +17,23 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_ea",
+            "description": "Return EA for a symbol name.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Symbol or function name.",
+                    },
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_function_code",
             "description": "Return Hex-Rays pseudocode for a function, resolved by EA or by name.",
             "parameters": {
