@@ -19,6 +19,7 @@ import gepetto.ida.tools.refresh_view
 import gepetto.ida.tools.rename_lvar
 import gepetto.ida.tools.rename_function
 import gepetto.ida.tools.search
+import gepetto.ida.tools.to_hex
 
 _ = gepetto.config._
 CLI: ida_kernwin.cli_t = None
@@ -35,7 +36,8 @@ MESSAGES: list[dict] = [
             f"current EA. \"This\" function or the \"current\" function always mean the one at the current EA.\n"
             f"When asked to perform an operation (such as renaming something), don't ask for confirmation. Just do it!\n"
             f"Always refresh the disassembly view after making a change in the IDB (renaming, etc.), so it is shown to"
-            f"the user (no need to mention when you do it).",
+            f"the user (no need to mention when you do it).\n"
+            f"Never convert decimal numbers to hexadecimal yourself; always use the `to_hex` tool for that.",
     }
 ]  # Keep a history of the conversation to simulate LLM memory.
 
@@ -89,6 +91,8 @@ class GepettoCLI(ida_kernwin.cli_t):
                         gepetto.ida.tools.list_symbols.handle_list_symbols_tc(tc, MESSAGES)
                     elif tc.function.name == "search":
                         gepetto.ida.tools.search.handle_search_tc(tc, MESSAGES)
+                    elif tc.function.name == "to_hex":
+                        gepetto.ida.tools.to_hex.handle_to_hex_tc(tc, MESSAGES)
                     elif tc.function.name == "get_callers":
                         gepetto.ida.tools.call_graph.handle_get_callers_tc(tc, MESSAGES)
                     elif tc.function.name == "get_callees":

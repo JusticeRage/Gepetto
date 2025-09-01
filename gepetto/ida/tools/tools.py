@@ -34,6 +34,23 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "to_hex",
+            "description": "Convert a decimal integer to a hexadecimal string.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "value": {
+                        "type": "integer",
+                        "description": "Decimal integer to convert.",
+                    },
+                },
+                "required": ["value"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_function_code",
             "description": "Return Hex-Rays pseudocode for a function, resolved by EA or by name.",
             "parameters": {
