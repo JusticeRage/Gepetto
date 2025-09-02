@@ -39,7 +39,9 @@ MESSAGES: list[dict] = [
             f"When asked to perform an operation (such as renaming something), don't ask for confirmation. Just do it!\n"
             f"Always refresh the disassembly view after making a change in the IDB (renaming, etc.), so it is shown to"
             f"the user (no need to mention when you do it).\n"
-            f"Never convert decimal numbers to hexadecimal yourself; always use the `to_hex` tool for that.",
+            f"Addresses should always be shown as hex in the form 0x1234, but never convert decimal numbers to "
+            f"hexadecimal yourself; always use the `to_hex` tool for that.\n"
+            f"If you ever encounter a tool error, don't try again, print the exception and stop.",
     }
 ]  # Keep a history of the conversation to simulate LLM memory.
 
@@ -91,6 +93,8 @@ class GepettoCLI(ida_kernwin.cli_t):
                         gepetto.ida.tools.get_xrefs.handle_get_xrefs_tc(tc, MESSAGES)
                     elif tc.function.name == "list_symbols":
                         gepetto.ida.tools.list_symbols.handle_list_symbols_tc(tc, MESSAGES)
+                    elif tc.function.name == "list_strings":
+                        gepetto.ida.tools.search.handle_list_strings_tc(tc, MESSAGES)
                     elif tc.function.name == "search":
                         gepetto.ida.tools.search.handle_search_tc(tc, MESSAGES)
                     elif tc.function.name == "to_hex":

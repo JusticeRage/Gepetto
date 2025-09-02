@@ -29,9 +29,7 @@ def handle_get_disasm_tc(tc, messages):
 
     add_result_to_messages(messages, tc, result)
 
-
 # -----------------------------------------------------------------------------
-
 
 def _get_disasm_line(ea: int) -> str:
     out = {"text": ""}
@@ -43,6 +41,7 @@ def _get_disasm_line(ea: int) -> str:
     ida_kernwin.execute_sync(_do, ida_kernwin.MFF_READ)
     return out["text"]
 
+# -----------------------------------------------------------------------------
 
 def get_disasm(ea: int) -> Dict:
     """Return the disassembly line at a given EA.

@@ -270,27 +270,60 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "search",
-            "description": "Search for text strings or hex byte patterns and return matching EAs.",
+            "description": "Search the binary for specific text strings or hex byte patterns. Returns the addresses (EAs) where matches were found. For enumerating all strings, use the `list_strings` function instead.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "text": {
                         "type": "string",
-                        "description": "ASCII text to look for.",
+                        "description": "Text to search for (ASCII/Unicode, case-insensitive by default)."
                     },
                     "hex": {
                         "type": "string",
-                        "description": "Hex pattern like '90 90 ?? FF'.",
+                        "description": "Hex byte pattern like '90 90 ?? FF'."
                     },
                     "case_sensitive": {
                         "type": "boolean",
-                        "description": "Case-sensitive text search.",
-                        "default": False,
-                    },
+                        "description": "Whether the text search should be case-sensitive.",
+                        "default": False
+                    }
                 },
-                "required": [],
-            },
-        },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_strings",
+            "description": "Enumerate discovered strings with pagination and filters.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": { "type": "integer", "default": 200, "minimum": 1 },
+                    "offset": { "type": "integer", "default": 0, "minimum": 0 },
+                    "min_len": { "type": "integer", "default": 4, "minimum": 1 },
+                    "encodings": {
+                        "type": "array",
+                        "items": { "type": "string", "enum": ["ascii","utf8","utf16","utf32"] }
+                    },
+                    "segments": {
+                        "type": "array",
+                        "items": { "type": "string" }
+                    },
+                    "include_xrefs": { "type": "boolean", "default": False },
+                    "include_text": { "type": "boolean", "default": True },
+                    "max_text_bytes": { "type": "integer", "default": 256, "minimum": 1 },
+                    "return_addresses_only": { "type": "boolean", "default": False },
+                    "sort_by": {
+                        "type": "string",
+                        "enum": ["ea","len","segment"],
+                        "default": "ea"
+                    }
+                },
+                "required": []
+            }
+        }
     },
     {
         "type": "function",

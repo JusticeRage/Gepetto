@@ -24,6 +24,8 @@ def handle_get_screen_ea_tc(tc, messages):
 
     add_result_to_messages(messages, tc, payload)
 
+# -----------------------------------------------------------------------------
+
 def get_screen_ea() -> str | None:
     """Return the current effective address, or None if no valid EA."""
     ea = ida_kernwin.execute_sync(ida_kernwin.get_screen_ea, ida_kernwin.MFF_FAST)

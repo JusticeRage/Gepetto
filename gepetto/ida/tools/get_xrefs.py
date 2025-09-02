@@ -57,19 +57,27 @@ def handle_get_xrefs_tc(tc, messages):
 
     add_result_to_messages(messages, tc, result)
 
+# -----------------------------------------------------------------------------
+
 def _is_call(xref_type: int) -> bool:
     # IDA uses fl_* constants in ida_xref; calls are typically fl_CN/fl_CF (near/far)
     return xref_type in (ida_xref.fl_CN, ida_xref.fl_CF)
 
+# -----------------------------------------------------------------------------
+
 def _is_flow(xref_type: int) -> bool:
     # Jumps/flow: near/far jump & ordinary flow
     return xref_type in (ida_xref.fl_JN, ida_xref.fl_JF, ida_xref.fl_F)
+
+# -----------------------------------------------------------------------------
 
 def _iter_func_items(fn: ida_funcs.func_t) -> Iterable[int]:
     ea = fn.start_ea
     while ea < fn.end_ea:
         yield ea
         ea = ida_bytes.get_item_end(ea)
+
+# -----------------------------------------------------------------------------
 
 def _collect_xrefs_to(ea: int, kinds_mask=ida_xref.XREF_ALL) -> Iterable[Tuple[int, int, bool]]:
     blk = ida_xref.xrefblk_t()
@@ -79,6 +87,8 @@ def _collect_xrefs_to(ea: int, kinds_mask=ida_xref.XREF_ALL) -> Iterable[Tuple[i
             if not blk.next_to():
                 break
 
+# -----------------------------------------------------------------------------
+
 def _collect_xrefs_from(ea: int, kinds_mask=ida_xref.XREF_ALL) -> Iterable[Tuple[int, int, bool]]:
     blk = ida_xref.xrefblk_t()
     if blk.first_from(ea, kinds_mask):
@@ -87,12 +97,16 @@ def _collect_xrefs_from(ea: int, kinds_mask=ida_xref.XREF_ALL) -> Iterable[Tuple
             if not blk.next_from():
                 break
 
+# -----------------------------------------------------------------------------
+
 def _ea_func_name(ea: int) -> Optional[str]:
     f = ida_funcs.get_func(ea)
     if f:
         return get_func_name(f) or None
     name = ida_name.get_ea_name(ea)
     return name or None
+
+# -----------------------------------------------------------------------------
 
 def get_xrefs_unified(
         scope: str,
