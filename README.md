@@ -21,7 +21,7 @@ Finally, with the corresponding interpreter, simply run:
 ```
 
 ⚠️ You will also need to edit the configuration file (found as `gepetto/config.ini`) and add your own API keys. For 
-OpenAI, it can be found on [this page](https://beta.openai.com/account/api-keys).
+OpenAI, it can be found on [this page](https://platform.openai.com/api-keys).
 Please note that API queries are usually not free (although not very expensive) and you will need to set up a payment 
 method with the corresponding provider.
 
