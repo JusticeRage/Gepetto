@@ -47,7 +47,7 @@ class GepettoPlugin(idaapi.plugin_t):
         if not ida_hexrays.init_hexrays_plugin():
             return idaapi.PLUGIN_SKIP
         # Only launch in interactive mode
-        if os.environ.get("IDA_IS_INTERACTIVE") != "1":
+        if not ida_kernwin.is_idaq():
             return idaapi.PLUGIN_SKIP
         # Check if Gepetto loaded at least one model properly
         if not gepetto.config.model:
