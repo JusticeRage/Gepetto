@@ -8,7 +8,6 @@ import ida_idaapi
 import gepetto.config
 import gepetto.ida.handlers
 from gepetto.ida.tools.tools import TOOLS
-import gepetto.ida.tools.cast
 import gepetto.ida.tools.call_graph
 import gepetto.ida.tools.get_ea
 import gepetto.ida.tools.get_function_code
