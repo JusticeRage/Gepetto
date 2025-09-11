@@ -2,6 +2,17 @@ import json
 
 import ida_kernwin
 
+
+def _get(obj, key, default=None):
+    """Safely get a value from either a dict or an object.
+
+    Handles both mapping-style (dict) and attribute-style (SimpleNamespace)
+    access so tool call payloads can be passed around uniformly.
+    """
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
+
 TOOLS = [
     {
         "type": "function",
@@ -369,9 +380,10 @@ TOOLS = [
 ]
 
 def add_result_to_messages(messages, tc, result):
-    tc_id = getattr(tc, "id", None) or tc.get("id")
-    fn_name = getattr(getattr(tc, "function", None), "name", None) \
-              or (tc.get("function") or {}).get("name", "get_xrefs")
+    # Support both SimpleNamespace tool calls (streaming) and dicts
+    tc_id = _get(tc, "id")
+    fn = _get(tc, "function", {}) or {}
+    fn_name = _get(fn, "name", "get_xrefs")
     messages.append(
         {
             "role": "tool",
