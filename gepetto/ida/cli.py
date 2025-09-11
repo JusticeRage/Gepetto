@@ -69,8 +69,101 @@ class GepettoCLI(ida_kernwin.cli_t):
         MESSAGES.append({"role": "user", "content": line})
 
         def handle_response(response):
-            if hasattr(response, "tool_calls") and response.tool_calls:
-                STATUS.set_status(f"Tool calls requested: {len(response.tool_calls)}", busy=False)
+            # Parse a Responses API Response into text and tool calls
+            def _response_text(resp):
+                txt = getattr(resp, "output_text", None)
+                if isinstance(txt, str) and txt:
+                    return txt
+                data = resp.model_dump() if hasattr(resp, "model_dump") else None
+                if isinstance(data, dict):
+                    out = data.get("output")
+                    if isinstance(out, list):
+                        parts = []
+                        for it in out:
+                            if not isinstance(it, dict):
+                                continue
+                            if it.get("type") == "output_text":
+                                content = it.get("content")
+                                if isinstance(content, list):
+                                    for p in content:
+                                        t = p.get("text") if isinstance(p, dict) else None
+                                        if isinstance(t, str):
+                                            parts.append(t)
+                                elif isinstance(it.get("text"), str):
+                                    parts.append(it.get("text"))
+                        if parts:
+                            return "".join(parts)
+                return ""
+
+            def _response_reasoning_summary(resp):
+                # Extract any reasoning summary text blocks from the response
+                try:
+                    data = resp.model_dump() if hasattr(resp, "model_dump") else {}
+                    out = data.get("output") or []
+                    summaries = []
+                    for it in out:
+                        if isinstance(it, dict) and it.get("type") == "reasoning":
+                            for s in it.get("summary", []) or []:
+                                if isinstance(s, dict) and isinstance(s.get("text"), str):
+                                    summaries.append(s["text"])
+                    if summaries:
+                        return " ".join(summaries)
+                except Exception:
+                    pass
+                return None
+
+            def _response_tool_calls(resp):
+                tc_list = []
+                outputs = getattr(resp, "output", None)
+                if isinstance(outputs, list) and outputs:
+                    for idx, item in enumerate(outputs):
+                        itype = getattr(item, "type", None) or (item.get("type") if isinstance(item, dict) else None)
+                        # Responses emits function tool calls as type == "function_call"
+                        if itype not in ("tool_call", "function_call"):
+                            continue
+                        iid = (
+                            getattr(item, "id", None)
+                            or getattr(item, "call_id", None)
+                            or (item.get("id") if isinstance(item, dict) else None)
+                            or (item.get("call_id") if isinstance(item, dict) else None)
+                        )
+                        name = getattr(item, "name", None) or (item.get("name") if isinstance(item, dict) else None)
+                        args = getattr(item, "arguments", None) or (item.get("arguments") if isinstance(item, dict) else None)
+                        tc_list.append(
+                            SimpleNamespace(
+                                index=idx,
+                                id=iid or "",
+                                type="function",
+                                function=SimpleNamespace(name=name or "", arguments=args or ""),
+                            )
+                        )
+                if not tc_list and hasattr(response, "model_dump"):
+                    try:
+                        data = response.model_dump()
+                        outs = data.get("output") or []
+                        for idx, it in enumerate(outs):
+                            if isinstance(it, dict) and (it.get("type") in ("tool_call", "function_call")):
+                                fn = it.get("name") or ""
+                                args = it.get("arguments") or ""
+                                iid = it.get("call_id") or it.get("id") or ""
+                                tc_list.append(
+                                    SimpleNamespace(
+                                        index=idx,
+                                        id=iid,
+                                        type="function",
+                                        function=SimpleNamespace(name=fn, arguments=args),
+                                    )
+                                )
+                    except Exception:
+                        pass
+                return tc_list
+
+            text = _response_text(response)
+            tool_calls_ns = _response_tool_calls(response)
+            reasoning_summary = _response_reasoning_summary(response)
+
+            if tool_calls_ns:
+                STATUS.set_status(f"Tool calls requested: {len(tool_calls_ns)}", busy=False)
                 tool_calls = [
                     {
                         "id": tc.id,
@@ -80,16 +173,16 @@ class GepettoCLI(ida_kernwin.cli_t):
                             "arguments": tc.function.arguments,
                         },
                     }
-                    for tc in response.tool_calls
+                    for tc in tool_calls_ns
                 ]
                 MESSAGES.append(
                     {
                         "role": "assistant",
-                        "content": response.content or "",
+                        "content": text or "",
                         "tool_calls": tool_calls,
                     }
                 )
-                for tc in response.tool_calls:
+                for tc in tool_calls_ns:
                     STATUS.log(f"→ Tool: {tc.function.name}({(tc.function.arguments or '')[:120]}...)")
                     STATUS.set_status(f"Running tool: {tc.function.name}", busy=True)
                     if tc.function.name == "get_screen_ea":
@@ -122,57 +215,36 @@ class GepettoCLI(ida_kernwin.cli_t):
                         gepetto.ida.tools.call_graph.handle_get_callees_tc(tc, MESSAGES)
                     elif tc.function.name == "refresh_view":
                         gepetto.ida.tools.refresh_view.handle_refresh_view_tc(tc, MESSAGES)
-                    # Stream tool result content to the status panel (respecting Verbose)
-                    # try:
-                    #     # Find the tool response we just appended
-                    #     tool_msg = None
-                    #     for m in reversed(MESSAGES):
-                    #         if isinstance(m, dict) and m.get("role") == "tool" and m.get("tool_call_id") == tc.id:
-                    #             tool_msg = m
-                    #             break
-                    #     if tool_msg:
-                    #         content = tool_msg.get("content") or ""
-                    #         prefix = f"→ {tc.function.name}: "
-                    #         # Truncate very large payloads to keep UI responsive
-                    #         MAX_CHARS = 8192
-                    #         truncated = False
-                    #         if len(content) > MAX_CHARS:
-                    #             content_to_show = content[:MAX_CHARS]
-                    #             truncated = True
-                    #         else:
-                    #             content_to_show = content
-                    #         # Chunk into smaller inserts for UI smoothness
-                    #         CHUNK = 512
-                    #         for i in range(0, len(content_to_show), CHUNK):
-                    #             STATUS.log_stream(content_to_show[i:i+CHUNK], prefix=prefix)
-                    #             prefix = ""  # ensure prefix only on first chunk
-                    #         if truncated:
-                    #             STATUS.log_stream("\n… (truncated)", prefix="")
-                    #         STATUS.end_stream()
-                    # except Exception:
-                    #     pass
+                STATUS.end_stream()
                 STATUS.set_status("Continuing after tools...", busy=True)
                 stream_and_handle()
             else:
-                MESSAGES.append({"role": "assistant", "content": response.content or ""})
+                # Ensure the streaming line is finished before logging summary
+                try:
+                    print("\n")
+                except Exception:
+                    pass
+                STATUS.end_stream()
+                if reasoning_summary:
+                    STATUS.log(f"🧠 Reasoning summary: {reasoning_summary}")
+                MESSAGES.append({"role": "assistant", "content": text or ""})
+                STATUS.set_status("Done", busy=False)
+                STATUS.log("✔ Completed turn")
 
         def stream_and_handle():
             message = SimpleNamespace(content="", tool_calls=[])
             model_name = str(gepetto.config.model)
 
             def on_chunk(delta=None, finish_reason=None, response=None):
-                # Handle out-of-band full responses or extras (e.g., reasoning summary)
+                # Final Responses API object
                 if response is not None:
-                    try:
-                        if hasattr(response, "reasoning_summary") and response.reasoning_summary:
-                            STATUS.log(f"🧠 Reasoning: {response.reasoning_summary}")
-                            return
-                    except Exception:
-                        pass
                     try:
                         handle_response(response)
                     except Exception:
                         pass
+                    return
+                if isinstance(delta, dict) and delta.get("status") == "thinking":
+                    STATUS.set_status("Thinking...", busy=True)
                     return
                 if isinstance(delta, str):
                     # Stream to panel without newlines while printing to console.
@@ -181,46 +253,18 @@ class GepettoCLI(ida_kernwin.cli_t):
                     message.content += delta
                     STATUS.set_status("Streaming...", busy=True)
                     return
-                if getattr(delta, "content", None):
-                    # Stream to panel without newlines while printing to console.
-                    STATUS.log_stream(delta.content, prefix=f"{model_name}: ")
-                    print(delta.content, end="", flush=True)
-                    message.content += delta.content
-                    STATUS.set_status("Streaming...", busy=True)
-                if getattr(delta, "tool_calls", None):
-                    for tc in delta.tool_calls:
-                        idx = tc.index
-                        while len(message.tool_calls) <= idx:
-                            message.tool_calls.append(
-                                SimpleNamespace(
-                                    id="",
-                                    type="",
-                                    function=SimpleNamespace(name="", arguments=""),
-                                )
-                            )
-                        current = message.tool_calls[idx]
-                        if getattr(tc, "id", None):
-                            current.id = tc.id
-                        if getattr(tc, "type", None):
-                            current.type = tc.type
-                        if getattr(tc, "function", None):
-                            fn = tc.function
-                            if getattr(fn, "name", None):
-                                current.function.name += fn.name
-                            if getattr(fn, "arguments", None):
-                                current.function.arguments += fn.arguments
-                    STATUS.set_status("Requesting tools...", busy=False)
+                if isinstance(finish_reason, str) and finish_reason.startswith("error:"):
+                    err = finish_reason.split(":", 1)[1] if ":" in finish_reason else finish_reason
+                    print("\n")
+                    STATUS.set_status("Error", busy=False)
+                    STATUS.end_stream()
+                    STATUS.log(f"✖ {err}")
+                    return
                 if finish_reason:
-                    if finish_reason != "tool_calls":
-                        print("\n")  # Add a blank line after the model's reply for readability.
-                        STATUS.set_status("Done", busy=False)
-                        # End streaming line in status panel
-                        STATUS.end_stream()
-                        STATUS.log("✔ Completed turn")
-                    else:
-                        # We are about to execute tools. End streaming line once.
-                        STATUS.end_stream()
-                    handle_response(message)
+                    print("\n")
+                    STATUS.set_status("Done", busy=False)
+                    STATUS.end_stream()
+                    STATUS.log("✔ Completed turn")
 
             gepetto.config.model.query_model_async(
                 MESSAGES,

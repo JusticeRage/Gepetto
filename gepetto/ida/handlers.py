@@ -20,15 +20,20 @@ def comment_callback(address, view, response, start_time):
 
     :param address: The address of the function to comment
     :param view: A handle to the decompiler window
-    :param response: The comment to add or a message object returned by the
-        model.  When using tool-calling APIs the model might return a
-        ``ChatCompletionMessage`` object instead of a simple string.  In order
-    to remain backwards compatible this function accepts either and extracts
-        the textual content when necessary.
+    :param response: The comment to add, which may be a plain string or a
+        Response object from the unified API. The textual content is extracted
+        and applied as function comment.
     """
     elapsed_time = time.time() - start_time
 
-    response_text = response.content if hasattr(response, "content") else response
+    def _to_text(resp):
+        if isinstance(resp, str):
+            return resp
+        txt = getattr(resp, "output_text", None)
+        if isinstance(txt, str) and txt:
+            return txt
+        return getattr(resp, "content", "") or ""
+    response_text = _to_text(response)
     response_text = "\n".join(textwrap.wrap(response_text, 80, replace_whitespace=False))
 
     # Add the response as a comment in IDA, but preserve any existing non-Gepetto comment
@@ -54,12 +59,18 @@ def comment_callback(address, view, response, start_time):
 def conversation_callback(response, memory):
     """Callback that prints the model's response in IDA's output window.
 
-    The ``response`` argument can either be a plain string or a message object
-    returned by :mod:`openai`.  Only the textual content is relevant here, so
-    extract it if needed.
+    The ``response`` argument can be a plain string or a Responses API
+    object; only the textual content is relevant here.
     """
 
-    text = response.content if hasattr(response, "content") else response
+    def _to_text(resp):
+        if isinstance(resp, str):
+            return resp
+        txt = getattr(resp, "output_text", None)
+        if isinstance(txt, str) and txt:
+            return txt
+        return getattr(resp, "content", "") or ""
+    text = _to_text(response)
     memory.append({"role": "assistant", "content": text})
 
     print()
@@ -114,7 +125,14 @@ def rename_callback(address, view, response):
     import json
     import re
 
-    response_text = response.content if hasattr(response, "content") else response
+    def _to_text(resp):
+        if isinstance(resp, str):
+            return resp
+        txt = getattr(resp, "output_text", None)
+        if isinstance(txt, str) and txt:
+            return txt
+        return getattr(resp, "content", "") or ""
+    response_text = _to_text(response)
     names = json.loads(response_text)
 
     function_addr = idaapi.get_func(address).start_ea
@@ -282,8 +300,11 @@ class GenerateCCodeHandler(idaapi.action_handler_t):
         project_name = idaapi.get_root_filename()
         func_name = idc.get_func_name(idaapi.get_screen_ea())
         file_name = f"{project_name}_{func_name}.c"
+        text = getattr(response, "output_text", None)
+        if not isinstance(text, str):
+            text = str(text or getattr(response, "content", ""))
         with open(file_name, "w", encoding="utf-8") as f:
-            f.write(response)
+            f.write(text)
 
         if view:
             view.refresh_view(False)
@@ -324,8 +345,11 @@ class GeneratePythonCodeHandler(idaapi.action_handler_t):
         project_name = idaapi.get_root_filename()
         func_name = idc.get_func_name(idaapi.get_screen_ea())
         file_name = f"{project_name}_{func_name}.py"
+        text = getattr(response, "output_text", None)
+        if not isinstance(text, str):
+            text = str(text or getattr(response, "content", ""))
         with open(file_name, "w", encoding="utf-8") as f:
-            f.write(response)
+            f.write(text)
 
         if view:
             view.refresh_view(False)

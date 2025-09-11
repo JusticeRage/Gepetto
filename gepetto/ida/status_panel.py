@@ -347,7 +347,10 @@ class _StatusPanelManager:
             self._stream_prefix_for_batch = prefix
         self._stream_buffer.append(text)
 
-        if " " in text:
+        # Heuristics: flush on whitespace, punctuation, or if the buffer grows large.
+        punct = {" ", "\n", "\t", ".", ",", ";", ":", "!", "?", ")", "]", "}"}
+        last = text[-1:] if text else ""
+        if any(ch in text for ch in punct) or last in punct or len("".join(self._stream_buffer)) >= 160:
             self._flush_stream_buffer()
 
     def end_stream(self):

@@ -6,7 +6,6 @@ from types import SimpleNamespace
 import httpx as _httpx
 import ida_kernwin
 import openai
-from pyexpat.errors import messages
 
 from gepetto.models.base import LanguageModel
 import gepetto.models.model_manager
@@ -26,6 +25,9 @@ GPTO3_MINI_MODEL_NAME = "o3-mini"
 OPENAI_RESTRICTED_MODELS = [GPT_5_MODEL_NAME, GPT_5_MINI_MODEL_NAME, GPT_5_NANO_MODEL_NAME, GPTO3_MODEL_NAME]
 
 class GPT(LanguageModel):
+    # Default adapter is Chat Completions. The first‑party OpenAI provider
+    # (this class) promotes itself to Responses API in __init__.
+    use_responses_api: bool = False
     oai_org_unverified = False
     oai_restricted_models = OPENAI_RESTRICTED_MODELS
 
@@ -68,183 +70,391 @@ class GPT(LanguageModel):
                 proxy=proxy,
             ) if proxy else None
         )
+        # For the first‑party OpenAI provider, default to the Responses API.
+        # Subclasses (OpenAI-compatible vendors) inherit False unless overridden.
+        if self.__class__ is GPT:
+            self.use_responses_api = True
 
     def __str__(self):
         return self.model
 
+    def _build_responses_input(self, conversation):
+        """Convert chat-style messages into Responses `instructions` and `input`.
+
+        Ensures content parts use the correct `type` values like `input_text`.
+        """
+        # Combine any system messages into instructions; keep others as input items
+        system_instructions = []
+        input_items = []
+        for msg in conversation:
+            role = msg.get("role") if isinstance(msg, dict) else getattr(msg, "role", None)
+            content = msg.get("content") if isinstance(msg, dict) else getattr(msg, "content", None)
+            tool_calls = msg.get("tool_calls") if isinstance(msg, dict) else getattr(msg, "tool_calls", None)
+            if role == "system":
+                if content:
+                    system_instructions.append(str(content))
+                continue
+
+            # Map Chat-style tool result messages to Responses FunctionCallOutput items
+            if role == "tool":
+                call_id = None
+                for k in ("tool_call_id", "id"):
+                    v = msg.get(k) if isinstance(msg, dict) else getattr(msg, k, None)
+                    if v:
+                        call_id = str(v)
+                        break
+                out = content
+                if isinstance(out, (dict, list)):
+                    try:
+                        import json as _json
+                        out = _json.dumps(out, ensure_ascii=False)
+                    except Exception:
+                        out = str(out)
+                elif out is None:
+                    out = ""
+                input_items.append({
+                    "type": "function_call_output",
+                    "call_id": call_id or "",
+                    "output": str(out),
+                })
+                continue
+
+            item = {"role": role or "user"}
+
+            # Normalize text content into Responses-style parts
+            parts = []
+            # Choose part type based on role: user/tool => input_text, assistant => output_text
+            part_type = "output_text" if (role == "assistant") else "input_text"
+            if isinstance(content, list):
+                for p in content:
+                    if isinstance(p, dict) and ("text" in p):
+                        txt = p.get("text", "")
+                        parts.append({"type": part_type, "text": txt})
+                    elif isinstance(p, dict) and p.get("type") in ("input_text", "output_text"):
+                        # Respect explicit type if the caller already matched schema
+                        parts.append({"type": p.get("type"), "text": p.get("text", "")})
+                    else:
+                        parts.append({"type": part_type, "text": str(p)})
+            elif isinstance(content, str):
+                parts.append({"type": part_type, "text": content})
+            elif content is None:
+                pass
+            else:
+                parts.append({"type": part_type, "text": str(content)})
+
+            # Include assistant-issued tool calls (function calls) so subsequent
+            # tool results (function_call_output) can reference them by call_id.
+            # Without echoing the function calls, the Responses API will reject
+            # our tool outputs with: "No tool call found for function call output".
+            if role == "assistant" and tool_calls:
+                try:
+                    for tc in tool_calls:
+                        # Chat-style tool_calls: {id, type:"function", function:{name, arguments}}
+                        if isinstance(tc, dict):
+                            tc_id = tc.get("id") or ""
+                            fn = tc.get("function") or {}
+                            name = fn.get("name") or ""
+                            args = fn.get("arguments") or ""
+                        else:
+                            tc_id = getattr(tc, "id", "")
+                            fn = getattr(tc, "function", None)
+                            name = getattr(fn, "name", "") if fn is not None else ""
+                            args = getattr(fn, "arguments", "") if fn is not None else ""
+                        # Append a function_call item; id is optional, call_id pairs with the output
+                        input_items.append({
+                            "type": "function_call",
+                            "call_id": str(tc_id or ""),
+                            "name": str(name or ""),
+                            "arguments": str(args or ""),
+                        })
+                except Exception:
+                    # Be permissive; at worst the tool outputs will be ignored by the model
+                    pass
+
+            if parts:
+                item["content"] = parts
+
+            input_items.append(item)
+
+        instructions = "\n".join(system_instructions) if system_instructions else None
+        return instructions, input_items
+
+    def _to_chat_tools(self, tools: list | None):
+        """Convert Responses-style tools to Chat Completions style."""
+        if not tools:
+            return None
+        out = []
+        for t in tools:
+            if not isinstance(t, dict) or t.get("type") != "function":
+                continue
+            name = t.get("name")
+            params = t.get("parameters") or {"type": "object"}
+            desc = t.get("description")
+            strict = t.get("strict")
+            # Ensure strict-compatible JSON Schema subset: disallow unknown keys
+            if strict and isinstance(params, dict):
+                if params.get("type") == "object" and "additionalProperties" not in params:
+                    params = dict(params)
+                    params["additionalProperties"] = False
+            fn = {"name": name, "parameters": params}
+            if desc is not None:
+                fn["description"] = desc
+            if strict is not None:
+                fn["strict"] = strict
+            out.append({"type": "function", "function": fn})
+        return out or None
+
+    def _finalize_chat_to_pseudo_response(self, text: str, tool_calls: list[dict]):
+        from types import SimpleNamespace
+        output = []
+        if text:
+            output.append({
+                "type": "output_text",
+                "content": [{"text": text}],
+            })
+        for tc in tool_calls or []:
+            output.append({
+                "type": "tool_call",
+                "id": tc.get("id", ""),
+                "name": tc.get("function", {}).get("name", ""),
+                "arguments": tc.get("function", {}).get("arguments", ""),
+            })
+        return SimpleNamespace(output=output)
+
+    def _query_via_chat_completions(self, conversation, cb, stream, additional_model_options):
+        # Prepare messages as-is; they are already Chat Completions-shaped
+        messages = conversation
+
+        # Prepare tools for Chat Completions
+        opts = dict(additional_model_options or {})
+        tools = self._to_chat_tools(opts.pop("tools", None))
+
+        # Map response_format.json_object → response_format JSON schema minimal
+        # Chat Completions accepts both json_object and json_schema nowadays.
+        rf = opts.get("response_format")
+        if isinstance(rf, dict) and rf.get("type") == "json_object":
+            opts["response_format"] = {"type": "json_object"}
+
+        try:
+            if not stream:
+                resp = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    tools=tools,
+                    **opts,
+                )
+                choice = resp.choices[0] if getattr(resp, "choices", None) else None
+                text = (getattr(choice.message, "content", None) if choice else None) or ""
+                tcs = getattr(choice.message, "tool_calls", None) or []
+                pseudo = self._finalize_chat_to_pseudo_response(text, tcs)
+                # Invoke callback directly from worker thread. UI updates inside
+                # the callback (status panel, etc.) already use execute_sync
+                # internally, and tool handlers may need to call execute_sync
+                # themselves. Calling cb on the UI thread can deadlock when
+                # tools then call execute_sync again.
+                cb(response=pseudo)
+                return
+            else:
+                stream_resp = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    tools=tools,
+                    stream=True,
+                    **opts,
+                )
+                # Accumulate text and tool calls
+                text_buf = []
+                tool_calls = {}
+                def upsert_tool_call(delta_tc):
+                    idx = getattr(delta_tc, "index", None)
+                    if idx is None:
+                        return
+                    entry = tool_calls.get(idx)
+                    if not entry:
+                        entry = {"id": getattr(delta_tc, "id", "") or "",
+                                 "function": {"name": "", "arguments": ""}}
+                        tool_calls[idx] = entry
+                    fn = getattr(delta_tc, "function", None)
+                    if fn is not None:
+                        # name/arguments arrive incrementally
+                        name = getattr(fn, "name", None)
+                        args = getattr(fn, "arguments", None)
+                        if name:
+                            entry["function"]["name"] += name
+                        if args:
+                            entry["function"]["arguments"] += args
+
+                for chunk in stream_resp:
+                    ch = chunk.choices[0] if getattr(chunk, "choices", None) else None
+                    delta = getattr(ch, "delta", None)
+                    if delta is None:
+                        continue
+                    # Stream text
+                    dtext = getattr(delta, "content", None)
+                    if dtext:
+                        text_buf.append(dtext)
+                        cb(dtext, None)
+                    # Collect tool call deltas
+                    dtcs = getattr(delta, "tool_calls", None) or []
+                    for dtc in dtcs:
+                        upsert_tool_call(dtc)
+
+                final_text = "".join(text_buf)
+                tcs = [tool_calls[i] for i in sorted(tool_calls.keys())]
+                pseudo = self._finalize_chat_to_pseudo_response(final_text, tcs)
+                cb(response=pseudo)
+                return
+        except Exception as e:
+            print(_("General exception encountered while running the query: {error}").format(error=str(e)))
+
     def query_model(self, query, cb, stream=False, additional_model_options=None):
         """
-        Function which sends a query to a GPT-API-compatible model and calls a callback when the response is available.
-        Blocks until the response is received
-        :param query: The request to send to the model. It can be a single string, or a sequence of messages in a
-        dictionary for a whole conversation.
-        :param cb: The function to which the response will be passed to.
-        :param additional_model_options: Additional parameters used when creating the model object. Typically, for
-        OpenAI, response_format={"type": "json_object"}.
+        Send a request using the unified Responses API and call a callback as
+        output arrives (streaming) or once the full response is ready.
+
+        - `query` may be a string or a list of chat-like messages
+        - `cb` is called as `cb(delta, finish_reason)` for streaming text deltas
+          and once at the end as `cb(response=<Response>)` with the final object
+        - Additional options may include `tools`, `tool_choice`, `max_tokens`,
+          `response_format`, `reasoning`, etc. Mapped to Responses equivalents.
         """
         if additional_model_options is None:
             additional_model_options = {}
 
-        # Extract optional Responses API reasoning summary request if present in options
-        # and/or via config. Chat Completions does not accept the `reasoning` param,
-        # so remove it from the body we send to chat.completions and handle separately.
-        reasoning_opts = None
-        if "reasoning" in additional_model_options:
-            try:
-                # Keep a shallow copy to avoid mutating caller-provided dict
-                reasoning_opts = dict(additional_model_options.get("reasoning") or {})
-            except Exception:
-                reasoning_opts = additional_model_options.get("reasoning")
-            # Do not pass through to chat.completions
-            try:
-                del additional_model_options["reasoning"]
-            except Exception:
-                pass
+        # Build instructions and input from a chat-like conversation or a single string
+        if isinstance(query, str):
+            conversation = [{"role": "user", "content": query}]
+        else:
+            conversation = query
 
-        # Also allow enabling via config: [OpenAI] REASONING_SUMMARY = off|auto
-        if reasoning_opts is None:
+        # Route by API mode
+        if not getattr(self, "use_responses_api", True):
+            return self._query_via_chat_completions(conversation, cb, stream, additional_model_options)
+
+        # Responses API path
+        instructions, input_items = self._build_responses_input(conversation)
+
+        # Map Chat options to Responses options
+        opts = dict(additional_model_options or {})
+        # response_format -> text.format
+        text_opts = {}
+        rf = opts.pop("response_format", None)
+        if isinstance(rf, dict):
+            if rf.get("type") == "json_object":
+                text_opts["format"] = "json"
+            elif rf.get("type") == "json_schema":
+                # Minimal wrapper for JSON Schema in Responses
+                js = rf.get("json_schema", {})
+                name = js.get("name") or "Output"
+                text_opts["format"] = {
+                    "type": "json_schema",
+                    "name": name,
+                    "json_schema": {
+                        "strict": True,
+                        "schema": js.get("schema", {"type": "object"}),
+                    },
+                }
+        if text_opts:
+            opts["text"] = text_opts
+
+        # max_tokens -> max_output_tokens
+        if "max_tokens" in opts and "max_output_tokens" not in opts:
             try:
-                cfg = gepetto.config.get_config("OpenAI", "REASONING_SUMMARY", default="off")
-                if isinstance(cfg, str) and cfg.lower() in ("auto", "on", "true", "1"):
-                    reasoning_opts = {"summary": "auto"}
+                opts["max_output_tokens"] = int(opts.pop("max_tokens"))
             except Exception:
-                pass
-        # Guardrail: only attempt summaries on known-supported reasoning models to avoid
-        # confusing/no-op outputs on others (e.g., printing just "detailed").
-        supported_for_summary = {
-            GPTO3_MODEL_NAME,
-            GPTO3_MINI_MODEL_NAME,
-            GPTO4_MINI_MODEL_NAME,
-            GPT_5_MODEL_NAME,
-            GPT_5_MINI_MODEL_NAME,
-            GPT_5_NANO_MODEL_NAME,
-        }
-        if reasoning_opts and self.model not in supported_for_summary:
-            reasoning_opts = None
+                opts.pop("max_tokens", None)
+
+        # Temperature guard for GPT‑5 family: omit or set to 1
+        if self.model and str(self.model).startswith("gpt-5"):
+            if "temperature" in opts and opts["temperature"] not in (None, 1):
+                opts["temperature"] = 1
+
+        # Always avoid server-side retention
+        opts["store"] = False
+
+        # Prefer not to parallelize tool calls for deterministic sequencing in IDA
+        if "parallel_tool_calls" not in opts:
+            opts["parallel_tool_calls"] = False
+
+        # Reasoning configuration: honor [OpenAI] reasoning_summary = off|auto|concise|detailed
         try:
-            if type(query) is str:
-                conversation = [
-                    {"role": "user", "content": query}
-                ]
-            else:
-                conversation = query
+            rs_mode = gepetto.config.get_config("OpenAI", "REASONING_SUMMARY", default="off")
+        except Exception:
+            rs_mode = "off"
+        if isinstance(rs_mode, str) and rs_mode.lower() in {"auto", "concise", "detailed"}:
+            # Only set for GPT‑5 / o‑series to avoid 400s on basic chat models
+            if str(self.model).startswith("gpt-5") or str(self.model).startswith("o"):
+                if "reasoning" not in opts:
+                    effort = "medium" if rs_mode != "detailed" else "high"
+                    opts["reasoning"] = {"summary": rs_mode.lower(), "effort": effort}
 
-            def _request(_stream: bool):
-                return self.client.chat.completions.create(
+        try:
+            if not stream:
+                resp = self.client.responses.create(
                     model=self.model,
-                    messages=conversation,
-                    stream=_stream,
-                    **additional_model_options
+                    input=input_items if len(input_items) > 0 else None,
+                    instructions=instructions,
+                    **opts,
                 )
-
-            def _fallback():
-                try:
-                    # Retry without streaming, then adapt to streaming-like callbacks
-                    response = _request(False)
-                    message = response.choices[0].message
-                    ida_kernwin.execute_sync(
-                        functools.partial(cb, response=message),
-                        ida_kernwin.MFF_WRITE,
-                    )                    
-                    # Emit content if any
-                    if getattr(message, "content", None):
-                        cb(message.content, None)
-                    # Emit tool calls if any, in one go
-                    tcs = getattr(message, "tool_calls", None) or []
-                    if tcs:
-                        tc_objs = []
-                        for i, tc in enumerate(tcs):
-                            fn = tc.function
-                            tc_objs.append(
-                                type("_TC", (), {
-                                    "index": i,
-                                    "id": getattr(tc, "id", ""),
-                                    "type": getattr(tc, "type", "function"),
-                                    "function": type("_FN", (), {
-                                        "name": getattr(fn, "name", ""),
-                                        "arguments": getattr(fn, "arguments", ""),
-                                    })(),
-                                })()
-                            )
-                        cb(type("_Delta", (), {"tool_calls": tc_objs})(), None)
-                        cb(type("_Done", (), {})(), "tool_calls")
-                    else:
-                        cb(type("_Done", (), {})(), "stop")
-                    return
-                except Exception as e:
-                    print(_("Exception encountered while retrying: {error}").format(error=str(e)))
-                    # pass
-            if self.oai_org_unverified and self.model in self.oai_restricted_models:
-                _fallback()
+                # Call the callback directly from this worker thread. See notes
+                # above regarding avoiding UI-thread deadlocks during tool calls.
+                cb(response=resp)
+                return
             else:
-                response = _request(stream)
-                if not stream:
-                    # Return the full message object so that callers can access
-                    # additional data such as tool calls when using the OpenAI
-                    # function calling API.
-                    message = response.choices[0].message
-                    ida_kernwin.execute_sync(
-                        functools.partial(cb, response=message),
-                        ida_kernwin.MFF_WRITE,
-                    )
-                else:
-                    for chunk in response:
-                        delta = chunk.choices[0].delta
-                        finished = chunk.choices[0].finish_reason
-                        cb(delta, finished)
-
-                # After the streaming loop (or non-stream path above), optionally
-                # fetch and emit a reasoning summary using the Responses API.
-                if reasoning_opts:
-                    def _emit_summary_async():
-                        try:
-                            summary_text = self._get_reasoning_summary(conversation, reasoning_opts)
-                            if summary_text:
-                                # Emit an out-of-band response object the CLI can pick up
-                                ida_kernwin.execute_sync(
-                                    functools.partial(cb, response=SimpleNamespace(reasoning_summary=summary_text)),
-                                    ida_kernwin.MFF_WRITE,
-                                )
-                        except Exception:
-                            # Be silent on summary failures; don't impact primary UX
-                            pass
-
-                    threading.Thread(target=_emit_summary_async, daemon=True).start()
-
-        except openai.BadRequestError as e:
-            # Fallback: some orgs/models do not allow streaming yet.
-            if stream and ("stream" in str(e).lower() or "unsupported" in str(e).lower()):
-                # if self.model in self.oai_restricted_models:
-                print(_("Unable to query in streaming mode: {error}\nFalling back and retrying!").format(error=str(e)))
-                self.oai_org_unverified = True
-                try:
-                    _fallback()
-                    # Also try to fetch a reasoning summary if requested
-                    if reasoning_opts:
-                        def _emit_summary_async2():
+                # Streaming path
+                # Use the streaming context manager for SSE and forward text deltas
+                with self.client.responses.stream(
+                    model=self.model,
+                    input=input_items if len(input_items) > 0 else None,
+                    instructions=instructions,
+                    **opts,
+                ) as stream_ctx:
+                    sent_thinking = False
+                    for event in stream_ctx:
+                        etype = getattr(event, "type", None)
+                        # Show a Thinking... status when any reasoning events begin
+                        if (not sent_thinking) and isinstance(etype, str) and etype.startswith("response.reasoning"):
                             try:
-                                summary_text = self._get_reasoning_summary(conversation, reasoning_opts)
-                                if summary_text:
-                                    ida_kernwin.execute_sync(
-                                        functools.partial(cb, response=SimpleNamespace(reasoning_summary=summary_text)),
-                                        ida_kernwin.MFF_WRITE,
-                                    )
+                                cb({"status": "thinking"}, None)
                             except Exception:
                                 pass
-                        threading.Thread(target=_emit_summary_async2, daemon=True).start()
+                            sent_thinking = True
+                        # Stream textual output chunks
+                        if etype == "response.output_text.delta":
+                            delta = getattr(event, "delta", None)
+                            if isinstance(delta, str) and delta:
+                                cb(delta, None)
+                        # End of textual output
+                        elif etype == "response.output_text.done":
+                            pass
+                        else:
+                            # Other event types are ignored here; tool calls will be surfaced in the final object
+                            pass
+                    final = stream_ctx.get_final_response()
+                    cb(response=final)
                     return
-                except Exception as e:
-                    print(_("Exception encountered while falling back: {error}").format(error=str(e)))
-            # Context length exceeded. Determine the max number of tokens we can ask for and retry.
+        except openai.BadRequestError as e:
             m = re.search(r'maximum context length is \d+ tokens, however you requested \d+ tokens', str(e))
-            if m:
-                print(_("Unfortunately, this function is too big to be analyzed with the model's current API limits."))
-            else:
-                print(_("General exception encountered while running the query: {error}").format(error=str(e)))
+            msg = _("Unfortunately, this function is too big to be analyzed with the model's current API limits.") if m else _("General exception encountered while running the query: {error}").format(error=str(e))
+            try:
+                cb(delta=None, finish_reason=f"error:{msg}")
+            except Exception:
+                pass
+            print(msg)
         except openai.OpenAIError as e:
-            print(_("{model} could not complete the request: {error}").format(model=self.model, error=str(e)))
+            msg = _("{model} could not complete the request: {error}").format(model=self.model, error=str(e))
+            try:
+                cb(delta=None, finish_reason=f"error:{msg}")
+            except Exception:
+                pass
+            print(msg)
         except Exception as e:
-            print(_("General exception encountered while running the query: {error}").format(error=str(e)))
+            msg = _("General exception encountered while running the query: {error}").format(error=str(e))
+            try:
+                cb(delta=None, finish_reason=f"error:{msg}")
+            except Exception:
+                pass
+            print(msg)
 
     # -----------------------------------------------------------------------------
 
@@ -259,125 +469,6 @@ class GPT(LanguageModel):
         t = threading.Thread(target=self.query_model, args=[query, cb, stream, additional_model_options])
         t.start()
 
-    # -------------------------------------------------------------------------
-    # Internal helpers
-    # -------------------------------------------------------------------------
-
-    def _get_reasoning_summary(self, conversation, reasoning_opts):
-        """Best-effort retrieval of a reasoning summary using the Responses API.
-
-        This does not alter the main request/response flow (which uses
-        chat.completions for broad compatibility). We make a separate
-        background call that asks the model to return its reasoning summary.
-
-        :param conversation: List of message dicts (system/user/assistant/...)
-        :param reasoning_opts: e.g., {"summary": "auto"}
-        :return: string summary or None
-        """
-        # Build a simple transcript and extract any system instructions
-        system_parts = []
-        lines = []
-        try:
-            for m in conversation or []:
-                role = m.get("role") if isinstance(m, dict) else getattr(m, "role", "")
-                content = m.get("content") if isinstance(m, dict) else getattr(m, "content", "")
-                if not content:
-                    continue
-                if role == "system":
-                    system_parts.append(str(content))
-                else:
-                    lines.append(f"{role}: {content}")
-        except Exception:
-            pass
-
-        instructions = "\n".join(system_parts) if system_parts else None
-        transcript = "\n".join(lines) if lines else None
-        if not transcript:
-            return None
-
-        # Call Responses API. We intentionally avoid passing tools/history to keep it robust
-        # and request almost no assistant text to minimize latency/cost.
-        try:
-            resp = self.client.responses.create(
-                model=self.model,
-                input=transcript,
-                instructions=instructions,
-                reasoning=reasoning_opts,
-                max_output_tokens=1,  # don't generate a second long answer
-                parallel_tool_calls=False,
-                store=False,
-            )
-        except Exception:
-            return None
-
-        # Extract textual reasoning summary from Responses output items.
-        # Prefer the official shapes, then fall back to tolerant scanning.
-        try:
-            # Python SDK >= 1.98.0: resp.output contains Reasoning items with content/summary parts
-            outputs = getattr(resp, "output", None) or []
-            for item in outputs:
-                # Match by attribute or dict shape
-                itype = getattr(item, "type", None) or (item.get("type") if isinstance(item, dict) else None)
-                if itype != "reasoning":
-                    continue
-                # Newer SDKs: item.content -> list of parts with .text and type 'reasoning_summary'
-                parts = getattr(item, "content", None)
-                if isinstance(parts, list):
-                    for p in parts:
-                        txt = getattr(p, "text", None) or (p.get("text") if isinstance(p, dict) else None)
-                        if isinstance(txt, str) and txt.strip():
-                            return txt.strip()
-                # Older cookbook examples: item.summary -> list of parts with .text
-                summary = getattr(item, "summary", None)
-                if isinstance(summary, list):
-                    for p in summary:
-                        txt = getattr(p, "text", None) or (p.get("text") if isinstance(p, dict) else None)
-                        if isinstance(txt, str) and txt.strip():
-                            return txt.strip()
-        except Exception:
-            pass
-
-        try:
-            data = resp.model_dump() if hasattr(resp, "model_dump") else None
-            if isinstance(data, dict):
-                # Look specifically under output[*].(content|summary)[*].text to avoid
-                # accidentally grabbing config values like {reasoning: {summary: "detailed"}}
-                outs = data.get("output") if isinstance(data.get("output"), list) else []
-                for item in outs:
-                    if not isinstance(item, dict) or item.get("type") != "reasoning":
-                        continue
-                    for coll_key in ("content", "summary"):
-                        coll = item.get(coll_key)
-                        if isinstance(coll, list):
-                            for p in coll:
-                                txt = p.get("text") if isinstance(p, dict) else None
-                                if isinstance(txt, str) and txt.strip():
-                                    return txt.strip()
-            return None
-        except Exception:
-            pass
-        return None
-
-    @staticmethod
-    def _deep_find_text(data, keys=("text",)):
-        """Recursively search for the first non-empty string value under any of the
-        provided keys.
-        """
-        try:
-            if isinstance(data, dict):
-                for k, v in data.items():
-                    if k in keys and isinstance(v, str) and v.strip():
-                        return v.strip()
-                    res = GPT._deep_find_text(v, keys)
-                    if res:
-                        return res
-            elif isinstance(data, list):
-                for v in data:
-                    res = GPT._deep_find_text(v, keys)
-                    if res:
-                        return res
-        except Exception:
-            return None
-        return None
+    # No additional internal helpers are required with Responses-first flow.
 
 gepetto.models.model_manager.register_model(GPT)
