@@ -61,18 +61,37 @@ def _convert_messages(messages):
                 )
             gemini_messages.append({"role": "model", "parts": parts})
         elif role == "tool":
+            # Build a FunctionResponse payload per google-genai expectations
+            # response must be an object with a 'content' list of parts
+            tool_name = _get(m, "name", "")
+            tool_id = _get(m, "tool_call_id", "") or _get(m, "id", "")
             try:
-                response = json.loads(content)
+                parsed = json.loads(content)
             except Exception:
-                response = content
+                parsed = content
+
+            # Gemini often expects: { name: <tool>, content: [{text: <json-or-text>}] }
+            if isinstance(parsed, dict) and "content" in parsed:
+                response_obj = parsed
+            else:
+                if isinstance(parsed, (dict, list)):
+                    txt = json.dumps(parsed, ensure_ascii=False)
+                else:
+                    txt = str(parsed)
+                response_obj = {
+                    "name": tool_name,
+                    "content": [{"text": txt}],
+                }
+
             gemini_messages.append(
                 {
                     "role": "user",
                     "parts": [
                         {
                             "function_response": {
-                                "name": _get(m, "name", ""),
-                                "response": response,
+                                "name": tool_name,
+                                "id": tool_id,
+                                "response": response_obj,
                             }
                         }
                     ],
@@ -252,8 +271,17 @@ class Gemini(LanguageModel):
             **additional_model_options,
         )
 
+        # Detect if we're continuing after tool responses; streaming sometimes stalls
+        has_function_response = any(
+            part.get("function_response")
+            for msg in messages
+            if isinstance(msg, dict) and msg.get("parts")
+            for part in msg.get("parts", [])
+            if isinstance(part, dict)
+        )
+
         try:
-            if stream:
+            if stream and not has_function_response:
                 response_stream = self.client.models.generate_content_stream(
                     model=self.model_name,
                     contents=messages,
@@ -341,10 +369,27 @@ class Gemini(LanguageModel):
                             )
                         )
 
-                ida_kernwin.execute_sync(
-                    functools.partial(cb, response=message),
-                    ida_kernwin.MFF_WRITE,
-                )
+                if stream:
+                    # Adapt non-streaming response to streaming-like callbacks
+                    if message.content:
+                        cb(message.content, None)
+                    if message.tool_calls:
+                        cb(SimpleNamespace(tool_calls=[
+                            SimpleNamespace(
+                                index=i,
+                                id=tc.id,
+                                type=tc.type,
+                                function=tc.function,
+                            ) for i, tc in enumerate(message.tool_calls)
+                        ]), None)
+                        cb(SimpleNamespace(), "tool_calls")
+                    else:
+                        cb(SimpleNamespace(), "stop")
+                else:
+                    ida_kernwin.execute_sync(
+                        functools.partial(cb, response=message),
+                        ida_kernwin.MFF_WRITE,
+                    )
 
         except Exception as e:
             error_message = _(

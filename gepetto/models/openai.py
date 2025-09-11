@@ -17,14 +17,17 @@ GPT_5_MODEL_NAME = "gpt-5"
 GPT_5_MINI_MODEL_NAME = "gpt-5-mini"
 GPT_5_NANO_MODEL_NAME = "gpt-5-nano"
 GPT4_MODEL_NAME = "gpt-4-turbo"
-GPT4o_MODEL_NAME = "gpt-4o"
-GPTo4_MINI_MODEL_NAME = "o4-mini"
+GPT4O_MODEL_NAME = "gpt-4o"
+GPTO4_MINI_MODEL_NAME = "o4-mini"
 GPT41_MODEL_NAME = "gpt-4.1"
-GPTo3_MODEL_NAME = "o3"
-GPTo3_PRO_MODEL_NAME = "o3-pro"
-
+GPTO3_MODEL_NAME = "o3"
+GPTO3_PRO_MODEL_NAME = "o3-pro"
+OPENAI_RESTRICTED_MODELS = [GPT_5_MODEL_NAME, GPT_5_MINI_MODEL_NAME, GPT_5_NANO_MODEL_NAME]
 
 class GPT(LanguageModel):
+    oai_org_unverified = False
+    oai_restricted_models = OPENAI_RESTRICTED_MODELS
+
     @staticmethod
     def get_menu_name() -> str:
         return "OpenAI"
@@ -35,11 +38,11 @@ class GPT(LanguageModel):
                 GPT_5_MINI_MODEL_NAME,
                 GPT_5_NANO_MODEL_NAME,
                 GPT4_MODEL_NAME,
-                GPT4o_MODEL_NAME,
-                GPTo4_MINI_MODEL_NAME,
+                GPT4O_MODEL_NAME,
+                GPTO4_MINI_MODEL_NAME,
                 GPT41_MODEL_NAME,
-                GPTo3_MODEL_NAME,
-                GPTo3_PRO_MODEL_NAME]
+                GPTO3_MODEL_NAME,
+                GPTO3_PRO_MODEL_NAME]
 
     @staticmethod
     def is_configured_properly() -> bool:
@@ -88,28 +91,81 @@ class GPT(LanguageModel):
             else:
                 conversation = query
 
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=conversation,
-                stream=stream,
-                **additional_model_options
-            )
-            if not stream:
-                # Return the full message object so that callers can access
-                # additional data such as tool calls when using the OpenAI
-                # function calling API.
-                message = response.choices[0].message
-                ida_kernwin.execute_sync(
-                    functools.partial(cb, response=message),
-                    ida_kernwin.MFF_WRITE,
+            def _request(_stream: bool):
+                return self.client.chat.completions.create(
+                    model=self.model,
+                    messages=conversation,
+                    stream=_stream,
+                    **additional_model_options
                 )
+
+            def _fallback():
+                try:
+                    # Retry without streaming, then adapt to streaming-like callbacks
+                    response = _request(False)
+                    message = response.choices[0].message
+                    ida_kernwin.execute_sync(
+                        functools.partial(cb, response=message),
+                        ida_kernwin.MFF_WRITE,
+                    )                    
+                    # Emit content if any
+                    if getattr(message, "content", None):
+                        cb(message.content, None)
+                    # Emit tool calls if any, in one go
+                    tcs = getattr(message, "tool_calls", None) or []
+                    if tcs:
+                        tc_objs = []
+                        for i, tc in enumerate(tcs):
+                            fn = tc.function
+                            tc_objs.append(
+                                type("_TC", (), {
+                                    "index": i,
+                                    "id": getattr(tc, "id", ""),
+                                    "type": getattr(tc, "type", "function"),
+                                    "function": type("_FN", (), {
+                                        "name": getattr(fn, "name", ""),
+                                        "arguments": getattr(fn, "arguments", ""),
+                                    })(),
+                                })()
+                            )
+                        cb(type("_Delta", (), {"tool_calls": tc_objs})(), None)
+                        cb(type("_Done", (), {})(), "tool_calls")
+                    else:
+                        cb(type("_Done", (), {})(), "stop")
+                    return
+                except Exception as e:
+                    print(_("Exception encountered while retrying: {error}").format(error=str(e)))
+                    # pass
+            if self.oai_org_unverified and self.model in self.oai_restricted_models:
+                _fallback()
             else:
-                for chunk in response:
-                    delta = chunk.choices[0].delta
-                    finished = chunk.choices[0].finish_reason
-                    cb(delta, finished)
+                response = _request(stream)
+                if not stream:
+                    # Return the full message object so that callers can access
+                    # additional data such as tool calls when using the OpenAI
+                    # function calling API.
+                    message = response.choices[0].message
+                    ida_kernwin.execute_sync(
+                        functools.partial(cb, response=message),
+                        ida_kernwin.MFF_WRITE,
+                    )
+                else:
+                    for chunk in response:
+                        delta = chunk.choices[0].delta
+                        finished = chunk.choices[0].finish_reason
+                        cb(delta, finished)
 
         except openai.BadRequestError as e:
+            # Fallback: some orgs/models do not allow streaming yet.
+            if stream and ("stream" in str(e).lower() or "unsupported" in str(e).lower()):
+                # if self.model in self.oai_restricted_models:
+                print(_("Unable to query in streaming mode: {error}\nFalling back and retrying!").format(error=str(e)))
+                self.oai_org_unverified = True
+                try:
+                    _fallback()
+                    return
+                except Exception as e:
+                    print(_("Exception encountered while falling back: {error}").format(error=str(e)))
             # Context length exceeded. Determine the max number of tokens we can ask for and retry.
             m = re.search(r'maximum context length is \d+ tokens, however you requested \d+ tokens', str(e))
             if m:

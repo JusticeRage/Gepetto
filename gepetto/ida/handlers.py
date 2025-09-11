@@ -232,6 +232,19 @@ class SwapModelHandler(idaapi.action_handler_t):
         # Refresh the menus to reflect which model is currently selected.
         self.plugin.generate_model_select_menu()
 
+        # Update status panel
+        try:
+            from gepetto.ida.status_panel import panel as STATUS
+            STATUS.ensure_shown()
+            STATUS.set_model(str(gepetto.config.model))
+            STATUS.set_status(_("Switched model"), busy=False)
+            STATUS.log(_(f"Model switched to: {self.new_model}."))
+        except Exception as e:
+            try:
+                print(f"Failed to update status panel: {e}")
+            except Exception:
+                pass
+
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
 

@@ -7,6 +7,7 @@ import ida_idaapi
 
 import gepetto.config
 import gepetto.ida.handlers
+from gepetto.ida.status_panel import panel as STATUS
 from gepetto.ida.tools.tools import TOOLS
 import gepetto.ida.tools.call_graph
 import gepetto.ida.tools.get_ea
@@ -55,10 +56,29 @@ class GepettoCLI(ida_kernwin.cli_t):
         if not line.strip():  # Don't do anything for empty sends.
             return True
 
+        # Ensure status panel is visible and reflect current model
+        try:
+            STATUS.ensure_shown()
+            STATUS.set_model(str(gepetto.config.model))
+            STATUS.set_status("Waiting for model…", busy=True)
+            STATUS.log(f"User: {line}")
+        except Exception as e:
+            try:
+                print(f"Failed to make status panel visible: {e}")
+            except Exception:
+                pass
+
         MESSAGES.append({"role": "user", "content": line})
 
         def handle_response(response):
             if hasattr(response, "tool_calls") and response.tool_calls:
+                try:
+                    STATUS.set_status(f"Tool calls requested: {len(response.tool_calls)}", busy=False)
+                except Exception as e:
+                    try:
+                        print(f"Failed to paint tool_calls in status panel: {e}")
+                    except Exception:
+                        pass
                 tool_calls = [
                     {
                         "id": tc.id,
@@ -78,6 +98,14 @@ class GepettoCLI(ida_kernwin.cli_t):
                     }
                 )
                 for tc in response.tool_calls:
+                    try:
+                        STATUS.log(f"→ Tool: {tc.function.name}({(tc.function.arguments or '')[:120]}…)")
+                        STATUS.set_status(f"Running tool: {tc.function.name}", busy=True)
+                    except Exception as e:
+                        try:
+                            print(f"Failed to show running tool in status panel: {e}")
+                        except Exception:
+                            pass
                     if tc.function.name == "get_screen_ea":
                         gepetto.ida.tools.get_screen_ea.handle_get_screen_ea_tc(tc, MESSAGES)
                     elif tc.function.name == "get_ea":
@@ -108,6 +136,13 @@ class GepettoCLI(ida_kernwin.cli_t):
                         gepetto.ida.tools.call_graph.handle_get_callees_tc(tc, MESSAGES)
                     elif tc.function.name == "refresh_view":
                         gepetto.ida.tools.refresh_view.handle_refresh_view_tc(tc, MESSAGES)
+                try:
+                    STATUS.set_status("Continuing after tools…", busy=True)
+                except Exception as e:
+                    try:
+                        print(f"Failed to update continue in status panel: {e}")
+                    except Exception:
+                        pass
                 stream_and_handle()
             else:
                 MESSAGES.append({"role": "assistant", "content": response.content or ""})
@@ -117,12 +152,28 @@ class GepettoCLI(ida_kernwin.cli_t):
 
             def on_chunk(delta, finish_reason):
                 if isinstance(delta, str):
+                    STATUS.log(_(f"Gepetto: {delta}"))
                     print(delta, end="", flush=True)
                     message.content += delta
+                    try:
+                        STATUS.set_status("Streaming…", busy=True)
+                    except Exception as e:
+                        try:
+                            print(f"Failed to set streaming status in status panel: {e}")
+                        except Exception:
+                            pass
                     return
                 if getattr(delta, "content", None):
+                    STATUS.log(_(f"Gepetto: {delta.content}"))
                     print(delta.content, end="", flush=True)
                     message.content += delta.content
+                    try:
+                        STATUS.set_status("Streaming…", busy=True)
+                    except Exception as e:
+                        try:
+                            print(f"Failed to set content streaming status in status panel: {e}")
+                        except Exception:
+                            pass
                 if getattr(delta, "tool_calls", None):
                     for tc in delta.tool_calls:
                         idx = tc.index
@@ -145,9 +196,21 @@ class GepettoCLI(ida_kernwin.cli_t):
                                 current.function.name += fn.name
                             if getattr(fn, "arguments", None):
                                 current.function.arguments += fn.arguments
+                    try:
+                        STATUS.set_status("Requesting tools…", busy=False)
+                    except Exception as e:
+                        try:
+                            print(f"Failed to set request status in status panel: {e}")
+                        except Exception:
+                            pass
                 if finish_reason:
                     if finish_reason != "tool_calls":
-                        print("\n\n")  # Add a blank line after the model's reply for readability.
+                        print("\n")  # Add a blank line after the model's reply for readability.
+                        try:
+                            STATUS.set_status("Done", busy=False)
+                            STATUS.log("✔ Completed turn")
+                        except Exception:
+                            pass
                     handle_response(message)
 
             gepetto.config.model.query_model_async(
@@ -182,3 +245,11 @@ def register_cli():
     CLI = GepettoCLI()
     if CLI.register():
         ida_idaapi.notify_when(ida_idaapi.NW_TERMIDA | ida_idaapi.NW_OPENIDB | ida_idaapi.NW_CLOSEIDB, cli_lifecycle_callback)
+        try:
+            STATUS.ensure_shown()
+            STATUS.set_status("Idle", busy=False)
+        except Exception as e:
+            try:
+                print(f"Failed to set idle status in status panel: {e}")
+            except Exception:
+                pass

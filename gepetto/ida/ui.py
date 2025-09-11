@@ -12,6 +12,7 @@ import gepetto.config
 from gepetto.ida.handlers import ExplainHandler, RenameHandler, SwapModelHandler, GenerateCCodeHandler, GeneratePythonCodeHandler
 from gepetto.ida.comment_handler import CommentHandler
 from gepetto.ida.cli import register_cli
+from gepetto.ida.status_panel import panel as STATUS
 import gepetto.models.model_manager
 
 _ = gepetto.config._
@@ -33,6 +34,8 @@ class GepettoPlugin(idaapi.plugin_t):
     c_code_menu_path = "Edit/Gepetto/" + _("Generate C Code")
     python_code_action_name = "gepetto:generate_python_code"
     python_code_menu_path = "Edit/Gepetto/" + _("Generate Python Code")
+    show_status_action_name = "gepetto:show_status_panel"
+    show_status_menu_path = "Edit/Gepetto/" + _("Show status panel")
     wanted_name = 'Gepetto'
     wanted_hotkey = ''
     comment = _("Uses {model} to enrich the decompiler's output").format(model=str(gepetto.config.model))
@@ -112,6 +115,17 @@ class GepettoPlugin(idaapi.plugin_t):
         idaapi.attach_action_to_menu(self.explain_menu_path, self.explain_action_name, idaapi.SETMENU_APP)
         idaapi.attach_action_to_menu(self.comment_menu_path, self.comment_action_name, idaapi.SETMENU_APP)
         idaapi.attach_action_to_menu(self.rename_menu_path, self.rename_action_name, idaapi.SETMENU_APP)
+        # Status panel action
+        show_status_action = idaapi.action_desc_t(
+            self.show_status_action_name,
+            _("Show status panel"),
+            _ShowStatusPanelHandler(),
+            "Ctrl+Alt+S",
+            _("Open the Gepetto status/log panel"),
+            77,
+        )
+        idaapi.register_action(show_status_action)
+        idaapi.attach_action_to_menu(self.show_status_menu_path, self.show_status_action_name, idaapi.SETMENU_APP)
         idaapi.attach_action_to_menu(self.c_code_menu_path, self.c_code_action_name, idaapi.SETMENU_APP)
         idaapi.attach_action_to_menu(self.python_code_menu_path, self.python_code_action_name, idaapi.SETMENU_APP)
 
@@ -207,3 +221,22 @@ class ContextMenuHooks(idaapi.UI_Hooks):
             idaapi.attach_action_to_popup(form, popup, GepettoPlugin.c_code_action_name, "Gepetto/")
             idaapi.attach_action_to_popup(form, popup, GepettoPlugin.python_code_action_name, "Gepetto/")
 
+
+# -----------------------------------------------------------------------------
+
+class _ShowStatusPanelHandler(idaapi.action_handler_t):
+    def activate(self, ctx):
+        try:
+            STATUS.ensure_shown()
+            STATUS.set_model(str(gepetto.config.model))
+            STATUS.set_status("Idle", busy=False)
+            STATUS.log("Status panel opened")
+        except Exception as e:
+            try:
+                print(f"Failed to open status panel: {e}")
+            except Exception:
+                pass
+        return 1
+
+    def update(self, ctx):  # always enabled
+        return idaapi.AST_ENABLE_ALWAYS
