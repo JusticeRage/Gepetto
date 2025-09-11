@@ -160,7 +160,20 @@ class GepettoCLI(ida_kernwin.cli_t):
             message = SimpleNamespace(content="", tool_calls=[])
             model_name = str(gepetto.config.model)
 
-            def on_chunk(delta, finish_reason):
+            def on_chunk(delta=None, finish_reason=None, response=None):
+                # Handle out-of-band full responses or extras (e.g., reasoning summary)
+                if response is not None:
+                    try:
+                        if hasattr(response, "reasoning_summary") and response.reasoning_summary:
+                            STATUS.log(f"🧠 Reasoning: {response.reasoning_summary}")
+                            return
+                    except Exception:
+                        pass
+                    try:
+                        handle_response(response)
+                    except Exception:
+                        pass
+                    return
                 if isinstance(delta, str):
                     # Stream to panel without newlines while printing to console.
                     STATUS.log_stream(delta, prefix=f"{model_name}: ")
