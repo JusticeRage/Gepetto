@@ -302,6 +302,7 @@ class Gemini(LanguageModel):
                 next_tool_index = 0
                 pending_tool_calls: list = []
                 saw_function_call = False
+                text_buf: list[str] = []
 
                 def upsert_tool_call(fc_obj):
                     nonlocal next_tool_index, saw_function_call
@@ -336,19 +337,28 @@ class Gemini(LanguageModel):
                     for part in parts:
                         if getattr(part, "text", None):
                             cb(part.text, None)
+                            text_buf.append(part.text)
                         elif getattr(part, "function_call", None):
                             upsert_tool_call(part.function_call)
 
                     fr = chunk.candidates[0].finish_reason if chunk.candidates else None
                     if fr and fr != types.FinishReason.FINISH_REASON_UNSPECIFIED:
-                        # Emit pending tool calls (if any) before signaling finish
-                        if pending_tool_calls:
-                            cb(SimpleNamespace(tool_calls=pending_tool_calls), None)
-
-                        finish_reason = fr.name.lower()
-                        if finish_reason == "stop" and saw_function_call:
-                            finish_reason = "tool_calls"
-                        cb(SimpleNamespace(), finish_reason)
+                        # Build a Responses-like final object so CLI can extract tool calls
+                        output = []
+                        final_text = "".join(text_buf)
+                        if final_text:
+                            output.append({
+                                "type": "output_text",
+                                "content": [{"text": final_text}],
+                            })
+                        for tc in pending_tool_calls:
+                            output.append({
+                                "type": "tool_call",
+                                "id": tc.id,
+                                "name": getattr(tc.function, "name", ""),
+                                "arguments": getattr(tc.function, "arguments", ""),
+                            })
+                        cb(response=SimpleNamespace(output=output))
             else:
                 response = self.client.models.generate_content(
                     model=self.model_name,
@@ -379,26 +389,39 @@ class Gemini(LanguageModel):
                         )
 
                 if stream:
-                    # Adapt non-streaming response to streaming-like callbacks
+                    # Adapt to streaming-like callbacks: emit text deltas, then final response
                     if message.content:
                         cb(message.content, None)
-                    if message.tool_calls:
-                        cb(SimpleNamespace(tool_calls=[
-                            SimpleNamespace(
-                                index=i,
-                                id=tc.id,
-                                type=tc.type,
-                                function=tc.function,
-                            ) for i, tc in enumerate(message.tool_calls)
-                        ]), None)
-                        cb(SimpleNamespace(), "tool_calls")
-                    else:
-                        cb(SimpleNamespace(), "stop")
+                    output = []
+                    if message.content:
+                        output.append({
+                            "type": "output_text",
+                            "content": [{"text": message.content}],
+                        })
+                    for tc in message.tool_calls:
+                        output.append({
+                            "type": "tool_call",
+                            "id": tc.id,
+                            "name": getattr(tc.function, "name", ""),
+                            "arguments": getattr(tc.function, "arguments", ""),
+                        })
+                    cb(response=SimpleNamespace(output=output))
                 else:
-                    ida_kernwin.execute_sync(
-                        functools.partial(cb, response=message),
-                        ida_kernwin.MFF_WRITE,
-                    )
+                    # Non-streaming: deliver a final Responses-like object directly
+                    output = []
+                    if message.content:
+                        output.append({
+                            "type": "output_text",
+                            "content": [{"text": message.content}],
+                        })
+                    for tc in message.tool_calls:
+                        output.append({
+                            "type": "tool_call",
+                            "id": tc.id,
+                            "name": getattr(tc.function, "name", ""),
+                            "arguments": getattr(tc.function, "arguments", ""),
+                        })
+                    cb(response=SimpleNamespace(output=output))
 
         except Exception as e:
             error_message = _(
