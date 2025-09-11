@@ -168,14 +168,23 @@ def _convert_tools(tools):
     for t in tools or []:
         if _get(t, "type") != "function":
             continue
-        fn = _get(t, "function", {})
-        params = _get(fn, "parameters")
+        # Accept both Chat Completions-style ({type:function, function:{...}})
+        # and Responses-style ({type:function, name:"...", parameters:{...}})
+        fn = _get(t, "function")
+        if fn is not None:
+            name = _get(fn, "name", "")
+            desc = _get(fn, "description")
+            params = _get(fn, "parameters")
+        else:
+            name = _get(t, "name", "")
+            desc = _get(t, "description")
+            params = _get(t, "parameters")
         if params:
             params = _sanitize_schema(params)
         function_decls.append(
             types.FunctionDeclaration(
-                name=_get(fn, "name", ""),
-                description=_get(fn, "description"),
+                name=name,
+                description=desc,
                 parameters=params,
             )
         )

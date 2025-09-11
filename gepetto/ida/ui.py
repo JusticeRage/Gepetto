@@ -36,6 +36,8 @@ class GepettoPlugin(idaapi.plugin_t):
     python_code_menu_path = "Edit/Gepetto/" + _("Generate Python Code")
     show_status_action_name = "gepetto:show_status_panel"
     show_status_menu_path = "Edit/Gepetto/" + _("Show status panel")
+    toggle_parallel_action_name = "gepetto:toggle_parallel_tool_calls"
+    toggle_parallel_menu_path = "Edit/Gepetto/" + _("Parallel tool calls")
     wanted_name = 'Gepetto'
     wanted_hotkey = ''
     comment = _("Uses {model} to enrich the decompiler's output").format(model=str(gepetto.config.model))
@@ -130,6 +132,14 @@ class GepettoPlugin(idaapi.plugin_t):
         idaapi.attach_action_to_menu(self.python_code_menu_path, self.python_code_action_name, idaapi.SETMENU_APP)
 
         self.generate_model_select_menu()
+        # Register/refresh the Parallel Tool Calls toggle next to "Select model"
+        try:
+            self.register_or_update_parallel_action()
+        except Exception as e:
+            try:
+                print(f"Failed to register parallel tool calls toggle: {e}")
+            except Exception:
+                pass
 
         # Register context menu actions
         self.menu = ContextMenuHooks()
@@ -161,6 +171,46 @@ class GepettoPlugin(idaapi.plugin_t):
         ida_kernwin.execute_sync(functools.partial(idaapi.register_action, action), ida_kernwin.MFF_FAST)
         ida_kernwin.execute_sync(functools.partial(idaapi.attach_action_to_menu, menu_path, action_name, idaapi.SETMENU_APP),
                                  ida_kernwin.MFF_FAST)
+
+    # -----------------------------------------------------------------------------
+
+    def _parallel_toggle_state(self) -> bool:
+        try:
+            v = gepetto.config.get_config("OpenAI", "PARALLEL_TOOL_CALLS", default="false")
+            return str(v).strip().lower() in ("1", "true", "yes", "on")
+        except Exception:
+            return False
+
+    def register_or_update_parallel_action(self):
+        """(Re)register the toggle action with a checkmark reflecting state."""
+        # Unregister first to refresh icon based on state
+        try:
+            ida_kernwin.execute_sync(
+                functools.partial(idaapi.unregister_action, self.toggle_parallel_action_name),
+                ida_kernwin.MFF_FAST,
+            )
+        except Exception:
+            pass
+
+        enabled = self._parallel_toggle_state()
+        icon_id = 208 if enabled else 0  # 208 == check mark
+        action = idaapi.action_desc_t(
+            self.toggle_parallel_action_name,
+            _('Parallel tool calls'),
+            ToggleParallelToolCallsHandler(self),
+            "",
+            _('Allow multiple tools to run in parallel (experimental).'),
+            icon_id,
+        )
+        ida_kernwin.execute_sync(
+            functools.partial(idaapi.register_action, action), ida_kernwin.MFF_FAST)
+        ida_kernwin.execute_sync(
+            functools.partial(idaapi.attach_action_to_menu,
+                              self.toggle_parallel_menu_path,
+                              self.toggle_parallel_action_name,
+                              idaapi.SETMENU_APP),
+            ida_kernwin.MFF_FAST,
+        )
 
     # -----------------------------------------------------------------------------
 
@@ -234,6 +284,36 @@ class _ShowStatusPanelHandler(idaapi.action_handler_t):
         except Exception as e:
             try:
                 print(f"Failed to open status panel: {e}")
+            except Exception:
+                pass
+        return 1
+
+    def update(self, ctx):  # always enabled
+        return idaapi.AST_ENABLE_ALWAYS
+
+
+# -----------------------------------------------------------------------------
+
+class ToggleParallelToolCallsHandler(idaapi.action_handler_t):
+    def __init__(self, plugin: GepettoPlugin):
+        idaapi.action_handler_t.__init__(self)
+        self.plugin = plugin
+
+    def activate(self, ctx):
+        try:
+            current = self.plugin._parallel_toggle_state()
+            new_val = "true" if not current else "false"
+            gepetto.config.update_config("OpenAI", "PARALLEL_TOOL_CALLS", new_val)
+            try:
+                STATUS.ensure_shown()
+                STATUS.set_status("Settings updated", busy=False)
+                STATUS.log(f"Parallel tool calls: {'ON' if new_val == 'true' else 'OFF'}")
+            except Exception:
+                pass
+            self.plugin.register_or_update_parallel_action()
+        except Exception as e:
+            try:
+                print(f"Failed to toggle parallel tool calls: {e}")
             except Exception:
                 pass
         return 1

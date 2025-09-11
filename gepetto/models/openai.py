@@ -16,6 +16,7 @@ _ = gepetto.config._
 GPT_5_MODEL_NAME = "gpt-5"
 GPT_5_MINI_MODEL_NAME = "gpt-5-mini"
 GPT_5_NANO_MODEL_NAME = "gpt-5-nano"
+GPT_5_HIGH_ALIAS = "gpt-5 (high)"
 GPT4_MODEL_NAME = "gpt-4-turbo"
 GPT4O_MODEL_NAME = "gpt-4o"
 GPTO4_MINI_MODEL_NAME = "o4-mini"
@@ -37,7 +38,9 @@ class GPT(LanguageModel):
 
     @staticmethod
     def supported_models():
-        return [GPT_5_MODEL_NAME,
+        return [# Convenience alias that forces high reasoning effort
+                GPT_5_HIGH_ALIAS,
+                GPT_5_MODEL_NAME,
                 GPT_5_MINI_MODEL_NAME,
                 GPT_5_NANO_MODEL_NAME,
                 GPT4_MODEL_NAME,
@@ -53,7 +56,11 @@ class GPT(LanguageModel):
         return bool(gepetto.config.get_config("OpenAI", "API_KEY", "OPENAI_API_KEY"))
 
     def __init__(self, model):
+        # Display name (what UI shows / config stores)
         self.model = model
+        # Map display name to actual API model name
+        self.api_model = GPT_5_MODEL_NAME if model == GPT_5_HIGH_ALIAS else model
+        self.reasoning_effort_override = "high" if model == GPT_5_HIGH_ALIAS else None
         # Get API key
         api_key = gepetto.config.get_config("OpenAI", "API_KEY", "OPENAI_API_KEY")
         if not api_key:
@@ -77,6 +84,13 @@ class GPT(LanguageModel):
 
     def __str__(self):
         return self.model
+
+    # Helpers ---------------------------------------------------------------
+    def _is_gpt5_family(self):
+        try:
+            return str(self.api_model).startswith("gpt-5")
+        except Exception:
+            return False
 
     def _build_responses_input(self, conversation):
         """Convert chat-style messages into Responses `instructions` and `input`.
@@ -229,6 +243,15 @@ class GPT(LanguageModel):
         opts = dict(additional_model_options or {})
         tools = self._to_chat_tools(opts.pop("tools", None))
 
+        # Respect global parallel tool calls toggle if not explicitly set
+        if "parallel_tool_calls" not in opts:
+            try:
+                ptc = gepetto.config.get_config("OpenAI", "PARALLEL_TOOL_CALLS", default="false")
+                ptc_bool = str(ptc).strip().lower() in ("1", "true", "yes", "on")
+            except Exception:
+                ptc_bool = False
+            opts["parallel_tool_calls"] = ptc_bool
+
         # Map response_format.json_object → response_format JSON schema minimal
         # Chat Completions accepts both json_object and json_schema nowadays.
         rf = opts.get("response_format")
@@ -238,7 +261,7 @@ class GPT(LanguageModel):
         try:
             if not stream:
                 resp = self.client.chat.completions.create(
-                    model=self.model,
+                    model=self.api_model,
                     messages=messages,
                     tools=tools,
                     **opts,
@@ -256,7 +279,7 @@ class GPT(LanguageModel):
                 return
             else:
                 stream_resp = self.client.chat.completions.create(
-                    model=self.model,
+                    model=self.api_model,
                     messages=messages,
                     tools=tools,
                     stream=True,
@@ -365,16 +388,21 @@ class GPT(LanguageModel):
                 opts.pop("max_tokens", None)
 
         # Temperature guard for GPT‑5 family: omit or set to 1
-        if self.model and str(self.model).startswith("gpt-5"):
+        if self.api_model and str(self.api_model).startswith("gpt-5"):
             if "temperature" in opts and opts["temperature"] not in (None, 1):
                 opts["temperature"] = 1
 
         # Always avoid server-side retention
         opts["store"] = False
 
-        # Prefer not to parallelize tool calls for deterministic sequencing in IDA
+        # Parallel tool calls: follow runtime config toggle if not explicitly set
         if "parallel_tool_calls" not in opts:
-            opts["parallel_tool_calls"] = False
+            try:
+                ptc = gepetto.config.get_config("OpenAI", "PARALLEL_TOOL_CALLS", default="false")
+                ptc_bool = str(ptc).strip().lower() in ("1", "true", "yes", "on")
+            except Exception:
+                ptc_bool = False
+            opts["parallel_tool_calls"] = ptc_bool
 
         # Reasoning configuration: honor [OpenAI] reasoning_summary = off|auto|concise|detailed
         try:
@@ -383,15 +411,20 @@ class GPT(LanguageModel):
             rs_mode = "off"
         if isinstance(rs_mode, str) and rs_mode.lower() in {"auto", "concise", "detailed"}:
             # Only set for GPT‑5 / o‑series to avoid 400s on basic chat models
-            if str(self.model).startswith("gpt-5") or str(self.model).startswith("o"):
+            if str(self.api_model).startswith("gpt-5") or str(self.api_model).startswith("o"):
                 if "reasoning" not in opts:
                     effort = "medium" if rs_mode != "detailed" else "high"
                     opts["reasoning"] = {"summary": rs_mode.lower(), "effort": effort}
+        # Apply explicit reasoning effort override from alias (e.g., GPT-5 (High))
+        if self.reasoning_effort_override:
+            r = opts.get("reasoning", {}) if isinstance(opts.get("reasoning"), dict) else {}
+            r["effort"] = self.reasoning_effort_override
+            opts["reasoning"] = r
 
         try:
             if not stream:
                 resp = self.client.responses.create(
-                    model=self.model,
+                    model=self.api_model,
                     input=input_items if len(input_items) > 0 else None,
                     instructions=instructions,
                     **opts,
@@ -404,7 +437,7 @@ class GPT(LanguageModel):
                 # Streaming path
                 # Use the streaming context manager for SSE and forward text deltas
                 with self.client.responses.stream(
-                    model=self.model,
+                    model=self.api_model,
                     input=input_items if len(input_items) > 0 else None,
                     instructions=instructions,
                     **opts,
