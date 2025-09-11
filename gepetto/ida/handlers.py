@@ -9,6 +9,7 @@ import ida_hexrays
 import idc
 
 import gepetto.config
+from gepetto.ida.status_panel import panel as STATUS
 from gepetto.models.model_manager import instantiate_model
 
 _ = gepetto.config._
@@ -62,6 +63,7 @@ def conversation_callback(response, memory):
     memory.append({"role": "assistant", "content": text})
 
     print()
+    STATUS.log(_(f"{str(gepetto.config.model)}: {text}"))
     for line in text.split("\n"):
         if not line.strip():
             continue
@@ -175,6 +177,7 @@ def rename_callback(address, view, response):
 
     if view:
         view.refresh_view(True)
+    STATUS.log(_(f"Done! {len(replaced)} name(s) renamed."))
     print(_("Done! {count} name(s) renamed.").format(count=len(replaced)))
 
 
@@ -284,6 +287,7 @@ class GenerateCCodeHandler(idaapi.action_handler_t):
 
         if view:
             view.refresh_view(False)
+        STATUS.log(_(f"{str(gepetto.config.model)} generated code saved to {file_name}"))
         print(_("{model} generated code saved to {file_name}").format(model=str(gepetto.config.model), file_name=file_name))
 
     def update(self, ctx):
@@ -325,6 +329,7 @@ class GeneratePythonCodeHandler(idaapi.action_handler_t):
 
         if view:
             view.refresh_view(False)
+        STATUS.log(_(f"{str(gepetto.config.model)} generated code saved to {file_name}"))
         print(_("{model} generated code saved to {file_name}").format(model=str(gepetto.config.model), file_name=file_name))
 
     def update(self, ctx):

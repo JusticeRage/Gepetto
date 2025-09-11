@@ -1,5 +1,3 @@
-import functools
-import json
 from types import SimpleNamespace
 
 import ida_kernwin
@@ -60,7 +58,7 @@ class GepettoCLI(ida_kernwin.cli_t):
         try:
             STATUS.ensure_shown()
             STATUS.set_model(str(gepetto.config.model))
-            STATUS.set_status("Waiting for model…", busy=True)
+            STATUS.set_status("Waiting for model...", busy=True)
             STATUS.log(f"User: {line}")
         except Exception as e:
             try:
@@ -72,13 +70,7 @@ class GepettoCLI(ida_kernwin.cli_t):
 
         def handle_response(response):
             if hasattr(response, "tool_calls") and response.tool_calls:
-                try:
-                    STATUS.set_status(f"Tool calls requested: {len(response.tool_calls)}", busy=False)
-                except Exception as e:
-                    try:
-                        print(f"Failed to paint tool_calls in status panel: {e}")
-                    except Exception:
-                        pass
+                STATUS.set_status(f"Tool calls requested: {len(response.tool_calls)}", busy=False)
                 tool_calls = [
                     {
                         "id": tc.id,
@@ -98,14 +90,8 @@ class GepettoCLI(ida_kernwin.cli_t):
                     }
                 )
                 for tc in response.tool_calls:
-                    try:
-                        STATUS.log(f"→ Tool: {tc.function.name}({(tc.function.arguments or '')[:120]}…)")
-                        STATUS.set_status(f"Running tool: {tc.function.name}", busy=True)
-                    except Exception as e:
-                        try:
-                            print(f"Failed to show running tool in status panel: {e}")
-                        except Exception:
-                            pass
+                    STATUS.log(f"→ Tool: {tc.function.name}({(tc.function.arguments or '')[:120]}...)")
+                    STATUS.set_status(f"Running tool: {tc.function.name}", busy=True)
                     if tc.function.name == "get_screen_ea":
                         gepetto.ida.tools.get_screen_ea.handle_get_screen_ea_tc(tc, MESSAGES)
                     elif tc.function.name == "get_ea":
@@ -136,44 +122,58 @@ class GepettoCLI(ida_kernwin.cli_t):
                         gepetto.ida.tools.call_graph.handle_get_callees_tc(tc, MESSAGES)
                     elif tc.function.name == "refresh_view":
                         gepetto.ida.tools.refresh_view.handle_refresh_view_tc(tc, MESSAGES)
-                try:
-                    STATUS.set_status("Continuing after tools…", busy=True)
-                except Exception as e:
-                    try:
-                        print(f"Failed to update continue in status panel: {e}")
-                    except Exception:
-                        pass
+                    # Stream tool result content to the status panel (respecting Verbose)
+                    # try:
+                    #     # Find the tool response we just appended
+                    #     tool_msg = None
+                    #     for m in reversed(MESSAGES):
+                    #         if isinstance(m, dict) and m.get("role") == "tool" and m.get("tool_call_id") == tc.id:
+                    #             tool_msg = m
+                    #             break
+                    #     if tool_msg:
+                    #         content = tool_msg.get("content") or ""
+                    #         prefix = f"→ {tc.function.name}: "
+                    #         # Truncate very large payloads to keep UI responsive
+                    #         MAX_CHARS = 8192
+                    #         truncated = False
+                    #         if len(content) > MAX_CHARS:
+                    #             content_to_show = content[:MAX_CHARS]
+                    #             truncated = True
+                    #         else:
+                    #             content_to_show = content
+                    #         # Chunk into smaller inserts for UI smoothness
+                    #         CHUNK = 512
+                    #         for i in range(0, len(content_to_show), CHUNK):
+                    #             STATUS.log_stream(content_to_show[i:i+CHUNK], prefix=prefix)
+                    #             prefix = ""  # ensure prefix only on first chunk
+                    #         if truncated:
+                    #             STATUS.log_stream("\n… (truncated)", prefix="")
+                    #         STATUS.end_stream()
+                    # except Exception:
+                    #     pass
+                STATUS.set_status("Continuing after tools...", busy=True)
                 stream_and_handle()
             else:
                 MESSAGES.append({"role": "assistant", "content": response.content or ""})
 
         def stream_and_handle():
             message = SimpleNamespace(content="", tool_calls=[])
+            model_name = str(gepetto.config.model)
 
             def on_chunk(delta, finish_reason):
                 if isinstance(delta, str):
-                    STATUS.log(_(f"Gepetto: {delta}"))
+                    # Stream to panel without newlines while printing to console.
+                    STATUS.log_stream(delta, prefix=f"{model_name}: ")
                     print(delta, end="", flush=True)
                     message.content += delta
-                    try:
-                        STATUS.set_status("Streaming…", busy=True)
-                    except Exception as e:
-                        try:
-                            print(f"Failed to set streaming status in status panel: {e}")
-                        except Exception:
-                            pass
+                    STATUS.set_status("Streaming...", busy=True)
                     return
                 if getattr(delta, "content", None):
-                    STATUS.log(_(f"Gepetto: {delta.content}"))
+                    # Stream to panel without newlines while printing to console.
+                    STATUS.log_stream(delta.content, prefix=f"{model_name}: ")
                     print(delta.content, end="", flush=True)
                     message.content += delta.content
-                    try:
-                        STATUS.set_status("Streaming…", busy=True)
-                    except Exception as e:
-                        try:
-                            print(f"Failed to set content streaming status in status panel: {e}")
-                        except Exception:
-                            pass
+                    STATUS.set_status("Streaming...", busy=True)
                 if getattr(delta, "tool_calls", None):
                     for tc in delta.tool_calls:
                         idx = tc.index
@@ -196,21 +196,17 @@ class GepettoCLI(ida_kernwin.cli_t):
                                 current.function.name += fn.name
                             if getattr(fn, "arguments", None):
                                 current.function.arguments += fn.arguments
-                    try:
-                        STATUS.set_status("Requesting tools…", busy=False)
-                    except Exception as e:
-                        try:
-                            print(f"Failed to set request status in status panel: {e}")
-                        except Exception:
-                            pass
+                    STATUS.set_status("Requesting tools...", busy=False)
                 if finish_reason:
                     if finish_reason != "tool_calls":
                         print("\n")  # Add a blank line after the model's reply for readability.
-                        try:
-                            STATUS.set_status("Done", busy=False)
-                            STATUS.log("✔ Completed turn")
-                        except Exception:
-                            pass
+                        STATUS.set_status("Done", busy=False)
+                        # End streaming line in status panel
+                        STATUS.end_stream()
+                        STATUS.log("✔ Completed turn")
+                    else:
+                        # We are about to execute tools. End streaming line once.
+                        STATUS.end_stream()
                     handle_response(message)
 
             gepetto.config.model.query_model_async(

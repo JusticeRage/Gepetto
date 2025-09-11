@@ -21,8 +21,8 @@ GPT4O_MODEL_NAME = "gpt-4o"
 GPTO4_MINI_MODEL_NAME = "o4-mini"
 GPT41_MODEL_NAME = "gpt-4.1"
 GPTO3_MODEL_NAME = "o3"
-GPTO3_PRO_MODEL_NAME = "o3-pro"
-OPENAI_RESTRICTED_MODELS = [GPT_5_MODEL_NAME, GPT_5_MINI_MODEL_NAME, GPT_5_NANO_MODEL_NAME]
+GPTO3_MINI_MODEL_NAME = "o3-mini"
+OPENAI_RESTRICTED_MODELS = [GPT_5_MODEL_NAME, GPT_5_MINI_MODEL_NAME, GPT_5_NANO_MODEL_NAME, GPTO3_MODEL_NAME]
 
 class GPT(LanguageModel):
     oai_org_unverified = False
@@ -42,7 +42,7 @@ class GPT(LanguageModel):
                 GPTO4_MINI_MODEL_NAME,
                 GPT41_MODEL_NAME,
                 GPTO3_MODEL_NAME,
-                GPTO3_PRO_MODEL_NAME]
+                GPTO3_MINI_MODEL_NAME]
 
     @staticmethod
     def is_configured_properly() -> bool:
