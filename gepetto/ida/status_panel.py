@@ -30,29 +30,6 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             return
         layout = QtWidgets.QVBoxLayout(self.parent)
 
-        # Header: model, status, progress
-        header = QtWidgets.QHBoxLayout()
-        self._model_label = QtWidgets.QLabel(f"Model: {gepetto.config.get_config('Gepetto', 'MODEL')}")
-        self._status_label = QtWidgets.QLabel("Idle")
-        self._progress = QtWidgets.QProgressBar()
-        self._progress.setRange(0, 0)
-        self._progress.setVisible(False)
-        header.addWidget(self._model_label)
-        header.addStretch(1)
-        header.addWidget(self._status_label)
-        header.addWidget(self._progress)
-
-        # Reasoning status (compact, 1–2 lines)
-        self._reasoning = QtWidgets.QPlainTextEdit()
-        self._reasoning.setReadOnly(True)
-        self._reasoning.setMaximumBlockCount(4)
-        self._reasoning.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        # Keep height around ~2 lines
-        fm = self.parent.fontMetrics()
-        two_lines = int(fm.lineSpacing() * 2.2)
-        self._reasoning.setFixedHeight(two_lines)
-        self._reasoning.setPlaceholderText("Reasoning…")
-
         # Log area (use QTextEdit to allow simple styling)
         self._log = QtWidgets.QTextEdit()
         self._log.setReadOnly(True)
@@ -65,23 +42,87 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._stream_active = False
         self._stream_prefix = ""
 
-        # Controls
-        controls = QtWidgets.QHBoxLayout()
-        self._autoscroll = QtWidgets.QCheckBox("Auto-scroll")
-        self._autoscroll.setChecked(True)
-        self._verbose = QtWidgets.QCheckBox("Verbose")
-        self._verbose.setChecked(True)
-        btn_clear = QtWidgets.QPushButton("Clear")
-        btn_clear.clicked.connect(self._log.clear)
-        controls.addWidget(self._autoscroll)
-        controls.addWidget(self._verbose)
-        controls.addStretch(1)
-        controls.addWidget(btn_clear)
+        # Top controls: Show reasoning, Show tool calls, Clear + Stop (right-aligned)
+        controls_top = QtWidgets.QHBoxLayout()
+        self._show_reasoning = QtWidgets.QCheckBox("Show reasoning")
+        self._show_reasoning.setChecked(True)
+        self._show_tool_calls = QtWidgets.QCheckBox("Show tool calls")
+        self._show_tool_calls.setChecked(True)
+        self._btn_clear = QtWidgets.QPushButton("Clear")
+        self._btn_clear.clicked.connect(self._log.clear)
+        controls_top.addWidget(self._show_reasoning)
+        controls_top.addWidget(self._show_tool_calls)
+        controls_top.addStretch(1)
+        controls_top.addWidget(self._btn_clear)
 
-        layout.addLayout(header)
-        layout.addWidget(self._reasoning)
+        # Reasoning status summary label (standalone container under log)
+        self._reason_label = QtWidgets.QLabel("")
+        try:
+            if QtGui is not None:
+                pal = self.parent.palette()
+                disabled_color = pal.color(QtGui.QPalette.Disabled, QtGui.QPalette.Text)
+                self._reason_label.setStyleSheet(f"color: {disabled_color.name()};")
+            else:
+                self._reason_label.setStyleSheet("color: #6e6e6e;")
+        except Exception:
+            try:
+                self._reason_label.setStyleSheet("color: #6e6e6e;")
+            except Exception:
+                pass
+        # Dedicated container that auto-hides when no reasoning event is active
+        self._reason_container = QtWidgets.QWidget()
+        reasoning_row = QtWidgets.QHBoxLayout(self._reason_container)
+        reasoning_row.addWidget(self._reason_label)
+        reasoning_row.addStretch(1)
+        self._reason_container.setVisible(False)
+
+        # Bottom row: Status + progress on left; Model on right
+        self._model_label = QtWidgets.QLabel(f"Model: {gepetto.config.get_config('Gepetto', 'MODEL')}")
+        self._status_label = QtWidgets.QLabel("Status: Idle")
+        self._progress = QtWidgets.QProgressBar()
+        self._progress.setFixedHeight(15)
+        self._progress.setRange(0, 0)
+        self._progress.setVisible(False)
+        self._btn_stop = QtWidgets.QPushButton("Stop")
+        # late import to avoid circular refs
+        try:
+            from gepetto.ida.status_panel import panel  
+            self._btn_stop.clicked.connect(lambda: panel.request_stop())
+        except Exception:
+            pass
+        bottom_row = QtWidgets.QHBoxLayout()
+        bottom_row.addWidget(self._model_label)
+        bottom_row.addStretch(1)
+        bottom_row.addWidget(self._status_label)
+        bottom_row.addWidget(self._progress)
+        bottom_row.addWidget(self._btn_stop)
+
+        # Compose layout
+        layout.addLayout(controls_top)
         layout.addWidget(self._log)
-        layout.addLayout(controls)
+        layout.addWidget(self._reason_container)
+        layout.addLayout(bottom_row)
+
+        # Reasoning/status animation timers (ellipses cadence)
+        try:
+            self._reason_base = ""
+            self._dot_idx = 0
+            self._dots = ["", ".", "..", "..."]
+            self._reason_timer = QtCore.QTimer(self.parent)
+            self._reason_timer.setInterval(300)  # 300 ms cadence
+            self._reason_timer.timeout.connect(self._tick_reasoning)
+        except Exception:
+            pass
+        # try:
+        #     # Status text animated ellipses
+        #     self._status_base = ""
+        #     self._status_dot_idx = 0
+        #     self._status_timer = QtCore.QTimer(self.parent)
+        #     self._status_timer.setInterval(300)
+        #     self._status_timer.timeout.connect(self._tick_status)
+        # except Exception:
+        #     pass
+
         # Mark as ready and request flush of any pending logs/status
         try:
             self.is_ready = True
@@ -162,7 +203,30 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     def set_status(self, text: str, busy: Optional[bool] = None):
         if QtWidgets is None or self.parent is None:
             return
-        self._status_label.setText(text)
+        # Busy: animate ellipses with truncated base text
+        if busy is True:
+            try:
+                self._status_base = self._truncate_for_status(text)
+                if getattr(self, "_status_timer", None) is not None:
+                    self._status_timer.start()
+                self._render_status()
+            except Exception:
+                self._status_label.setText(text)
+            self._progress.setVisible(True)
+            return
+        # Not busy: stop animation and show final state
+        try:
+            if getattr(self, "_status_timer", None) is not None:
+                self._status_timer.stop()
+            lower = (text or "").strip().lower()
+            if lower == "done":
+                self._status_label.setText("Status: Done")
+            elif lower == "idle" or not lower:
+                self._status_label.setText("Status: Idle")
+            else:
+                self._status_label.setText(text)
+        except Exception:
+            self._status_label.setText(text or "Status: Idle")
         if busy is not None:
             self._progress.setVisible(bool(busy))
 
@@ -176,8 +240,8 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             except Exception:
                 pass
             return
-        # Apply simple verbosity filter: hide noisy tool lines when unchecked
-        if hasattr(self, "_verbose") and not self._verbose.isChecked():
+        # Apply simple filter: hide noisy tool lines when unchecked
+        if hasattr(self, "_show_tool_calls") and not self._show_tool_calls.isChecked():
             if line.startswith("→ "):
                 return
         # Ensure each log entry starts at the beginning of a line
@@ -187,35 +251,47 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         # Force default format (non-italic, default color)
         self._reset_char_format()
         self._log.insertPlainText(entry)
-
-        if self._autoscroll.isChecked():
-            self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
+        # Always autoscroll
+        self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
 
     # Reasoning box helpers
     def set_reasoning_text(self, text: str):
         if QtWidgets is None or self.parent is None:
             return
-        # Replace contents fully
+        # Update base text and render without altering animation state
         try:
-            self._reasoning.setPlainText(text or "")
+            self._reason_base = text or "Reasoning"
+            self.start_reasoning_animation()
+            if hasattr(self, "_render_reasoning"):
+                self._render_reasoning()
+            else:
+                self._reason_label.setText(self._reason_base)
         except Exception:
             pass
 
     def append_reasoning_delta(self, text: str):
         if QtWidgets is None or self.parent is None or QtGui is None:
             return
-        self._reasoning.moveCursor(QtGui.QTextCursor.MoveOperation.End)
-        self._reasoning.insertPlainText(text)
-        # Keep caret visible without scrollbars
-        cursor = self._reasoning.textCursor()
-        self._reasoning.setTextCursor(cursor)
+        try:
+            # Coalesce into base text and re-render; keep ellipses animation running
+            delta = (text or "").replace("\n", " ")
+            self._reason_base = (self._reason_base or "") + delta
+            if hasattr(self, "_render_reasoning"):
+                self._render_reasoning()
+            else:
+                self._reason_label.setText(self._reason_base)
+        except Exception:
+            pass
 
     def clear_reasoning(self):
         if QtWidgets is None or self.parent is None:
             return
         try:
-            self._reasoning.clear()
+            self._reason_base = ""
+            self._reason_label.setText("")
+            self._reason_container.setVisible(False)
         except Exception:
+            print("ERROR")
             pass
 
     # Stream text into the log without creating new lines per chunk.
@@ -226,9 +302,12 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             print("ERROR")
             # Console fallback handled by manager
             return
-        # Apply verbosity filter: hide tool streaming when unchecked
-        if hasattr(self, "_verbose") and not self._verbose.isChecked():
+        # Apply filters: hide tool streaming and detailed reasoning when unchecked
+        if hasattr(self, "_show_tool_calls") and not self._show_tool_calls.isChecked():
             if str(prefix).startswith("→ "):
+                return
+        if hasattr(self, "_show_reasoning") and not self._show_reasoning.isChecked():
+            if str(prefix).startswith("Reasoning: "):
                 return
 
         # Move cursor to the very end of the document
@@ -247,9 +326,8 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
 
         # Now, insert the new text at the cursor's current position
         self._log.insertPlainText(text)
-
-        if self._autoscroll.isChecked():
-            self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
+        # Always autoscroll
+        self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
 
     def end_stream(self):
         if QtWidgets is None or self.parent is None or QtGui is None:
@@ -280,8 +358,8 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         except Exception:
             # Fallback to plain text on failure
             self._log.insertPlainText(html)
-        if self._autoscroll.isChecked():
-            self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
+        # Always autoscroll
+        self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
 
     def append_line_html(self, html: str):
         # Use <br/> for explicit line breaks in HTML context
@@ -309,10 +387,19 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             # Plain-text fallback, still respecting line boundaries
             self._ensure_line_start()
             self._log.insertPlainText(f"{ts} | {model_name} reasoning...\n")
-        if self._autoscroll.isChecked():
-            self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
+        # Always autoscroll
+        self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
+        # Start reasoning label animation and show the container
+        try:
+            if hasattr(self, "_reason_container"): # and self._show_reasoning.isChecked():
+                self._reason_container.setVisible(True)
+        except Exception:
+            pass
 
     def append_summary_stream(self, text: str):
+        # Gate detailed reasoning by the "Show reasoning" checkbox
+        if hasattr(self, "_show_reasoning") and not self._show_reasoning.isChecked():
+            return
         # Append italic plain text with preserved whitespace
         if QtGui is None:
             try:
@@ -333,17 +420,95 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         cursor.setCharFormat(italic_fmt)
         cursor.insertText(text)
         cursor.setCharFormat(prev_fmt)
-        # Keep scroll pinned
-        if self._autoscroll.isChecked():
-            self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
+        # Always autoscroll
+        self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
+        # Update reasoning label base text and re-render
+        # try:
+        #     delta = (text or "").replace("\n", " ")
+        #     self._reason_base = (self._reason_base or "") + delta
+        #     if hasattr(self, "_render_reasoning"):
+        #         self._render_reasoning()
+        # except Exception:
+        #     pass
 
     def end_summary_stream(self):
         # Finish with exactly one newline for clean separation
         self._ensure_trailing_newline()
         # Reset format so following lines are not italic or dimmed
         self._reset_char_format()
-        if self._autoscroll.isChecked():
-            self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
+        # Always autoscroll
+        # self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
+        # Stop reasoning animation and auto-hide the reasoning container
+        # try:
+        #     self.stop_reasoning_animation()
+        #     # if hasattr(self, "_reason_container"):
+        #     #     self._reason_container.setVisible(False)
+        # except Exception:
+        #     pass
+
+    # Reasoning animation helpers
+    def _render_reasoning(self):
+        try:
+            dots = getattr(self, "_dots", ["", ".", "..", "..."])
+            idx = getattr(self, "_dot_idx", 0) % len(dots)
+            self._reason_label.setText(f"{self._reason_base or ''}{dots[idx]}")
+        except Exception:
+            print("ERROR")
+            try:
+                self._reason_label.setText(self._reason_base or "")
+            except Exception:
+                pass
+
+    def _truncate_for_status(self, text: str, limit: int = 50) -> str:
+        try:
+            s = str(text or "")
+        except Exception:
+            s = ""
+        if len(s) <= limit:
+            return s
+        return s[:limit] + " (trimmed)"
+
+    def _render_status(self):
+        try:
+            dots = getattr(self, "_dots", ["", ".", "..", "..."])
+            idx = getattr(self, "_status_dot_idx", 0) % len(dots)
+            base = getattr(self, "_status_base", "") or ""
+            self._status_label.setText(f"{base}{dots[idx]}")
+        except Exception:
+            pass
+
+    def _tick_status(self):
+        try:
+            self._status_dot_idx = (getattr(self, "_status_dot_idx", 0) + 1) % len(getattr(self, "_dots", ["", ".", "..", "..."]))
+            self._render_status()
+        except Exception:
+            pass
+
+    def _tick_reasoning(self):
+        try:
+            self._dot_idx = (getattr(self, "_dot_idx", 0) + 1) % len(getattr(self, "_dots", ["", ".", "..", "..."]))
+            self._render_reasoning()
+        except Exception:
+            pass
+
+    def start_reasoning_animation(self, base_text: str = ""):
+        try:
+            self._dot_idx = 0
+            if getattr(self, "_reason_timer", None) is not None:
+                self._reason_timer.start()
+            self._render_reasoning()
+        except Exception:
+            print("ERROR")
+            pass
+
+    def stop_reasoning_animation(self):
+        try:
+            if getattr(self, "_reason_timer", None) is not None:
+                self._reason_timer.stop()
+            self._dot_idx = 0
+            self._render_reasoning()
+        except Exception:
+            pass
 
     # Styled assistant answer streaming (bold model prefix)
     def append_answer_stream(self, text: str, model_name: str):
@@ -369,8 +534,8 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         # Append the plain text portion
         self._reset_char_format()
         self._log.insertPlainText(text)
-        if self._autoscroll.isChecked():
-            self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
+        # Always autoscroll
+        self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
 
 
 class _StatusPanelManager:
@@ -393,6 +558,9 @@ class _StatusPanelManager:
         # Reasoning streaming buffer/state
         self._pending_reasoning_text: Optional[str] = None
         self._reasoning_buffer: list[str] = []
+        # Stop/cancel support
+        self._on_stop = None
+        self._stopped = False
 
     def _is_ready(self) -> bool:
         return bool(self._form and getattr(self._form, "_log", None))
@@ -559,6 +727,8 @@ class _StatusPanelManager:
             pass
 
     def log_stream(self, text: str, prefix: str = "Gepetto: "):
+        if getattr(self, "_stopped", False):
+            return
         # If panel not ready, buffer and print to console without newlines
         if not self._is_ready():
             self._pending_stream_prefix = prefix
@@ -600,6 +770,8 @@ class _StatusPanelManager:
             pass
 
     def summary_stream_start(self, model_name: str):
+        # Reset stop flag at the start of a new reasoning stream
+        self._stopped = False
         if not self._is_ready():
             self._pending_logs.append(f"{model_name} reasoning...")
             return
@@ -615,6 +787,8 @@ class _StatusPanelManager:
             pass
 
     def summary_stream(self, text: str):
+        if getattr(self, "_stopped", False):
+            return
         if not self._is_ready():
             self._pending_logs.append(text)
             return
@@ -644,6 +818,8 @@ class _StatusPanelManager:
             pass
 
     def answer_stream(self, text: str, model_name: str):
+        if getattr(self, "_stopped", False):
+            return
         if not self._is_ready():
             self._pending_stream_prefix = f"{model_name}: "
             self._pending_stream_text.append(text)
@@ -676,6 +852,8 @@ class _StatusPanelManager:
             pass
 
     def reasoning_stream(self, text_delta: str):
+        if getattr(self, "_stopped", False):
+            return
         if not self._is_ready():
             # Coalesce while not ready; last write wins when flushed
             self._pending_reasoning_text = (self._pending_reasoning_text or "") + (text_delta or "")
@@ -741,6 +919,67 @@ class _StatusPanelManager:
             return 1
         try:
             ida_kernwin.execute_sync(_do, self._MFF_FAST)
+        except Exception:
+            pass
+
+    def set_stop_callback(self, cb):
+        """Register an optional callback invoked when the user presses Stop."""
+        self._on_stop = cb
+
+    def reset_stop(self):
+        """Clear the stop flag to allow new streaming."""
+        self._stopped = False
+
+    def request_stop(self):
+        """Immediately stop UI streaming and mark Idle; invoke backend stop if provided."""
+        # Signal that streaming should be ignored from now on
+        self._stopped = True
+        # Try to end the current UI stream line, if any
+        try:
+            if self._is_ready():
+                def _do():
+                    try:
+                        self._form.end_stream()
+                    except Exception:
+                        return 0
+                    return 1
+                ida_kernwin.execute_sync(_do, self._MFF_FAST)
+        except Exception:
+            pass
+        # Update status/log
+        try:
+            self.set_status("Idle", busy=False)
+            # Ensure the stop log message appears even if streaming is stopped
+            def _do_log():
+                try:
+                    # Add a concise cancellation footer and provider-specific note
+                    try:
+                        import gepetto.config as _cfg
+                        provider = getattr(_cfg.model, "get_menu_name", lambda: "Model")()
+                        note = None
+                        if provider == "OpenAI":
+                            note = "Requested stream close; server cancels promptly. Residual buffered tokens may appear; ignored."
+                        elif provider == "Google Gemini":
+                            note = "Best-effort stream close requested; upstream may compute briefly; further output is ignored."
+                        else:
+                            note = "Cancellation requested upstream; further output (if any) is ignored."
+                        self._form.append_log("Canceled.")
+                        if note:
+                            self._form.append_log(note)
+                    except Exception:
+                        self._form.append_log("Canceled.")
+                        pass
+                    self._reason_container.setVisible(False)
+                except Exception:
+                    return 0
+                return 1
+            ida_kernwin.execute_sync(_do_log, self._MFF_FAST)
+        except Exception:
+            pass
+        # Invoke backend cancellation, if registered
+        try:
+            if self._on_stop:
+                self._on_stop()
         except Exception:
             pass
 

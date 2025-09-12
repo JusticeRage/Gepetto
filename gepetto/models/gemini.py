@@ -221,6 +221,11 @@ class Gemini(LanguageModel):
             )
 
         self.client = genai.Client(api_key=api_key)
+        # Cancellation primitives
+        import threading as _thr
+        self._cancel_lock = _thr.Lock()
+        self._cancel_ev: _thr.Event | None = None
+        self._active_stream = None
 
         proxy = gepetto.config.get_config("Gepetto", "PROXY")
         if proxy:
@@ -280,22 +285,18 @@ class Gemini(LanguageModel):
             **additional_model_options,
         )
 
-        # Detect if we're continuing after tool responses; streaming sometimes stalls
-        has_function_response = any(
-            part.get("function_response")
-            for msg in messages
-            if isinstance(msg, dict) and msg.get("parts")
-            for part in msg.get("parts", [])
-            if isinstance(part, dict)
-        )
-
         try:
-            if stream and not has_function_response:
+            if stream:
                 response_stream = self.client.models.generate_content_stream(
                     model=self.model_name,
                     contents=messages,
                     config=config,
                 )
+                # Initialize/record cancel state for this request
+                with self._cancel_lock:
+                    import threading as _thr
+                    self._cancel_ev = getattr(self, "_cancel_ev", None) or _thr.Event()
+                    self._active_stream = response_stream
 
                 # Accumulate tool calls across chunks to assign stable indices
                 tool_idx_by_id: dict[str, int] = {}
@@ -331,6 +332,17 @@ class Gemini(LanguageModel):
                         call.function.arguments = json.dumps(_to_serializable(args) or {})
 
                 for chunk in response_stream:
+                    # Cancellation check
+                    if getattr(self, "_cancel_ev", None) is not None and self._cancel_ev.is_set():
+                        try:
+                            close = getattr(response_stream, "close", None)
+                            if callable(close):
+                                close()
+                        except Exception:
+                            pass
+                        with self._cancel_lock:
+                            self._active_stream = None
+                        break
                     parts = (
                         chunk.candidates[0].content.parts if chunk.candidates else []
                     )
@@ -358,6 +370,11 @@ class Gemini(LanguageModel):
                                 "name": getattr(tc.function, "name", ""),
                                 "arguments": getattr(tc.function, "arguments", ""),
                             })
+                        # Skip delivering final output if canceled
+                        if getattr(self, "_cancel_ev", None) is not None and self._cancel_ev.is_set():
+                            with self._cancel_lock:
+                                self._active_stream = None
+                            return
                         cb(response=SimpleNamespace(output=output))
             else:
                 response = self.client.models.generate_content(
@@ -424,6 +441,14 @@ class Gemini(LanguageModel):
                     cb(response=SimpleNamespace(output=output))
 
         except Exception as e:
+            # Suppress network/stream errors if the request was cancelled
+            try:
+                if getattr(self, "_cancel_ev", None) is not None and self._cancel_ev.is_set():
+                    with self._cancel_lock:
+                        self._active_stream = None
+                    return
+            except Exception:
+                pass
             error_message = _(
                 "General exception encountered while running the query: {error}"
             ).format(error=str(e))
@@ -435,5 +460,24 @@ class Gemini(LanguageModel):
         )
         t.start()
 
+
+    def cancel_current_request(self):
+        """Signal cancellation to any in‑flight streaming request."""
+        try:
+            with self._cancel_lock:
+                ev = getattr(self, "_cancel_ev", None)
+                st = getattr(self, "_active_stream", None)
+                if ev is not None:
+                    ev.set()
+                if st is not None:
+                    try:
+                        close = getattr(st, "close", None)
+                        if callable(close):
+                            close()
+                    except Exception:
+                        pass
+                self._active_stream = None
+        except Exception:
+            pass
 
 gepetto.models.model_manager.register_model(Gemini)

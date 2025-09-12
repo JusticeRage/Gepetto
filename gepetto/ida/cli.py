@@ -59,6 +59,12 @@ class GepettoCLI(ida_kernwin.cli_t):
             STATUS.ensure_shown()
             STATUS.set_model(str(gepetto.config.model))
             STATUS.set_status("Waiting for model...", busy=True)
+            # Reset stop state and bind backend cancellation to Stop button
+            try:
+                STATUS.reset_stop()
+                STATUS.set_stop_callback(lambda: getattr(gepetto.config.model, "cancel_current_request", lambda: None)())
+            except Exception:
+                pass
             # Clear prior reasoning overlay at the start of each turn
             try:
                 STATUS.clear_reasoning()
@@ -227,6 +233,8 @@ class GepettoCLI(ida_kernwin.cli_t):
                     elif tc.function.name == "refresh_view":
                         gepetto.ida.tools.refresh_view.handle_refresh_view_tc(tc, MESSAGES)
                 STATUS.end_stream()
+                if getattr(STATUS, "_stopped", False):
+                    return
                 STATUS.set_status("Continuing after tools...", busy=True)
                 stream_and_handle()
             else:
@@ -243,8 +251,13 @@ class GepettoCLI(ida_kernwin.cli_t):
                     except Exception:
                         pass
                     STATUS.log(f"Thinking Summary: {reasoning_summary}")
+                try:
+                    STATUS.summary_stream_end()
+                except Exception:
+                    pass
                 MESSAGES.append({"role": "assistant", "content": text or ""})
                 STATUS.set_status("Done", busy=False)
+                STATUS.clear_reasoning()
                 STATUS.log("✔ Completed turn")
 
         def stream_and_handle():
@@ -301,9 +314,8 @@ class GepettoCLI(ida_kernwin.cli_t):
                         last_heading_title = title
                         # Cap shown length for the mini strip
                         if len(title) > 80:
-                            title = title[:77] + "…"
-        
-                        shown = title if title.endswith("...") else f"{title}..."
+                            title = title[:77] + " (...)"
+                        shown = title if title.endswith("(...)") else f"{title}"
                         if shown != current_heading:
                             try:
                                 STATUS.set_reasoning(shown)
@@ -371,7 +383,12 @@ class GepettoCLI(ida_kernwin.cli_t):
                         pass
                     return
                 if isinstance(delta, dict) and delta.get("status") == "thinking":
-                    STATUS.set_status("Thinking...", busy=True)
+                    # try:
+                    #     STATUS.summary_stream_start(model_name)
+                    # except Exception:
+                    #     pass
+                    STATUS.set_status("Reasoning...", busy=True)
+                    STATUS.set_reasoning("Reasoning")
                     return
                 # OpenAI Responses: live reasoning UI updates
                 if isinstance(delta, dict):
@@ -387,21 +404,21 @@ class GepettoCLI(ida_kernwin.cli_t):
                         return
                     nonlocal streamed_summary_seen
                     # Stream mid-step summary parts and the final coherent summary into the main log
-                    rspd = delta.get("reasoning_summary_part_delta") or delta.get("reasoning_summary_part")
-                    if isinstance(rspd, str) and rspd:
-                        # Heuristic: new step headers often begin with **Title**
-                        if rspd.lstrip().startswith("**"):
-                            # New step starting: reset heading parse and any ongoing summary stream
-                            heading_buf = ""
-                            if summary_text_started:
-                                STATUS.end_stream()
-                                summary_text_started = False
-                            summary_buffer = ""
-                        # For summary parts, only update when a complete **header** is present
-                        _maybe_update_heading(rspd, md_only=True)
-                        STATUS.log_stream(rspd, prefix="Thinking: ")
-                        streamed_summary_seen = True
-                        return
+                    # rspd = delta.get("reasoning_summary_part_delta") or delta.get("reasoning_summary_part")
+                    # if isinstance(rspd, str) and rspd:
+                    #     # Heuristic: new step headers often begin with **Title**
+                    #     if rspd.lstrip().startswith("**"):
+                    #         # New step starting: reset heading parse and any ongoing summary stream
+                    #         heading_buf = ""
+                    #         if summary_text_started:
+                    #             STATUS.end_stream()
+                    #             summary_text_started = False
+                    #         summary_buffer = ""
+                    #     # For summary parts, only update when a complete **header** is present
+                    #     _maybe_update_heading(rspd, md_only=True)
+                    #     STATUS.log_stream(rspd, prefix="Reasoning: ")
+                    #     streamed_summary_seen = True
+                    #     return
                     rstd = delta.get("reasoning_summary_text_delta")
                     if isinstance(rstd, str) and rstd:
                         # If a new summary step begins while we were already streaming, restart
@@ -422,6 +439,7 @@ class GepettoCLI(ida_kernwin.cli_t):
                                 summary_text_started = True
                                 STATUS.summary_stream_start(model_name)
                                 STATUS.summary_stream(stripped)
+                                # STATUS.log_stream(stripped, prefix="Reasoning: ")
                                 summary_buffer = ""
                         else:
                             STATUS.summary_stream(rstd)
@@ -443,7 +461,9 @@ class GepettoCLI(ida_kernwin.cli_t):
                         streamed_summary_seen = True
                         return
                 if isinstance(delta, str):
-                    # Stream to panel without newlines while printing to console.
+                    # Respect Stop: suppress console output and UI streaming when stopped
+                    if getattr(STATUS, "_stopped", False):
+                        return
                     STATUS.answer_stream(delta, model_name)
                     print(delta, end="", flush=True)
                     message.content += delta
@@ -458,6 +478,10 @@ class GepettoCLI(ida_kernwin.cli_t):
                     return
                 if finish_reason:
                     print("\n")
+                    try:
+                        STATUS.summary_stream_end()
+                    except Exception:
+                        pass
                     STATUS.set_status("Done", busy=False)
                     STATUS.end_stream()
                     STATUS.log("✔ Completed turn")

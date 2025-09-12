@@ -44,6 +44,11 @@ class Ollama(LanguageModel):
     def __init__(self, model):
         self.model = model
         self.client = create_client()
+        # Cancellation primitives
+        import threading as _thr
+        self._cancel_lock = _thr.Lock()
+        self._cancel_ev: _thr.Event | None = None
+        self._active_response = None
 
     def query_model_async(self, query, cb, stream=False, additional_model_options = None):
         if additional_model_options is None:
@@ -73,10 +78,44 @@ class Ollama(LanguageModel):
                 ida_kernwin.execute_sync(functools.partial(cb, response=response["message"]["content"]),
                                          ida_kernwin.MFF_WRITE)
             else:
+                # Initialize/record cancel state for this request
+                with self._cancel_lock:
+                    import threading as _thr
+                    self._cancel_ev = getattr(self, "_cancel_ev", None) or _thr.Event()
+                    self._active_response = response
                 for chunk in response:
+                    # Cancellation check
+                    if getattr(self, "_cancel_ev", None) is not None and self._cancel_ev.is_set():
+                        try:
+                            close = getattr(response, "close", None)
+                            if callable(close):
+                                close()
+                        except Exception:
+                            pass
+                        with self._cancel_lock:
+                            self._active_response = None
+                        break
                     cb(chunk['message']['content'], finished=chunk['done'])
         except Exception as e:
             print(e)
 
+
+    def cancel_current_request(self):
+        """Signal cancellation to any in‑flight streaming request."""
+        try:
+            with self._cancel_lock:
+                ev = getattr(self, "_cancel_ev", None)
+                resp = getattr(self, "_active_response", None)
+                if ev is not None:
+                    ev.set()
+                if resp is not None:
+                    try:
+                        close = getattr(resp, "close", None)
+                        if callable(close):
+                            close()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
 gepetto.models.model_manager.register_model(Ollama)

@@ -81,6 +81,10 @@ class GPT(LanguageModel):
         # Subclasses (OpenAI-compatible vendors) inherit False unless overridden.
         if self.__class__ is GPT:
             self.use_responses_api = True
+        # Cancellation primitives
+        self._cancel_lock = threading.Lock()
+        self._cancel_ev: threading.Event | None = None
+        self._active_stream_ctx = None
 
     def __str__(self):
         return self.model
@@ -285,6 +289,11 @@ class GPT(LanguageModel):
                     stream=True,
                     **opts,
                 )
+                # Initialize/record cancel state for this request
+                with self._cancel_lock:
+                    import threading as _thr
+                    self._cancel_ev = getattr(self, "_cancel_ev", None) or _thr.Event()
+                    self._active_stream_ctx = stream_resp
                 # Accumulate text and tool calls
                 text_buf = []
                 tool_calls = {}
@@ -308,6 +317,18 @@ class GPT(LanguageModel):
                             entry["function"]["arguments"] += args
 
                 for chunk in stream_resp:
+                    # Cancellation check
+                    if getattr(self, "_cancel_ev", None) is not None and self._cancel_ev.is_set():
+                        try:
+                            close = getattr(stream_resp, "close", None)
+                            if callable(close):
+                                close()
+                        except Exception:
+                            pass
+                        with self._cancel_lock:
+                            self._active_stream_ctx = None
+                        break
+
                     ch = chunk.choices[0] if getattr(chunk, "choices", None) else None
                     delta = getattr(ch, "delta", None)
                     if delta is None:
@@ -322,12 +343,27 @@ class GPT(LanguageModel):
                     for dtc in dtcs:
                         upsert_tool_call(dtc)
 
+                # If canceled, do not deliver a final response
+                if getattr(self, "_cancel_ev", None) is not None and self._cancel_ev.is_set():
+                    with self._cancel_lock:
+                        self._active_stream_ctx = None
+                    return
+
                 final_text = "".join(text_buf)
                 tcs = [tool_calls[i] for i in sorted(tool_calls.keys())]
                 pseudo = self._finalize_chat_to_pseudo_response(final_text, tcs)
                 cb(response=pseudo)
+                with self._cancel_lock:
+                    self._active_stream_ctx = None
                 return
         except Exception as e:
+            try:
+                if getattr(self, "_cancel_ev", None) is not None and self._cancel_ev.is_set():
+                    with self._cancel_lock:
+                        self._active_stream_ctx = None
+                    return
+            except Exception:
+                pass
             print(_("General exception encountered while running the query: {error}").format(error=str(e)))
 
     def query_model(self, query, cb, stream=False, additional_model_options=None):
@@ -442,11 +478,25 @@ class GPT(LanguageModel):
                     instructions=instructions,
                     **opts,
                 ) as stream_ctx:
+                    # Initialize/record cancel state for this request
+                    with self._cancel_lock:
+                        import threading as _thr
+                        self._cancel_ev = getattr(self, "_cancel_ev", None) or _thr.Event()
+                        self._active_stream_ctx = stream_ctx
                     sent_thinking = False
                     saw_reasoning = False
                     summary_done = False
                     buffered_output: list[str] = []
                     for event in stream_ctx:
+                        # Cancellation check
+                        if getattr(self, "_cancel_ev", None) is not None and self._cancel_ev.is_set():
+                            try:
+                                stream_ctx.close()
+                            except Exception:
+                                pass
+                            with self._cancel_lock:
+                                self._active_stream_ctx = None
+                            break
                         etype = getattr(event, "type", None)
                         # Show a Thinking... status when any reasoning events begin
                         if (not sent_thinking) and isinstance(etype, str) and etype.startswith("response.reasoning"):
@@ -529,13 +579,24 @@ class GPT(LanguageModel):
                         except Exception:
                             pass
                         buffered_output.clear()
+                    # If canceled, do not deliver a final response
+                    if getattr(self, "_cancel_ev", None) is not None and self._cancel_ev.is_set():
+                        with self._cancel_lock:
+                            self._active_stream_ctx = None
+                        return
                     final = stream_ctx.get_final_response()
                     cb(response=final)
+                    with self._cancel_lock:
+                        self._active_stream_ctx = None
                     return
         except openai.BadRequestError as e:
             m = re.search(r'maximum context length is \d+ tokens, however you requested \d+ tokens', str(e))
             msg = _("Unfortunately, this function is too big to be analyzed with the model's current API limits.") if m else _("General exception encountered while running the query: {error}").format(error=str(e))
             try:
+                if getattr(self, "_cancel_ev", None) is not None and self._cancel_ev.is_set():
+                    with self._cancel_lock:
+                        self._active_stream_ctx = None
+                    return
                 cb(delta=None, finish_reason=f"error:{msg}")
             except Exception:
                 pass
@@ -543,6 +604,10 @@ class GPT(LanguageModel):
         except openai.OpenAIError as e:
             msg = _("{model} could not complete the request: {error}").format(model=self.model, error=str(e))
             try:
+                if getattr(self, "_cancel_ev", None) is not None and self._cancel_ev.is_set():
+                    with self._cancel_lock:
+                        self._active_stream_ctx = None
+                    return
                 cb(delta=None, finish_reason=f"error:{msg}")
             except Exception:
                 pass
@@ -550,6 +615,10 @@ class GPT(LanguageModel):
         except Exception as e:
             msg = _("General exception encountered while running the query: {error}").format(error=str(e))
             try:
+                if getattr(self, "_cancel_ev", None) is not None and self._cancel_ev.is_set():
+                    with self._cancel_lock:
+                        self._active_stream_ctx = None
+                    return
                 cb(delta=None, finish_reason=f"error:{msg}")
             except Exception:
                 pass
@@ -569,5 +638,24 @@ class GPT(LanguageModel):
         t.start()
 
     # No additional internal helpers are required with Responses-first flow.
+
+    def cancel_current_request(self):
+        """Signal cancellation to any in‑flight streaming request."""
+        try:
+            with self._cancel_lock:
+                ev = getattr(self, "_cancel_ev", None)
+                ctx = getattr(self, "_active_stream_ctx", None)
+                if ev is not None:
+                    ev.set()
+                if ctx is not None:
+                    try:
+                        close = getattr(ctx, "close", None)
+                        if callable(close):
+                            close()
+                    except Exception:
+                        pass
+                self._active_stream_ctx = None
+        except Exception:
+            pass
 
 gepetto.models.model_manager.register_model(GPT)

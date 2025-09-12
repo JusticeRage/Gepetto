@@ -24,6 +24,8 @@ def comment_callback(address, view, response, start_time):
         Response object from the unified API. The textual content is extracted
         and applied as function comment.
     """
+    if getattr(STATUS, "_stopped", False):
+        return
     elapsed_time = time.time() - start_time
 
     def _to_text(resp):
@@ -97,6 +99,11 @@ class ExplainHandler(idaapi.action_handler_t):
         start_time = time.time()
         decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
         v = ida_hexrays.get_widget_vdui(ctx.widget)
+        try:
+            STATUS.reset_stop()
+            STATUS.set_stop_callback(lambda: getattr(gepetto.config.model, "cancel_current_request", lambda: None)())
+        except Exception:
+            pass
         gepetto.config.model.query_model_async(
             f"Can you explain what the following C function does and suggest a better name for it?\n"
             f"Your response should use the following locale as a language: {gepetto.config.get_localization_locale()}\n"
@@ -132,6 +139,8 @@ def rename_callback(address, view, response):
         if isinstance(txt, str) and txt:
             return txt
         return getattr(resp, "content", "") or ""
+    if getattr(STATUS, "_stopped", False):
+        return
     response_text = _to_text(response)
     names = json.loads(response_text)
 
@@ -284,6 +293,12 @@ class GenerateCCodeHandler(idaapi.action_handler_t):
         if not decompiler_output:
             return 0
 
+        try:
+            STATUS.reset_stop()
+            STATUS.set_stop_callback(lambda: getattr(gepetto.config.model, "cancel_current_request", lambda: None)())
+        except Exception:
+            pass
+
         gepetto.config.model.query_model_async(
             _("Please generate executable C code based on the following decompiled C code and ensure it includes all necessary header files and other information:\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
             functools.partial(self._save_c_code, view=v)
@@ -297,6 +312,8 @@ class GenerateCCodeHandler(idaapi.action_handler_t):
         :param view: A handle to the decompiler window
         :param response: The generated C code from the model
         """
+        if getattr(STATUS, "_stopped", False):
+            return
         project_name = idaapi.get_root_filename()
         func_name = idc.get_func_name(idaapi.get_screen_ea())
         file_name = f"{project_name}_{func_name}.c"
@@ -329,6 +346,12 @@ class GeneratePythonCodeHandler(idaapi.action_handler_t):
         if not decompiler_output:
             return 0
 
+        try:
+            STATUS.reset_stop()
+            STATUS.set_stop_callback(lambda: getattr(gepetto.config.model, "cancel_current_request", lambda: None)())
+        except Exception:
+            pass
+
         gepetto.config.model.query_model_async(
             _("Please generate equivalent Python code based on the following decompiled C code, and provide an example of the function call:\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
             functools.partial(self._save_python_code, view=v)
@@ -342,6 +365,8 @@ class GeneratePythonCodeHandler(idaapi.action_handler_t):
         :param view: A handle to the decompiler window
         :param response: The generated python code from the model
         """
+        if getattr(STATUS, "_stopped", False):
+            return
         project_name = idaapi.get_root_filename()
         func_name = idc.get_func_name(idaapi.get_screen_ea())
         file_name = f"{project_name}_{func_name}.py"

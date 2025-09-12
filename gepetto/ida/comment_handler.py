@@ -3,7 +3,6 @@ import json
 import re
 import time
 import textwrap
-from urllib import response
 
 import idaapi
 import ida_hexrays
@@ -11,7 +10,7 @@ import ida_kernwin
 import idc
 
 import gepetto.config
-from gepetto.models.model_manager import instantiate_model
+from gepetto.ida.status_panel import panel as STATUS
 
 _ = gepetto.config._
 
@@ -35,7 +34,12 @@ class CommentHandler(idaapi.action_handler_t):
         pseudocode_lines = get_commentable_lines(decompiler_output)
         formatted_lines = format_commentable_lines(pseudocode_lines)
         v = ida_hexrays.get_widget_vdui(ctx.widget)
-              
+               
+        try:
+            STATUS.reset_stop()
+            STATUS.set_stop_callback(lambda: getattr(gepetto.config.model, "cancel_current_request", lambda: None)())
+        except Exception:
+            pass
         gepetto.config.model.query_model_async(
             f"""
                 RESPOND STRICTLY IN THE FORMAT JSON MAP {{ lineNumber: "comment" }}, NOTHING ELSE!!!
@@ -65,6 +69,8 @@ def comment_callback(decompiler_output, pseudocode_lines, view, response, start_
     The ``response`` parameter can be a raw string or a Responses API object.
     """
     try:
+        if getattr(STATUS, "_stopped", False):
+            return
         elapsed_time = time.time() - start_time
 
         def _to_text(resp):
@@ -78,7 +84,18 @@ def comment_callback(decompiler_output, pseudocode_lines, view, response, start_
 
         print(f"Response: {response_text}")
 
-        items = json.loads(response_text)
+        try:
+            items = json.loads(response_text)
+        except Exception as e:
+            try:
+                ida_kernwin.warning(_("Model returned malformed JSON; comments not applied."))
+            except Exception:
+                pass
+            try:
+                print(f"[ERROR] Malformed JSON from model: {e}")
+            except Exception:
+                pass
+            return
         pairs = [(int(line), comment) for line, comment in items.items()]
 
         for line, comment in pairs:
