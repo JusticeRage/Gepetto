@@ -53,10 +53,14 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._reasoning.setFixedHeight(two_lines)
         self._reasoning.setPlaceholderText("Reasoning…")
 
-        # Log area
-        self._log = QtWidgets.QPlainTextEdit()
+        # Log area (use QTextEdit to allow simple styling)
+        self._log = QtWidgets.QTextEdit()
         self._log.setReadOnly(True)
-        self._log.setMaximumBlockCount(5000)
+        try:
+            # QTextEdit doesn't have setMaximumBlockCount; cap document size via block count if available
+            self._log.document().setMaximumBlockCount(5000)
+        except Exception:
+            pass
         # Streaming state
         self._stream_active = False
         self._stream_prefix = ""
@@ -88,6 +92,67 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         except Exception:
             pass
 
+    # Ensure subsequent insertions use default (non-italic, default color) format
+    def _reset_char_format(self):
+        if QtGui is None:
+            return
+        cursor = self._log.textCursor()
+        fmt = QtGui.QTextCharFormat()
+        fmt.setFontItalic(False)
+        # Clear explicit foreground color so palette text color is used
+        fmt.clearForeground()
+        cursor.setCharFormat(fmt)
+        self._log.setTextCursor(cursor)
+
+    # Ensure the cursor is at the start of a line (not mid-line) by inserting
+    # exactly one newline only when needed. Avoid paragraph insertions that can
+    # introduce extra spacing in QTextEdit.
+    def _ensure_line_start(self):
+        if QtGui is None:
+            return
+        try:
+            # If the current document already ends with a newline (including <br/>)
+            # or is empty, do nothing; else add exactly one newline.
+            doc_text = self._log.toPlainText()
+            if doc_text and not doc_text.endswith("\n"):
+                self._log.moveCursor(QtGui.QTextCursor.MoveOperation.End)
+                self._log.insertPlainText("\n")
+        except Exception:
+            pass
+
+    # Ensure there is exactly one trailing newline at the end of the document.
+    def _ensure_trailing_newline(self):
+        if QtGui is None:
+            return
+        try:
+            doc_text = self._log.toPlainText()
+            if not doc_text.endswith("\n"):
+                self._log.moveCursor(QtGui.QTextCursor.MoveOperation.End)
+                self._log.insertPlainText("\n")
+        except Exception:
+            pass
+
+    def _squash_trailing_blank_line(self):
+        if QtGui is None:
+            return
+        try:
+            doc = self._log.document()
+            cursor = self._log.textCursor()
+            # Loop: remove trailing whitespace-only blocks
+            while True:
+                block = doc.lastBlock()
+                if not block.isValid():
+                    break
+                if block.text().strip() != "":
+                    break
+                # Delete the newline preceding the empty/whitespace block
+                cursor.movePosition(QtGui.QTextCursor.MoveOperation.End)
+                cursor.movePosition(QtGui.QTextCursor.MoveOperation.StartOfBlock)
+                cursor.deletePreviousChar()
+                # If multiple empties stacked, continue
+        except Exception:
+            pass
+
     # ------------------------------ API ------------------------------
     def set_model(self, model_name: str):
         if QtWidgets is None or self.parent is None:
@@ -115,9 +180,12 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         if hasattr(self, "_verbose") and not self._verbose.isChecked():
             if line.startswith("→ "):
                 return
-        
-        # Use the robust moveCursor/insertPlainText logic
+        # Ensure each log entry starts at the beginning of a line
+        self._ensure_line_start()
+        # Use the robust moveCursor + insertPlainText pattern
         self._log.moveCursor(QtGui.QTextCursor.MoveOperation.End)
+        # Force default format (non-italic, default color)
+        self._reset_char_format()
         self._log.insertPlainText(entry)
 
         if self._autoscroll.isChecked():
@@ -172,6 +240,9 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             self._stream_prefix = prefix
             timestamp = datetime.datetime.now().strftime("%H:%M:%S")
             header = f"{timestamp} | {prefix}"
+            # Ensure default formatting and start at line start for headers
+            self._ensure_line_start()
+            self._reset_char_format()
             self._log.insertPlainText(header)
 
         # Now, insert the new text at the cursor's current position
@@ -185,11 +256,121 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             return
         if not getattr(self, "_stream_active", False):
             return
-        # Finish the line with a newline and reset state
-        self._log.moveCursor(QtGui.QTextCursor.MoveOperation.End)
-        self._log.insertPlainText("\n")
+        # Finish the line with exactly one newline and reset state
+        self._ensure_trailing_newline()
         self._stream_active = False
         self._stream_prefix = ""
+        # Reset format to default after finishing a stream line
+        self._reset_char_format()
+
+    # Styled helpers ------------------------------------------------------
+    def append_html(self, html: str):
+        if QtWidgets is None or self.parent is None or QtGui is None:
+            # Fallback strip HTML
+            import re as _re
+            plain = _re.sub(r"<[^>]+>", "", html)
+            try:
+                print(plain, end="")
+            except Exception:
+                pass
+            return
+        self._log.moveCursor(QtGui.QTextCursor.MoveOperation.End)
+        try:
+            self._log.insertHtml(html)
+        except Exception:
+            # Fallback to plain text on failure
+            self._log.insertPlainText(html)
+        if self._autoscroll.isChecked():
+            self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
+
+    def append_line_html(self, html: str):
+        # Use <br/> for explicit line breaks in HTML context
+        self.append_html(html + "<br/>")
+
+    def append_user(self, text: str):
+        ts = datetime.datetime.now().strftime("%H:%M:%S")
+        import html as _html
+        safe = _html.escape(text).replace("\n", "<br/>")
+        html = f"{ts} | <b>User</b>: {safe}"
+        self.append_line_html(html)
+
+    # Styled summary streaming (bold header + italic body)
+    def start_summary_stream(self, model_name: str):
+        ts = datetime.datetime.now().strftime("%H:%M:%S")
+        import html as _html
+        safe_model = _html.escape(model_name)
+        header_html = f"{ts} | <b>{safe_model} reasoning...</b>"  # newline added below
+        self._log.moveCursor(QtGui.QTextCursor.MoveOperation.End)
+        try:
+            # Start header at the beginning of a line
+            self._ensure_line_start()
+            self._log.insertHtml(header_html + "<br/>")
+        except Exception:
+            # Plain-text fallback, still respecting line boundaries
+            self._ensure_line_start()
+            self._log.insertPlainText(f"{ts} | {model_name} reasoning...\n")
+        if self._autoscroll.isChecked():
+            self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
+
+    def append_summary_stream(self, text: str):
+        # Append italic plain text with preserved whitespace
+        if QtGui is None:
+            try:
+                print(text, end="")
+            except Exception:
+                pass
+            return
+        cursor = self._log.textCursor()
+        # Save current format and apply italic only for this insertion
+        prev_fmt = cursor.charFormat()
+        italic_fmt = QtGui.QTextCharFormat(prev_fmt)
+        italic_fmt.setFontItalic(True)
+        # Dim the summary text
+        try:
+            italic_fmt.setForeground(QtGui.QBrush(QtGui.QColor(102, 102, 102)))  # #666
+        except Exception:
+            pass
+        cursor.setCharFormat(italic_fmt)
+        cursor.insertText(text)
+        cursor.setCharFormat(prev_fmt)
+        # Keep scroll pinned
+        if self._autoscroll.isChecked():
+            self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
+
+    def end_summary_stream(self):
+        # Finish with exactly one newline for clean separation
+        self._ensure_trailing_newline()
+        # Reset format so following lines are not italic or dimmed
+        self._reset_char_format()
+        if self._autoscroll.isChecked():
+            self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
+
+    # Styled assistant answer streaming (bold model prefix)
+    def append_answer_stream(self, text: str, model_name: str):
+        if QtWidgets is None or self.parent is None or QtGui is None:
+            # Console fallback handled by manager
+            return
+        # Initialize the stream line if needed, with bold model name
+        if not self._stream_active:
+            self._stream_active = True
+            ts = datetime.datetime.now().strftime("%H:%M:%S")
+            import html as _html
+            safe_model = _html.escape(model_name)
+            header_html = f"{ts} | <b>{safe_model}</b>: "
+            self._log.moveCursor(QtGui.QTextCursor.MoveOperation.End)
+            # Ensure we begin at the start of a line for the answer header
+            self._ensure_line_start()
+            # Ensure default formatting for answer header
+            self._reset_char_format()
+            try:
+                self._log.insertHtml(header_html)
+            except Exception:
+                self._log.insertPlainText(f"{ts} | {model_name}: ")
+        # Append the plain text portion
+        self._reset_char_format()
+        self._log.insertPlainText(text)
+        if self._autoscroll.isChecked():
+            self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
 
 
 class _StatusPanelManager:
@@ -401,6 +582,82 @@ class _StatusPanelManager:
         last = text[-1:] if text else ""
         if any(ch in text for ch in punct) or last in punct or len("".join(self._stream_buffer)) >= 160:
             self._flush_stream_buffer()
+
+    # ----------------------- Styled convenience APIs ---------------------
+    def log_user(self, text: str):
+        if not self._is_ready():
+            self._pending_logs.append(f"User: {text}")
+            return
+        def _do():
+            try:
+                self._form.append_user(text)
+            except Exception:
+                return 0
+            return 1
+        try:
+            ida_kernwin.execute_sync(_do, self._MFF_FAST)
+        except Exception:
+            pass
+
+    def summary_stream_start(self, model_name: str):
+        if not self._is_ready():
+            self._pending_logs.append(f"{model_name} reasoning...")
+            return
+        def _do():
+            try:
+                self._form.start_summary_stream(model_name)
+            except Exception:
+                return 0
+            return 1
+        try:
+            ida_kernwin.execute_sync(_do, self._MFF_FAST)
+        except Exception:
+            pass
+
+    def summary_stream(self, text: str):
+        if not self._is_ready():
+            self._pending_logs.append(text)
+            return
+        def _do():
+            try:
+                self._form.append_summary_stream(text)
+            except Exception:
+                return 0
+            return 1
+        try:
+            ida_kernwin.execute_sync(_do, self._MFF_FAST)
+        except Exception:
+            pass
+
+    def summary_stream_end(self):
+        if not self._is_ready():
+            return
+        def _do():
+            try:
+                self._form.end_summary_stream()
+            except Exception:
+                return 0
+            return 1
+        try:
+            ida_kernwin.execute_sync(_do, self._MFF_FAST)
+        except Exception:
+            pass
+
+    def answer_stream(self, text: str, model_name: str):
+        if not self._is_ready():
+            self._pending_stream_prefix = f"{model_name}: "
+            self._pending_stream_text.append(text)
+            return
+        def _do():
+            try:
+                self._form.append_answer_stream(text, model_name)
+            except Exception:
+                return 0
+            return 1
+        try:
+            ida_kernwin.execute_sync(_do, self._MFF_FAST)
+        except Exception:
+            pass
 
     # ----------------------- Reasoning streaming API ----------------------
     def set_reasoning(self, text: str):

@@ -64,7 +64,7 @@ class GepettoCLI(ida_kernwin.cli_t):
                 STATUS.clear_reasoning()
             except Exception:
                 pass
-            STATUS.log(f"User: {line}")
+            STATUS.log_user(line)
         except Exception as e:
             try:
                 print(f"Failed to make status panel visible: {e}")
@@ -168,8 +168,12 @@ class GepettoCLI(ida_kernwin.cli_t):
             text = _response_text(response)
             tool_calls_ns = _response_tool_calls(response)
             reasoning_summary = _response_reasoning_summary(response)
-
             if tool_calls_ns:
+                # Close any ongoing styled reasoning summary stream before tool logs
+                try:
+                    STATUS.summary_stream_end()
+                except Exception:
+                    pass
                 STATUS.set_status(f"Tool calls requested: {len(tool_calls_ns)}", busy=False)
                 tool_calls = [
                     {
@@ -254,27 +258,51 @@ class GepettoCLI(ida_kernwin.cli_t):
             last_heading_title = None  # without ellipsis
             summary_buffer = ""
 
-            def _maybe_update_heading(delta_text: str):
+            def _maybe_update_heading(delta_text: str, md_only: bool = False, finalize: bool = False):
+                """Update the compact reasoning header.
+
+                Behavior:
+                - Prefer a Markdown header of the form "**Title**" at the very start.
+                  If an opening "**" is seen, wait until the closing "**" before updating
+                  (avoids truncated "Anal...").
+                - If `md_only` is False, fall back to the first non-empty line,
+                  but only after we have a newline (i.e., the line is complete),
+                  or when `finalize` is True (e.g., on reasoning_text_done).
+                - Caps length and appends an ellipsis to indicate streaming.
+                """
                 nonlocal heading_buf, current_heading, last_heading_title
                 if not isinstance(delta_text, str) or not delta_text:
                     return
                 heading_buf += delta_text
-                # Prefer a Markdown bold header like **Step Title** at the start
                 try:
                     import re as _re
-                    m = _re.search(r"^\s*\*\*([^\*][^\*]*)\*\*", heading_buf)
-                    if m:
-                        title = m.group(1).strip()
+                    # 1) Strict Markdown header at the beginning
+                    # If we detect an opening ** but not a closing yet, do not update.
+                    if _re.match(r"^\s*\*\*", heading_buf):
+                        m = _re.match(r"^\s*\*\*([^\*][^\*]{0,160})\*\*", heading_buf)
+                        if not m:
+                            # waiting for closing **; do nothing yet
+                            return
+                        title = (m.group(1) or "").strip()
                     else:
-                        # Fallback: first non-empty line
                         title = None
-                        for line in heading_buf.splitlines():
-                            s = line.strip()
-                            if s:
-                                title = s
-                                break
+                        if not md_only:
+                            # 2) Fallback: use first non-empty line, but only when we have a full line
+                            if "\n" in heading_buf or finalize:
+                                for line in heading_buf.splitlines():
+                                    s = line.strip()
+                                    if s:
+                                        title = s[:160]
+                                        break
+                            else:
+                                # Keep buffering until newline to avoid partial words
+                                return
                     if title:
                         last_heading_title = title
+                        # Cap shown length for the mini strip
+                        if len(title) > 80:
+                            title = title[:77] + "…"
+        
                         shown = title if title.endswith("...") else f"{title}..."
                         if shown != current_heading:
                             try:
@@ -349,11 +377,13 @@ class GepettoCLI(ida_kernwin.cli_t):
                 if isinstance(delta, dict):
                     rt = delta.get("reasoning_text_delta")
                     if isinstance(rt, str) and rt:
-                        _maybe_update_heading(rt)
+                        # Avoid partial updates; prefer full **header** or wait for newline.
+                        _maybe_update_heading(rt, md_only=False, finalize=False)
                         return
                     rtd = delta.get("reasoning_text_done")
                     if isinstance(rtd, str):
-                        _maybe_update_heading(rtd)
+                        # On completion, allow fallback extraction even without newline
+                        _maybe_update_heading(rtd, md_only=False, finalize=True)
                         return
                     nonlocal streamed_summary_seen
                     # Stream mid-step summary parts and the final coherent summary into the main log
@@ -367,7 +397,8 @@ class GepettoCLI(ida_kernwin.cli_t):
                                 STATUS.end_stream()
                                 summary_text_started = False
                             summary_buffer = ""
-                        _maybe_update_heading(rspd)
+                        # For summary parts, only update when a complete **header** is present
+                        _maybe_update_heading(rspd, md_only=True)
                         STATUS.log_stream(rspd, prefix="Thinking: ")
                         streamed_summary_seen = True
                         return
@@ -378,9 +409,10 @@ class GepettoCLI(ida_kernwin.cli_t):
                             STATUS.end_stream()
                             summary_text_started = False
                             summary_buffer = ""
-                        # Accumulate until we can safely strip header and start printing
-                        heading_buf = ""
-                        _maybe_update_heading(rstd)
+                            heading_buf = ""
+                        # Accumulate until we can safely strip header and start printing.
+                        # Feed every delta into the header parser; it will update once **...** closes.
+                        _maybe_update_heading(rstd, md_only=True)
                         summary_buffer += rstd
                         if not summary_text_started:
                             stripped = _strip_summary_header(summary_buffer)
@@ -388,10 +420,11 @@ class GepettoCLI(ida_kernwin.cli_t):
                             if stripped:
                                 STATUS.end_stream()
                                 summary_text_started = True
-                                STATUS.log_stream(stripped, prefix="Thinking Summary: ")
+                                STATUS.summary_stream_start(model_name)
+                                STATUS.summary_stream(stripped)
                                 summary_buffer = ""
                         else:
-                            STATUS.log_stream(rstd, prefix="Thinking Summary: ")
+                            STATUS.summary_stream(rstd)
                         streamed_summary_seen = True
                         return
                     rsd = delta.get("reasoning_summary_done")
@@ -400,15 +433,18 @@ class GepettoCLI(ida_kernwin.cli_t):
                         if not summary_text_started and summary_buffer:
                             stripped = _strip_summary_header(summary_buffer)
                             if stripped:
-                                STATUS.log_stream(stripped, prefix="Thinking Summary: ")
-                        STATUS.end_stream()
+                                STATUS.summary_stream_start(model_name)
+                                STATUS.summary_stream(stripped)
+                        STATUS.summary_stream_end()
+                        # Reset header accumulator at the end of a summary block
+                        heading_buf = ""
                         summary_buffer = ""
                         summary_text_started = False
                         streamed_summary_seen = True
                         return
                 if isinstance(delta, str):
                     # Stream to panel without newlines while printing to console.
-                    STATUS.log_stream(delta, prefix=f"{model_name}: ")
+                    STATUS.answer_stream(delta, model_name)
                     print(delta, end="", flush=True)
                     message.content += delta
                     STATUS.set_status("Streaming...", busy=True)
