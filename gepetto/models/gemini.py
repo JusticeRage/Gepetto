@@ -40,6 +40,11 @@ def _convert_messages(messages):
         if role == "user":
             gemini_messages.append({"role": "user", "parts": [{"text": content}]})
         elif role == "assistant":
+            # Prefer raw Gemini parts if present to preserve thought signatures across turns
+            raw_parts = _get(m, "parts") or _get(m, "gemini_parts")
+            if isinstance(raw_parts, list) and raw_parts:
+                gemini_messages.append({"role": "model", "parts": raw_parts})
+                continue
             parts = []
             if content:
                 parts.append({"text": content})
@@ -164,8 +169,38 @@ def _to_serializable(value):
 
 
 def _convert_tools(tools):
+    """Convert our tool schema to Gemini `tools` list.
+
+    Supports function tools and allows callers to pass native Gemini tools
+    (e.g., {"google_search": {}}, {"code_execution": {}}, {"url_context": {}})
+    alongside function declarations.
+    """
+    # out = []
     function_decls = []
     for t in tools or []:
+        # # Native Gemini tool passthroughs
+        # if isinstance(t, dict) and (
+        #     "google_search" in t or "code_execution" in t or "url_context" in t
+        # ):
+        #     try:
+        #         if "google_search" in t:
+        #             gs = t.get("google_search") or {}
+        #             out.append(types.Tool(google_search=gs))
+        #             continue
+        #         if "code_execution" in t:
+        #             ce = t.get("code_execution") or {}
+        #             out.append(types.Tool(code_execution=ce))
+        #             continue
+        #         if "url_context" in t:
+        #             uc = t.get("url_context") or {}
+        #             out.append(types.Tool(url_context=uc))
+        #             continue
+        #     except Exception:
+        #         # Fallback to raw dict tool if typed construction is unavailable
+        #         out.append(t)
+        #         continue
+
+        # Function tools (Chat Completions or Responses style)
         if _get(t, "type") != "function":
             continue
         # Accept both Chat Completions-style ({type:function, function:{...}})
@@ -181,16 +216,29 @@ def _convert_tools(tools):
             params = _get(t, "parameters")
         if params:
             params = _sanitize_schema(params)
-        function_decls.append(
-            types.FunctionDeclaration(
-                name=name,
-                description=desc,
-                parameters=params,
+        try:
+            function_decls.append(
+                types.FunctionDeclaration(
+                    name=name,
+                    description=desc,
+                    parameters=params,
+                )
             )
-        )
+        except Exception:
+            # Fallback simple dict; the client may coerce this as needed
+            function_decls.append({
+                "name": name,
+                "description": desc,
+                "parameters": params,
+            })
     if function_decls:
         return [types.Tool(function_declarations=function_decls)]
     return None
+    #     try:
+    #         out.append(types.Tool(function_declarations=function_decls))
+    #     except Exception:
+    #         out.append({"function_declarations": function_decls})
+    # return out or None
 
 
 class Gemini(LanguageModel):
@@ -258,6 +306,44 @@ class Gemini(LanguageModel):
         if "tools" in additional_model_options:
             tools = _convert_tools(additional_model_options.pop("tools"))
 
+        # # Build tools list: caller's function tools + optional native Gemini tools
+        # tools_list = []
+        # if "tools" in additional_model_options:
+        #     tconv = _convert_tools(additional_model_options.pop("tools")) or []
+        #     if isinstance(tconv, list):
+        #         tools_list.extend(tconv)
+        # # Optional native tools via config flags
+        # def _truthy(val):
+        #     try:
+        #         return str(val).strip().lower() in ("1", "true", "yes", "on")
+        #     except Exception:
+        #         return False
+        # try:
+        #     if _truthy(gepetto.config.get_config("Gemini", "ENABLE_GOOGLE_SEARCH", default="false")):
+        #         try:
+        #             tools_list.append(types.Tool(google_search={}))
+        #         except Exception:
+        #             tools_list.append({"google_search": {}})
+        # except Exception:
+        #     pass
+        # try:
+        #     if _truthy(gepetto.config.get_config("Gemini", "ENABLE_CODE_EXECUTION", default="false")):
+        #         try:
+        #             tools_list.append(types.Tool(code_execution={}))
+        #         except Exception:
+        #             tools_list.append({"code_execution": {}})
+        # except Exception:
+        #     pass
+        # try:
+        #     if _truthy(gepetto.config.get_config("Gemini", "ENABLE_URL_CONTEXT", default="false")):
+        #         try:
+        #             tools_list.append(types.Tool(url_context={}))
+        #         except Exception:
+        #             tools_list.append({"url_context": {}})
+        # except Exception:
+        #     pass
+        # tools = tools_list or None
+
         safety_settings = [
             types.SafetySetting(
                 category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
@@ -285,13 +371,17 @@ class Gemini(LanguageModel):
         except Exception:
             thinking_cfg = None
 
+        # Avoid duplicate keys from additional options
+        additional_opts = dict(additional_model_options or {})
+        additional_opts.pop("tools", None)
+
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
             tools=tools,
             safety_settings=safety_settings,
             thinking_config=thinking_cfg if thinking_cfg else None,
             **config_kwargs,
-            **additional_model_options,
+            **additional_opts,
         )
 
         try:
@@ -314,6 +404,9 @@ class Gemini(LanguageModel):
                 saw_function_call = False
                 text_buf: list[str] = []
                 thought_buf: list[str] = []
+                # Preserve original SDK part objects to keep thought_signature bytes intact
+                raw_parts: list = []
+                sent_reasoning_done = False
 
                 def upsert_tool_call(fc_obj):
                     nonlocal next_tool_index, saw_function_call
@@ -341,6 +434,7 @@ class Gemini(LanguageModel):
                     except Exception:
                         call.function.arguments = json.dumps(_to_serializable(args) or {})
 
+                sent_final = False
                 for chunk in response_stream:
                     # Cancellation check
                     if getattr(self, "_cancel_ev", None) is not None and self._cancel_ev.is_set():
@@ -356,6 +450,7 @@ class Gemini(LanguageModel):
                     parts = (
                         chunk.candidates[0].content.parts if chunk.candidates else []
                     )
+                    finalize_on_function_call = False
                     for part in parts:
                         if getattr(part, "text", None):
                             # If this part carries Gemini thoughts, stream as reasoning summary
@@ -365,14 +460,68 @@ class Gemini(LanguageModel):
                                 if t:
                                     cb({"reasoning_summary_text_delta": t}, None)
                                     thought_buf.append(t)
+                                    # Keep the raw part with signature
+                                    raw_parts.append(part)
                             else:
+                                # If normal text begins while we were still streaming thoughts,
+                                # close the reasoning summary first to avoid interleaving.
+                                if thought_buf and not sent_reasoning_done:
+                                    try:
+                                        cb({"reasoning_summary_done": "".join(thought_buf).rstrip("\r\n")}, None)
+                                    except Exception:
+                                        pass
+                                    sent_reasoning_done = True
                                 cb(part.text, None)
                                 text_buf.append(part.text)
+                                raw_parts.append(part)
                         elif getattr(part, "function_call", None):
                             upsert_tool_call(part.function_call)
+                            raw_parts.append(part)
+                            finalize_on_function_call = True
+
+                    # If the model requested a tool call, finalize immediately; many backends pause here
+                    if finalize_on_function_call and not sent_final:
+                        output = []
+                        final_text = "".join(text_buf)
+                        if final_text:
+                            output.append({
+                                "type": "output_text",
+                                "content": [{"text": final_text}],
+                            })
+                        final_thoughts = "".join(thought_buf).rstrip("\r\n")
+                        if final_thoughts and not sent_reasoning_done:
+                            try:
+                                cb({"reasoning_summary_done": final_thoughts}, None)
+                            except Exception:
+                                pass
+                            output.append({
+                                "type": "reasoning",
+                                "summary": [{"text": final_thoughts}],
+                            })
+                            sent_reasoning_done = True
+                        for tc in pending_tool_calls:
+                            output.append({
+                                "type": "tool_call",
+                                "id": tc.id,
+                                "name": getattr(tc.function, "name", ""),
+                                "arguments": getattr(tc.function, "arguments", ""),
+                            })
+                        if getattr(self, "_cancel_ev", None) is not None and self._cancel_ev.is_set():
+                            with self._cancel_lock:
+                                self._active_stream = None
+                            return
+                        cb(response=SimpleNamespace(output=output, gemini_parts=raw_parts, parts=raw_parts))
+                        sent_final = True
+                        try:
+                            close = getattr(response_stream, "close", None)
+                            if callable(close):
+                                close()
+                        except Exception:
+                            pass
+                        break
 
                     fr = chunk.candidates[0].finish_reason if chunk.candidates else None
-                    if fr and fr != types.FinishReason.FINISH_REASON_UNSPECIFIED:
+                    if fr and getattr(types.FinishReason, "FINISH_REASON_UNSPECIFIED", None) is not None and fr != types.FinishReason.FINISH_REASON_UNSPECIFIED:
                         # Build a Responses-like final object so CLI can extract tool calls
                         output = []
                         final_text = "".join(text_buf)
@@ -404,7 +553,41 @@ class Gemini(LanguageModel):
                             with self._cancel_lock:
                                 self._active_stream = None
                             return
-                        cb(response=SimpleNamespace(output=output))
+                        cb(response=SimpleNamespace(output=output, gemini_parts=raw_parts, parts=raw_parts))
+                        sent_final = True
+                # If the stream ended without an explicit finish_reason, flush what we have
+                if not sent_final and (saw_function_call or text_buf or thought_buf or pending_tool_calls):
+                    output = []
+                    final_text = "".join(text_buf)
+                    if final_text:
+                        output.append({
+                            "type": "output_text",
+                            "content": [{"text": final_text}],
+                        })
+                    final_thoughts = "".join(thought_buf).rstrip("\r\n")
+                    if final_thoughts and not sent_reasoning_done:
+                        try:
+                            cb({"reasoning_summary_done": final_thoughts}, None)
+                        except Exception:
+                            pass
+                        output.append({
+                            "type": "reasoning",
+                            "summary": [{"text": final_thoughts}],
+                        })
+                        sent_reasoning_done = True
+                    for tc in pending_tool_calls:
+                        output.append({
+                            "type": "tool_call",
+                            "id": tc.id,
+                            "name": getattr(tc.function, "name", ""),
+                            "arguments": getattr(tc.function, "arguments", ""),
+                        })
+                    # Skip delivering final output if canceled
+                    if getattr(self, "_cancel_ev", None) is not None and self._cancel_ev.is_set():
+                        with self._cancel_lock:
+                            self._active_stream = None
+                        return
+                    cb(response=SimpleNamespace(output=output, gemini_parts=raw_parts, parts=raw_parts))
             else:
                 response = self.client.models.generate_content(
                     model=self.model_name,
@@ -414,15 +597,19 @@ class Gemini(LanguageModel):
 
                 message = SimpleNamespace(content="", tool_calls=[])
                 final_thoughts = []
+                raw_parts: list = []
                 parts = (
                     response.candidates[0].content.parts if response.candidates else []
                 )
                 for part in parts:
                     if getattr(part, "text", None):
                         if getattr(part, "thought", False):
-                            final_thoughts.append((part.text or "").rstrip("\r\n"))
+                            txt = (part.text or "").rstrip("\r\n")
+                            final_thoughts.append(txt)
+                            raw_parts.append(part)
                         else:
                             message.content += part.text
+                            raw_parts.append(part)
                     elif getattr(part, "function_call", None):
                         fc = part.function_call
                         message.tool_calls.append(
@@ -437,6 +624,7 @@ class Gemini(LanguageModel):
                                 ),
                             )
                         )
+                        raw_parts.append(part)
 
                 if stream:
                     # Adapt to streaming-like callbacks: emit text deltas, then final response
@@ -463,7 +651,7 @@ class Gemini(LanguageModel):
                             "name": getattr(tc.function, "name", ""),
                             "arguments": getattr(tc.function, "arguments", ""),
                         })
-                    cb(response=SimpleNamespace(output=output))
+                    cb(response=SimpleNamespace(output=output, gemini_parts=raw_parts, parts=raw_parts))
                 else:
                     # Non-streaming: deliver a final Responses-like object directly
                     output = []
@@ -484,7 +672,7 @@ class Gemini(LanguageModel):
                             "name": getattr(tc.function, "name", ""),
                             "arguments": getattr(tc.function, "arguments", ""),
                         })
-                    cb(response=SimpleNamespace(output=output))
+                    cb(response=SimpleNamespace(output=output, gemini_parts=raw_parts, parts=raw_parts))
 
         except Exception as e:
             # Suppress network/stream errors if the request was cancelled

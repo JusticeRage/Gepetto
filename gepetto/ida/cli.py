@@ -171,8 +171,46 @@ class GepettoCLI(ida_kernwin.cli_t):
                         pass
                 return tc_list
 
+            def _response_gemini_parts(resp):
+                # Preserve raw Gemini parts (with thought signatures) if provided
+                raw = getattr(resp, "gemini_parts", None) or getattr(resp, "parts", None)
+                if isinstance(raw, list) and raw:
+                    return raw
+                # Some clients may include in model_dump
+                if hasattr(resp, "model_dump"):
+                    try:
+                        data = resp.model_dump()
+                        rp = data.get("parts") or data.get("gemini_parts")
+                        if isinstance(rp, list) and rp:
+                            return rp
+                    except Exception:
+                        pass
+                return None
+
             text = _response_text(response)
             tool_calls_ns = _response_tool_calls(response)
+            gemini_parts = _response_gemini_parts(response)
+            # Optional debug: log presence of thought signatures
+            try:
+                dbg = gepetto.config.get_config("Gemini", "DEBUG_THOUGHT_SIGNATURES", default="false")
+                if str(dbg).strip().lower() in ("1", "true", "yes", "on") and isinstance(gemini_parts, list):
+                    import base64 as _b64
+                    sigs = []
+                    for p in gemini_parts:
+                        sig = getattr(p, "thought_signature", None)
+                        if sig is None and isinstance(p, dict):
+                            sig = p.get("thought_signature")
+                        if isinstance(sig, (bytes, bytearray)):
+                            sigs.append(_b64.b64encode(sig).decode("utf-8"))
+                        elif isinstance(sig, str) and sig:
+                            # assume already base64
+                            sigs.append(sig)
+                    if sigs:
+                        STATUS.log(f"Thought signatures: {len(sigs)} present; first={sigs[0][:16]}…")
+                    else:
+                        STATUS.log("Thought signatures: none present in this turn")
+            except Exception:
+                pass
             reasoning_summary = _response_reasoning_summary(response)
             if tool_calls_ns:
                 # Close any ongoing styled reasoning summary stream before tool logs
@@ -192,13 +230,14 @@ class GepettoCLI(ida_kernwin.cli_t):
                     }
                     for tc in tool_calls_ns
                 ]
-                MESSAGES.append(
-                    {
-                        "role": "assistant",
-                        "content": text or "",
-                        "tool_calls": tool_calls,
-                    }
-                )
+                msg = {
+                    "role": "assistant",
+                    "content": text or "",
+                    "tool_calls": tool_calls,
+                }
+                if gemini_parts:
+                    msg["parts"] = gemini_parts
+                MESSAGES.append(msg)
                 for tc in tool_calls_ns:
                     STATUS.log(f"→ Tool: {tc.function.name}({(tc.function.arguments or '')[:120]}...)")
                     STATUS.set_status(f"Running tool: {tc.function.name}", busy=True)
@@ -255,7 +294,10 @@ class GepettoCLI(ida_kernwin.cli_t):
                     STATUS.summary_stream_end()
                 except Exception:
                     pass
-                MESSAGES.append({"role": "assistant", "content": text or ""})
+                final_msg = {"role": "assistant", "content": text or ""}
+                if gemini_parts:
+                    final_msg["parts"] = gemini_parts
+                MESSAGES.append(final_msg)
                 STATUS.set_status("Done", busy=False)
                 STATUS.clear_reasoning()
                 STATUS.log("✔ Completed turn")
