@@ -443,6 +443,9 @@ class GPT(LanguageModel):
                     **opts,
                 ) as stream_ctx:
                     sent_thinking = False
+                    saw_reasoning = False
+                    summary_done = False
+                    buffered_output: list[str] = []
                     for event in stream_ctx:
                         etype = getattr(event, "type", None)
                         # Show a Thinking... status when any reasoning events begin
@@ -452,17 +455,80 @@ class GPT(LanguageModel):
                             except Exception:
                                 pass
                             sent_thinking = True
+                            saw_reasoning = True
+
+                        # Reasoning text live updates (support both reasoning_text.* and generic reasoning.*)
+                        if etype == "response.reasoning_text.delta" or (isinstance(etype, str) and etype.startswith("response.reasoning") and etype.endswith(".delta") and ("summary" not in etype)):
+                            delta = getattr(event, "delta", None)
+                            if isinstance(delta, str) and delta:
+                                cb({"reasoning_text_delta": delta}, None)
+                            continue
+                        if etype == "response.reasoning_text.done" or (isinstance(etype, str) and etype.startswith("response.reasoning") and etype.endswith(".done") and ("summary" not in etype)):
+                            text = getattr(event, "text", None)
+                            if isinstance(text, str):
+                                cb({"reasoning_text_done": text}, None)
+                            continue
+
+                        # Reasoning summary stream and final
+                        if isinstance(etype, str) and "reasoning_summary" in etype:
+                            # Stream partial summary steps
+                            if etype.endswith("summary_part.delta") or etype.endswith("reasoning_summary_part.delta"):
+                                piece = getattr(event, "delta", None) or getattr(event, "text", None)
+                                if isinstance(piece, str) and piece:
+                                    cb({"reasoning_summary_part_delta": piece}, None)
+                                continue
+                            # Some providers emit "added" for completed step texts
+                            if etype.endswith("summary_part.added") or etype.endswith("reasoning_summary_part.added"):
+                                piece = getattr(event, "text", None) or getattr(event, "delta", None)
+                                if isinstance(piece, str) and piece:
+                                    cb({"reasoning_summary_part_delta": piece + "\n"}, None)
+                                continue
+                            # Stream the final coherent summary text
+                            if etype.endswith("reasoning_summary_text.delta") or etype.endswith("summary_text.delta"):
+                                piece = getattr(event, "delta", None) or getattr(event, "text", None)
+                                if isinstance(piece, str) and piece:
+                                    cb({"reasoning_summary_text_delta": piece}, None)
+                                continue
+                            if etype.endswith("reasoning_summary_text.done") or etype.endswith("summary_text.done") or etype.endswith("summary.done"):
+                                text = getattr(event, "text", None)
+                                if isinstance(text, str) and text:
+                                    cb({"reasoning_summary_done": text}, None)
+                                summary_done = True
+                                if buffered_output:
+                                    try:
+                                        cb("".join(buffered_output), None)
+                                    except Exception:
+                                        pass
+                                    buffered_output.clear()
+                                continue
                         # Stream textual output chunks
                         if etype == "response.output_text.delta":
                             delta = getattr(event, "delta", None)
                             if isinstance(delta, str) and delta:
-                                cb(delta, None)
+                                if saw_reasoning and not summary_done:
+                                    buffered_output.append(delta)
+                                else:
+                                    cb(delta, None)
                         # End of textual output
                         elif etype == "response.output_text.done":
-                            pass
+                            # If we buffered output waiting for summary but never saw a summary_done,
+                            # flush now to avoid losing text for models that don't emit summaries.
+                            if buffered_output and not summary_done:
+                                try:
+                                    cb("".join(buffered_output), None)
+                                except Exception:
+                                    pass
+                                buffered_output.clear()
                         else:
                             # Other event types are ignored here; tool calls will be surfaced in the final object
                             pass
+                    # Finalize: ensure any buffered output is flushed prior to delivering the final object
+                    if buffered_output:
+                        try:
+                            cb("".join(buffered_output), None)
+                        except Exception:
+                            pass
+                        buffered_output.clear()
                     final = stream_ctx.get_final_response()
                     cb(response=final)
                     return

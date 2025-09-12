@@ -42,6 +42,17 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         header.addWidget(self._status_label)
         header.addWidget(self._progress)
 
+        # Reasoning status (compact, 1–2 lines)
+        self._reasoning = QtWidgets.QPlainTextEdit()
+        self._reasoning.setReadOnly(True)
+        self._reasoning.setMaximumBlockCount(4)
+        self._reasoning.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        # Keep height around ~2 lines
+        fm = self.parent.fontMetrics()
+        two_lines = int(fm.lineSpacing() * 2.2)
+        self._reasoning.setFixedHeight(two_lines)
+        self._reasoning.setPlaceholderText("Reasoning…")
+
         # Log area
         self._log = QtWidgets.QPlainTextEdit()
         self._log.setReadOnly(True)
@@ -64,6 +75,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         controls.addWidget(btn_clear)
 
         layout.addLayout(header)
+        layout.addWidget(self._reasoning)
         layout.addWidget(self._log)
         layout.addLayout(controls)
         # Mark as ready and request flush of any pending logs/status
@@ -110,6 +122,33 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
 
         if self._autoscroll.isChecked():
             self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
+
+    # Reasoning box helpers
+    def set_reasoning_text(self, text: str):
+        if QtWidgets is None or self.parent is None:
+            return
+        # Replace contents fully
+        try:
+            self._reasoning.setPlainText(text or "")
+        except Exception:
+            pass
+
+    def append_reasoning_delta(self, text: str):
+        if QtWidgets is None or self.parent is None or QtGui is None:
+            return
+        self._reasoning.moveCursor(QtGui.QTextCursor.MoveOperation.End)
+        self._reasoning.insertPlainText(text)
+        # Keep caret visible without scrollbars
+        cursor = self._reasoning.textCursor()
+        self._reasoning.setTextCursor(cursor)
+
+    def clear_reasoning(self):
+        if QtWidgets is None or self.parent is None:
+            return
+        try:
+            self._reasoning.clear()
+        except Exception:
+            pass
 
     # Stream text into the log without creating new lines per chunk.
     # Starts a new timestamped row with the given prefix on first call,
@@ -170,6 +209,9 @@ class _StatusPanelManager:
         self._stream_buffer: list[str] = []
         self._stream_prefix_for_batch: Optional[str] = None
         self._last_flush_time = 0
+        # Reasoning streaming buffer/state
+        self._pending_reasoning_text: Optional[str] = None
+        self._reasoning_buffer: list[str] = []
 
     def _is_ready(self) -> bool:
         return bool(self._form and getattr(self._form, "_log", None))
@@ -210,6 +252,13 @@ class _StatusPanelManager:
             # Clear pending stream buffer after flush
             self._pending_stream_text.clear()
             self._pending_stream_prefix = None
+        # Apply pending reasoning text
+        if self._pending_reasoning_text is not None:
+            try:
+                self._form.set_reasoning_text(self._pending_reasoning_text)
+            except Exception:
+                pass
+            self._pending_reasoning_text = None
 
     def _flush_via_exec(self):
         try:
@@ -352,6 +401,60 @@ class _StatusPanelManager:
         last = text[-1:] if text else ""
         if any(ch in text for ch in punct) or last in punct or len("".join(self._stream_buffer)) >= 160:
             self._flush_stream_buffer()
+
+    # ----------------------- Reasoning streaming API ----------------------
+    def set_reasoning(self, text: str):
+        self._pending_reasoning_text = text
+        if not self._is_ready():
+            return
+        def _do():
+            try:
+                self._form.set_reasoning_text(text)
+            except Exception:
+                return 0
+            return 1
+        try:
+            ida_kernwin.execute_sync(_do, self._MFF_FAST)
+        except Exception:
+            pass
+
+    def reasoning_stream(self, text_delta: str):
+        if not self._is_ready():
+            # Coalesce while not ready; last write wins when flushed
+            self._pending_reasoning_text = (self._pending_reasoning_text or "") + (text_delta or "")
+            return
+        self._reasoning_buffer.append(text_delta)
+        # Flush on whitespace heuristic similar to log_stream
+        punct = {" ", "\n", "\t", ".", ",", ";", ":", "!", "?", ")", "]", "}"}
+        last = text_delta[-1:] if text_delta else ""
+        if any(ch in text_delta for ch in punct) or last in punct or len("".join(self._reasoning_buffer)) >= 160:
+            joined = "".join(self._reasoning_buffer)
+            self._reasoning_buffer.clear()
+            def _do():
+                try:
+                    self._form.append_reasoning_delta(joined)
+                except Exception:
+                    return 0
+                return 1
+            try:
+                ida_kernwin.execute_sync(_do, self._MFF_FAST)
+            except Exception:
+                pass
+
+    def clear_reasoning(self):
+        self._pending_reasoning_text = ""
+        if not self._is_ready():
+            return
+        def _do():
+            try:
+                self._form.clear_reasoning()
+            except Exception:
+                return 0
+            return 1
+        try:
+            ida_kernwin.execute_sync(_do, self._MFF_FAST)
+        except Exception:
+            pass
 
     def end_stream(self):
         # Flush any remaining stream buffer

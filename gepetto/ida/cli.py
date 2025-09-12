@@ -59,6 +59,11 @@ class GepettoCLI(ida_kernwin.cli_t):
             STATUS.ensure_shown()
             STATUS.set_model(str(gepetto.config.model))
             STATUS.set_status("Waiting for model...", busy=True)
+            # Clear prior reasoning overlay at the start of each turn
+            try:
+                STATUS.clear_reasoning()
+            except Exception:
+                pass
             STATUS.log(f"User: {line}")
         except Exception as e:
             try:
@@ -67,6 +72,8 @@ class GepettoCLI(ida_kernwin.cli_t):
                 pass
 
         MESSAGES.append({"role": "user", "content": line})
+
+        streamed_summary_seen = False
 
         def handle_response(response):
             # Parse a Responses API Response into text and tool calls
@@ -225,8 +232,13 @@ class GepettoCLI(ida_kernwin.cli_t):
                 except Exception:
                     pass
                 STATUS.end_stream()
-                if reasoning_summary:
-                    STATUS.log(f"🧠 Reasoning summary: {reasoning_summary}")
+                if reasoning_summary and not streamed_summary_seen:
+                    # Ensure any prior streaming line is finished, then log final summary in main output
+                    try:
+                        STATUS.end_stream()
+                    except Exception:
+                        pass
+                    STATUS.log(f"Thinking Summary: {reasoning_summary}")
                 MESSAGES.append({"role": "assistant", "content": text or ""})
                 STATUS.set_status("Done", busy=False)
                 STATUS.log("✔ Completed turn")
@@ -234,8 +246,95 @@ class GepettoCLI(ida_kernwin.cli_t):
         def stream_and_handle():
             message = SimpleNamespace(content="", tool_calls=[])
             model_name = str(gepetto.config.model)
+            summary_text_started = False
+            # Extract a concise heading for the reasoning strip from reasoning_text
+            # or, if absent, from the first line / **Header** of the summary stream.
+            heading_buf = ""
+            current_heading = None
+            last_heading_title = None  # without ellipsis
+            summary_buffer = ""
+
+            def _maybe_update_heading(delta_text: str):
+                nonlocal heading_buf, current_heading, last_heading_title
+                if not isinstance(delta_text, str) or not delta_text:
+                    return
+                heading_buf += delta_text
+                # Prefer a Markdown bold header like **Step Title** at the start
+                try:
+                    import re as _re
+                    m = _re.search(r"^\s*\*\*([^\*][^\*]*)\*\*", heading_buf)
+                    if m:
+                        title = m.group(1).strip()
+                    else:
+                        # Fallback: first non-empty line
+                        title = None
+                        for line in heading_buf.splitlines():
+                            s = line.strip()
+                            if s:
+                                title = s
+                                break
+                    if title:
+                        last_heading_title = title
+                        shown = title if title.endswith("...") else f"{title}..."
+                        if shown != current_heading:
+                            try:
+                                STATUS.set_reasoning(shown)
+                            except Exception:
+                                pass
+                            current_heading = shown
+                except Exception:
+                    pass
+
+            def _strip_summary_header(text: str) -> str:
+                """Remove duplicated header from the start of the summary text.
+
+                Behavior:
+                - If a Markdown header begins ("**Title") but the closing "**"
+                  hasn't arrived yet, return "" to continue buffering.
+                - If a full Markdown header is present, strip it and any
+                  following blank lines.
+                - If the first line equals the last parsed heading title
+                  (non-markdown), strip that line.
+                - Otherwise, return the text unchanged.
+                """
+                if not isinstance(text, str) or not text:
+                    return text or ""
+                import re as _re
+
+                s = text
+                ls = s.lstrip()
+                if ls.startswith("**"):
+                    # Incomplete Markdown header? keep buffering.
+                    close = ls.find("**", 2)
+                    if close == -1 and "\n" not in ls:
+                        return ""
+                    # If we have a closing **, strip header and any trailing newlines
+                    if close != -1:
+                        after = ls[close + 2 :]
+                        after = after.lstrip(" \t\r\n")
+                        # Map back to original string offset by the amount stripped from left
+                        stripped_count = len(s) - len(ls)
+                        s = s[:stripped_count] + after
+                    else:
+                        # Header line broken across lines: treat first line as header; strip it
+                        first_line, sep, rest = s.partition("\n")
+                        if sep:
+                            s = rest.lstrip(" \t\r\n")
+                        else:
+                            return ""  # only header so far
+
+                # Non-markdown header duplication: drop if equals last heading
+                if last_heading_title:
+                    first_line, sep, rest = s.partition("\n")
+                    def _clean_title(t: str) -> str:
+                        return t.strip().strip('*').rstrip(':').strip()
+                    if _clean_title(first_line) == _clean_title(last_heading_title):
+                        s = rest.lstrip(" \t\r\n") if sep else ""
+
+                return s
 
             def on_chunk(delta=None, finish_reason=None, response=None):
+                nonlocal summary_text_started, summary_buffer
                 # Final Responses API object
                 if response is not None:
                     try:
@@ -246,6 +345,67 @@ class GepettoCLI(ida_kernwin.cli_t):
                 if isinstance(delta, dict) and delta.get("status") == "thinking":
                     STATUS.set_status("Thinking...", busy=True)
                     return
+                # OpenAI Responses: live reasoning UI updates
+                if isinstance(delta, dict):
+                    rt = delta.get("reasoning_text_delta")
+                    if isinstance(rt, str) and rt:
+                        _maybe_update_heading(rt)
+                        return
+                    rtd = delta.get("reasoning_text_done")
+                    if isinstance(rtd, str):
+                        _maybe_update_heading(rtd)
+                        return
+                    nonlocal streamed_summary_seen
+                    # Stream mid-step summary parts and the final coherent summary into the main log
+                    rspd = delta.get("reasoning_summary_part_delta") or delta.get("reasoning_summary_part")
+                    if isinstance(rspd, str) and rspd:
+                        # Heuristic: new step headers often begin with **Title**
+                        if rspd.lstrip().startswith("**"):
+                            # New step starting: reset heading parse and any ongoing summary stream
+                            heading_buf = ""
+                            if summary_text_started:
+                                STATUS.end_stream()
+                                summary_text_started = False
+                            summary_buffer = ""
+                        _maybe_update_heading(rspd)
+                        STATUS.log_stream(rspd, prefix="Thinking: ")
+                        streamed_summary_seen = True
+                        return
+                    rstd = delta.get("reasoning_summary_text_delta")
+                    if isinstance(rstd, str) and rstd:
+                        # If a new summary step begins while we were already streaming, restart
+                        if summary_text_started and (rstd.lstrip().startswith("**") or (last_heading_title and rstd.strip().startswith(last_heading_title))):
+                            STATUS.end_stream()
+                            summary_text_started = False
+                            summary_buffer = ""
+                        # Accumulate until we can safely strip header and start printing
+                        heading_buf = ""
+                        _maybe_update_heading(rstd)
+                        summary_buffer += rstd
+                        if not summary_text_started:
+                            stripped = _strip_summary_header(summary_buffer)
+                            # Start streaming once we have something meaningful after header
+                            if stripped:
+                                STATUS.end_stream()
+                                summary_text_started = True
+                                STATUS.log_stream(stripped, prefix="Thinking Summary: ")
+                                summary_buffer = ""
+                        else:
+                            STATUS.log_stream(rstd, prefix="Thinking Summary: ")
+                        streamed_summary_seen = True
+                        return
+                    rsd = delta.get("reasoning_summary_done")
+                    if isinstance(rsd, str):
+                        # If we buffered but never started streaming, flush now after stripping header
+                        if not summary_text_started and summary_buffer:
+                            stripped = _strip_summary_header(summary_buffer)
+                            if stripped:
+                                STATUS.log_stream(stripped, prefix="Thinking Summary: ")
+                        STATUS.end_stream()
+                        summary_buffer = ""
+                        summary_text_started = False
+                        streamed_summary_seen = True
+                        return
                 if isinstance(delta, str):
                     # Stream to panel without newlines while printing to console.
                     STATUS.log_stream(delta, prefix=f"{model_name}: ")
