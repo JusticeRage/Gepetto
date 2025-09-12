@@ -277,10 +277,19 @@ class Gemini(LanguageModel):
             ),
         ]
 
+        # Enable Gemini "thinking" stream so we can display reasoning steps.
+        # Latest docs recommend ThinkingConfig(include_thoughts=True) for
+        # rolling, incremental summaries during generation.
+        try:
+            thinking_cfg = types.ThinkingConfig(include_thoughts=True)
+        except Exception:
+            thinking_cfg = None
+
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
             tools=tools,
             safety_settings=safety_settings,
+            thinking_config=thinking_cfg if thinking_cfg else None,
             **config_kwargs,
             **additional_model_options,
         )
@@ -304,6 +313,7 @@ class Gemini(LanguageModel):
                 pending_tool_calls: list = []
                 saw_function_call = False
                 text_buf: list[str] = []
+                thought_buf: list[str] = []
 
                 def upsert_tool_call(fc_obj):
                     nonlocal next_tool_index, saw_function_call
@@ -348,8 +358,16 @@ class Gemini(LanguageModel):
                     )
                     for part in parts:
                         if getattr(part, "text", None):
-                            cb(part.text, None)
-                            text_buf.append(part.text)
+                            # If this part carries Gemini thoughts, stream as reasoning summary
+                            if getattr(part, "thought", False):
+                                t = part.text or ""
+                                t = t.rstrip("\r\n")  # avoid extra blank lines at end
+                                if t:
+                                    cb({"reasoning_summary_text_delta": t}, None)
+                                    thought_buf.append(t)
+                            else:
+                                cb(part.text, None)
+                                text_buf.append(part.text)
                         elif getattr(part, "function_call", None):
                             upsert_tool_call(part.function_call)
 
@@ -362,6 +380,17 @@ class Gemini(LanguageModel):
                             output.append({
                                 "type": "output_text",
                                 "content": [{"text": final_text}],
+                            })
+                        # Emit reasoning summary done and include final summary in the object
+                        final_thoughts = "".join(thought_buf).rstrip("\r\n")
+                        if final_thoughts:
+                            try:
+                                cb({"reasoning_summary_done": final_thoughts}, None)
+                            except Exception:
+                                pass
+                            output.append({
+                                "type": "reasoning",
+                                "summary": [{"text": final_thoughts}],
                             })
                         for tc in pending_tool_calls:
                             output.append({
@@ -384,12 +413,16 @@ class Gemini(LanguageModel):
                 )
 
                 message = SimpleNamespace(content="", tool_calls=[])
+                final_thoughts = []
                 parts = (
                     response.candidates[0].content.parts if response.candidates else []
                 )
                 for part in parts:
                     if getattr(part, "text", None):
-                        message.content += part.text
+                        if getattr(part, "thought", False):
+                            final_thoughts.append((part.text or "").rstrip("\r\n"))
+                        else:
+                            message.content += part.text
                     elif getattr(part, "function_call", None):
                         fc = part.function_call
                         message.tool_calls.append(
@@ -409,11 +442,19 @@ class Gemini(LanguageModel):
                     # Adapt to streaming-like callbacks: emit text deltas, then final response
                     if message.content:
                         cb(message.content, None)
+                    if final_thoughts:
+                        joined = "".join(final_thoughts).rstrip("\r\n")
+                        cb({"reasoning_summary_done": joined}, None)
                     output = []
                     if message.content:
                         output.append({
                             "type": "output_text",
                             "content": [{"text": message.content}],
+                        })
+                    if final_thoughts:
+                        output.append({
+                            "type": "reasoning",
+                            "summary": [{"text": "".join(final_thoughts).rstrip("\r\n")}],
                         })
                     for tc in message.tool_calls:
                         output.append({
@@ -430,6 +471,11 @@ class Gemini(LanguageModel):
                         output.append({
                             "type": "output_text",
                             "content": [{"text": message.content}],
+                        })
+                    if final_thoughts:
+                        output.append({
+                            "type": "reasoning",
+                            "summary": [{"text": "".join(final_thoughts).rstrip("\r\n")}],
                         })
                     for tc in message.tool_calls:
                         output.append({
