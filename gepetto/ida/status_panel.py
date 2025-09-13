@@ -23,6 +23,8 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._build_ui()
 
     def OnClose(self, form):
+        from gepetto.ida.status_panel import panel
+        panel.form_closed()
         pass
 
     def _build_ui(self):
@@ -60,13 +62,18 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         try:
             if QtGui is not None:
                 pal = self.parent.palette()
-                disabled_color = pal.color(QtGui.QPalette.Disabled, QtGui.QPalette.Text)
-                self._reason_label.setStyleSheet(f"color: {disabled_color.name()};")
+                fg_color = pal.color(QtGui.QPalette.WindowText)
+                bg_color = pal.color(QtGui.QPalette.Window)
+                r = (fg_color.red() + bg_color.red()) // 2
+                g = (fg_color.green() + bg_color.green()) // 2
+                b = (fg_color.blue() + bg_color.blue()) // 2
+                dim_color = QtGui.QColor(r, g, b)
+                self._reason_label.setStyleSheet(f"color: {dim_color.name()};")
             else:
-                self._reason_label.setStyleSheet("color: #6e6e6e;")
+                self._reason_label.setStyleSheet("color: #888888;")
         except Exception:
             try:
-                self._reason_label.setStyleSheet("color: #6e6e6e;")
+                self._reason_label.setStyleSheet("color: #888888;")
             except Exception:
                 pass
         # Dedicated container that auto-hides when no reasoning event is active
@@ -414,7 +421,15 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         italic_fmt.setFontItalic(True)
         # Dim the summary text
         try:
-            italic_fmt.setForeground(QtGui.QBrush(QtGui.QColor(102, 102, 102)))  # #666
+            # italic_fmt.setForeground(QtGui.QBrush(QtGui.QColor(102, 102, 102)))  # #666
+            pal = self._log.palette()
+            fg_color = pal.color(QtGui.QPalette.Text)
+            bg_color = pal.color(QtGui.QPalette.Base)
+            r = (fg_color.red() + bg_color.red()) // 2
+            g = (fg_color.green() + bg_color.green()) // 2
+            b = (fg_color.blue() + bg_color.blue()) // 2
+            dim_color = QtGui.QColor(r, g, b)
+            italic_fmt.setForeground(QtGui.QBrush(dim_color))
         except Exception:
             pass
         cursor.setCharFormat(italic_fmt)
@@ -561,6 +576,7 @@ class _StatusPanelManager:
         # Stop/cancel support
         self._on_stop = None
         self._stopped = False
+        self._docked = False
 
     def _is_ready(self) -> bool:
         return bool(self._form and getattr(self._form, "_log", None))
@@ -617,6 +633,15 @@ class _StatusPanelManager:
 
     def ensure_shown(self):
         # For menu/CLI activation, we're likely on the UI thread. Try direct Show().
+        if self._form is not None:
+            try:
+                # If the form is already created, just show it
+                self._form.Show()
+                return
+            except Exception:
+                # If Show() fails, the form is likely in a bad state, so we recreate it
+                # self._form = None
+                pass
         try:
             if self._form is None:
                 self._form = GepettoStatusForm()
@@ -625,15 +650,6 @@ class _StatusPanelManager:
                     "Gepetto Status",
                     options=(ida_kernwin.PluginForm.WOPN_PERSIST | ida_kernwin.PluginForm.WOPN_DP_RIGHT),
                 )
-                # Try docking near Output window if APIs are available
-                try:
-                    tw = self._form.GetWidget()
-                    if hasattr(ida_kernwin, "find_widget") and hasattr(ida_kernwin, "set_dock_pos"):
-                        outw = ida_kernwin.find_widget("Output window")
-                        if outw is not None:
-                            ida_kernwin.set_dock_pos(tw, outw, getattr(ida_kernwin, "DP_RIGHT", 2), 0, 0, 0, 0, True)
-                except Exception:
-                    pass
                 # Request a flush on next loop to apply any pending updates
                 if QtCore is not None:
                     QtCore.QTimer.singleShot(0, self._flush_via_exec)
@@ -649,15 +665,6 @@ class _StatusPanelManager:
                         "Gepetto Status",
                         options=(ida_kernwin.PluginForm.WOPN_PERSIST | ida_kernwin.PluginForm.WOPN_DP_RIGHT),
                     )
-                    # Try docking via APIs
-                    try:
-                        tw = self._form.GetWidget()
-                        if hasattr(ida_kernwin, "find_widget") and hasattr(ida_kernwin, "set_dock_pos"):
-                            outw = ida_kernwin.find_widget("Output window")
-                            if outw is not None:
-                                ida_kernwin.set_dock_pos(tw, outw, getattr(ida_kernwin, "DP_RIGHT", 2), 0, 0, 0, 0, True)
-                    except Exception:
-                        pass
                     if QtCore is not None:
                         QtCore.QTimer.singleShot(0, self._flush_via_exec)
             except Exception:
@@ -982,6 +989,26 @@ class _StatusPanelManager:
                 self._on_stop()
         except Exception:
             pass
+
+    def dock(self):
+        if self._docked or self._form is None:
+            return
+        try:
+            tw = self._form.GetWidget()
+            if hasattr(ida_kernwin, "find_widget") and hasattr(ida_kernwin, "set_dock_pos"):
+                main_window = None
+                for widget in QtWidgets.QApplication.topLevelWidgets():
+                    if isinstance(widget, QtWidgets.QMainWindow):
+                        main_window = widget
+                        break
+                if main_window is not None:
+                    ida_kernwin.set_dock_pos(tw, main_window, getattr(ida_kernwin, "DP_RIGHT", 2), 0, 0, 0, 0, True)
+                    self._docked = True
+        except Exception:
+            pass
+
+    def form_closed(self):
+        self._form = None
 
 
 # Singleton instance

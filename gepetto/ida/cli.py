@@ -528,6 +528,43 @@ class GepettoCLI(ida_kernwin.cli_t):
                     STATUS.end_stream()
                     STATUS.log("✔ Completed turn")
 
+            # Optional debug: show outbound thought signatures across the full assistant history
+            try:
+                dbg = gepetto.config.get_config("Gemini", "DEBUG_THOUGHT_SIGNATURES", default="false")
+                if str(dbg).strip().lower() in ("1", "true", "yes", "on"):
+                    import base64 as _b64
+                    total = 0
+                    last = 0
+                    first_b64 = None
+                    assistants = 0
+                    for m in MESSAGES:
+                        if not (isinstance(m, dict) and m.get("role") == "assistant" and isinstance(m.get("parts"), list)):
+                            continue
+                        assistants += 1
+                        turn_count = 0
+                        for p in m["parts"]:
+                            sig = getattr(p, "thought_signature", None)
+                            if sig is None and isinstance(p, dict):
+                                sig = p.get("thought_signature")
+                            if isinstance(sig, (bytes, bytearray)) and sig:
+                                b64 = _b64.b64encode(sig).decode("utf-8")
+                                if first_b64 is None:
+                                    first_b64 = b64
+                                total += 1
+                                turn_count += 1
+                            elif isinstance(sig, str) and sig:
+                                if first_b64 is None:
+                                    first_b64 = sig
+                                total += 1
+                                turn_count += 1
+                        last = turn_count  # overwritten until final assistant is reached
+                    if total:
+                        STATUS.log(f"Sending thought signatures: total={total} across {assistants} assistant turns; last={last}; first={ (first_b64 or '')[:16] }…")
+                    else:
+                        STATUS.log("Sending thought signatures: total=0 (none across assistant history)")
+            except Exception:
+                pass
+
             gepetto.config.model.query_model_async(
                 MESSAGES,
                 on_chunk,

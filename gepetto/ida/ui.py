@@ -17,6 +17,18 @@ import gepetto.models.model_manager
 
 _ = gepetto.config._
 
+# Use PySide6 exclusively (IDA 9.x). Do not mix bindings.
+try:
+    from PySide6 import QtWidgets, QtCore, QtGui  # type: ignore
+except Exception:
+    QtWidgets = QtCore = QtGui = None  # Fallback to console-only logging
+
+
+class DockingHooks(idaapi.UI_Hooks):
+    def ready_to_run(self):
+        STATUS.ensure_shown()
+        STATUS.dock()
+
 
 # =============================================================================
 # Setup the menus, hotkeys and cli in IDA
@@ -144,6 +156,10 @@ class GepettoPlugin(idaapi.plugin_t):
         # Register context menu actions
         self.menu = ContextMenuHooks()
         self.menu.hook()
+
+        # Docking hook
+        self.docking_hook = DockingHooks()
+        self.docking_hook.hook()
 
         # Register CLI
         register_cli()
