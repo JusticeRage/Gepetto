@@ -78,7 +78,7 @@ def load_config():
             model = get_fallback_model()
             print(f"Defaulted to {str(model)}.")
         except RuntimeError:
-            print(_("No model available. Please edit the configuration file and try again."))
+            print(_("Gepetto: No model available. Please edit the configuration file and try again."))
             model = None
 
     # Ensure Gemini section exists - this is a good place to initialize default sections if they don't exist

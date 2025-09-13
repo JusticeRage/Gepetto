@@ -18,6 +18,8 @@ AZURE_OPENAI_MODELS = [
 
 
 class AzureOpenAI(GPT):
+    # Azure OpenAI supports the Responses API.
+    use_responses_api = True
     API_VERSION = "2024-05-01-preview"
 
     @staticmethod

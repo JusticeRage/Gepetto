@@ -6,6 +6,11 @@ class LanguageModel(metaclass=abc.ABCMeta):
     def query_model_async(self, query, cb, stream, additional_model_options) -> None:
         pass
 
+    def cancel_current_request(self) -> None:
+        """Optional cancellation hook. Providers override to cancel any in‑flight request.
+        Default no-op so callers can safely invoke this even if unsupported."""
+        pass
+
     def __eq__(self, other):
         return self.get_menu_name() == other.get_menu_name()
 

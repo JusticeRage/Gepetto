@@ -9,6 +9,7 @@ import ida_hexrays
 import idc
 
 import gepetto.config
+from gepetto.ida.status_panel import panel as STATUS
 from gepetto.models.model_manager import instantiate_model
 
 _ = gepetto.config._
@@ -19,15 +20,22 @@ def comment_callback(address, view, response, start_time):
 
     :param address: The address of the function to comment
     :param view: A handle to the decompiler window
-    :param response: The comment to add or a message object returned by the
-        model.  When using tool-calling APIs the model might return a
-        ``ChatCompletionMessage`` object instead of a simple string.  In order
-    to remain backwards compatible this function accepts either and extracts
-        the textual content when necessary.
+    :param response: The comment to add, which may be a plain string or a
+        Response object from the unified API. The textual content is extracted
+        and applied as function comment.
     """
+    if getattr(STATUS, "_stopped", False):
+        return
     elapsed_time = time.time() - start_time
 
-    response_text = response.content if hasattr(response, "content") else response
+    def _to_text(resp):
+        if isinstance(resp, str):
+            return resp
+        txt = getattr(resp, "output_text", None)
+        if isinstance(txt, str) and txt:
+            return txt
+        return getattr(resp, "content", "") or ""
+    response_text = _to_text(response)
     response_text = "\n".join(textwrap.wrap(response_text, 80, replace_whitespace=False))
 
     # Add the response as a comment in IDA, but preserve any existing non-Gepetto comment
@@ -53,15 +61,22 @@ def comment_callback(address, view, response, start_time):
 def conversation_callback(response, memory):
     """Callback that prints the model's response in IDA's output window.
 
-    The ``response`` argument can either be a plain string or a message object
-    returned by :mod:`openai`.  Only the textual content is relevant here, so
-    extract it if needed.
+    The ``response`` argument can be a plain string or a Responses API
+    object; only the textual content is relevant here.
     """
 
-    text = response.content if hasattr(response, "content") else response
+    def _to_text(resp):
+        if isinstance(resp, str):
+            return resp
+        txt = getattr(resp, "output_text", None)
+        if isinstance(txt, str) and txt:
+            return txt
+        return getattr(resp, "content", "") or ""
+    text = _to_text(response)
     memory.append({"role": "assistant", "content": text})
 
     print()
+    STATUS.log(_(f"{str(gepetto.config.model)}: {text}"))
     for line in text.split("\n"):
         if not line.strip():
             continue
@@ -84,6 +99,11 @@ class ExplainHandler(idaapi.action_handler_t):
         start_time = time.time()
         decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
         v = ida_hexrays.get_widget_vdui(ctx.widget)
+        try:
+            STATUS.reset_stop()
+            STATUS.set_stop_callback(lambda: getattr(gepetto.config.model, "cancel_current_request", lambda: None)())
+        except Exception:
+            pass
         gepetto.config.model.query_model_async(
             f"Can you explain what the following C function does and suggest a better name for it?\n"
             f"Your response should use the following locale as a language: {gepetto.config.get_localization_locale()}\n"
@@ -112,7 +132,16 @@ def rename_callback(address, view, response):
     import json
     import re
 
-    response_text = response.content if hasattr(response, "content") else response
+    def _to_text(resp):
+        if isinstance(resp, str):
+            return resp
+        txt = getattr(resp, "output_text", None)
+        if isinstance(txt, str) and txt:
+            return txt
+        return getattr(resp, "content", "") or ""
+    if getattr(STATUS, "_stopped", False):
+        return
+    response_text = _to_text(response)
     names = json.loads(response_text)
 
     function_addr = idaapi.get_func(address).start_ea
@@ -175,6 +204,7 @@ def rename_callback(address, view, response):
 
     if view:
         view.refresh_view(True)
+    STATUS.log(_(f"Done! {len(replaced)} name(s) renamed."))
     print(_("Done! {count} name(s) renamed.").format(count=len(replaced)))
 
 
@@ -232,6 +262,19 @@ class SwapModelHandler(idaapi.action_handler_t):
         # Refresh the menus to reflect which model is currently selected.
         self.plugin.generate_model_select_menu()
 
+        # Update status panel
+        try:
+            from gepetto.ida.status_panel import panel as STATUS
+            STATUS.ensure_shown()
+            STATUS.set_model(str(gepetto.config.model))
+            STATUS.set_status(_("Switched model"), busy=False)
+            STATUS.log(_(f"Model switched to: {self.new_model}."))
+        except Exception as e:
+            try:
+                print(f"Failed to update status panel: {e}")
+            except Exception:
+                pass
+
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
 
@@ -250,6 +293,12 @@ class GenerateCCodeHandler(idaapi.action_handler_t):
         if not decompiler_output:
             return 0
 
+        try:
+            STATUS.reset_stop()
+            STATUS.set_stop_callback(lambda: getattr(gepetto.config.model, "cancel_current_request", lambda: None)())
+        except Exception:
+            pass
+
         gepetto.config.model.query_model_async(
             _("Please generate executable C code based on the following decompiled C code and ensure it includes all necessary header files and other information:\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
             functools.partial(self._save_c_code, view=v)
@@ -263,14 +312,20 @@ class GenerateCCodeHandler(idaapi.action_handler_t):
         :param view: A handle to the decompiler window
         :param response: The generated C code from the model
         """
+        if getattr(STATUS, "_stopped", False):
+            return
         project_name = idaapi.get_root_filename()
         func_name = idc.get_func_name(idaapi.get_screen_ea())
         file_name = f"{project_name}_{func_name}.c"
+        text = getattr(response, "output_text", None)
+        if not isinstance(text, str):
+            text = str(text or getattr(response, "content", ""))
         with open(file_name, "w", encoding="utf-8") as f:
-            f.write(response)
+            f.write(text)
 
         if view:
             view.refresh_view(False)
+        STATUS.log(_(f"{str(gepetto.config.model)} generated code saved to {file_name}"))
         print(_("{model} generated code saved to {file_name}").format(model=str(gepetto.config.model), file_name=file_name))
 
     def update(self, ctx):
@@ -291,6 +346,12 @@ class GeneratePythonCodeHandler(idaapi.action_handler_t):
         if not decompiler_output:
             return 0
 
+        try:
+            STATUS.reset_stop()
+            STATUS.set_stop_callback(lambda: getattr(gepetto.config.model, "cancel_current_request", lambda: None)())
+        except Exception:
+            pass
+
         gepetto.config.model.query_model_async(
             _("Please generate equivalent Python code based on the following decompiled C code, and provide an example of the function call:\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
             functools.partial(self._save_python_code, view=v)
@@ -304,14 +365,20 @@ class GeneratePythonCodeHandler(idaapi.action_handler_t):
         :param view: A handle to the decompiler window
         :param response: The generated python code from the model
         """
+        if getattr(STATUS, "_stopped", False):
+            return
         project_name = idaapi.get_root_filename()
         func_name = idc.get_func_name(idaapi.get_screen_ea())
         file_name = f"{project_name}_{func_name}.py"
+        text = getattr(response, "output_text", None)
+        if not isinstance(text, str):
+            text = str(text or getattr(response, "content", ""))
         with open(file_name, "w", encoding="utf-8") as f:
-            f.write(response)
+            f.write(text)
 
         if view:
             view.refresh_view(False)
+        STATUS.log(_(f"{str(gepetto.config.model)} generated code saved to {file_name}"))
         print(_("{model} generated code saved to {file_name}").format(model=str(gepetto.config.model), file_name=file_name))
 
     def update(self, ctx):
