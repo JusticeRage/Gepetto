@@ -149,7 +149,7 @@ class GepettoPlugin(idaapi.plugin_t):
             self.register_or_update_parallel_action()
         except Exception as e:
             try:
-                print(f"Failed to register parallel tool calls toggle: {e}")
+                print(_("Failed to register parallel tool calls toggle: {error}").format(error=e))
             except Exception:
                 pass
 
@@ -296,10 +296,10 @@ class _ShowStatusPanelHandler(idaapi.action_handler_t):
             STATUS.ensure_shown()
             STATUS.set_model(str(gepetto.config.model))
             STATUS.set_status("Idle", busy=False)
-            STATUS.log("Status panel opened")
+            STATUS.log(_("Status panel opened"))
         except Exception as e:
             try:
-                print(f"Failed to open status panel: {e}")
+                print(_("Failed to open status panel: {error}").format(error=e))
             except Exception:
                 pass
         return 1
@@ -322,14 +322,14 @@ class ToggleParallelToolCallsHandler(idaapi.action_handler_t):
             gepetto.config.update_config("OpenAI", "PARALLEL_TOOL_CALLS", new_val)
             try:
                 STATUS.ensure_shown()
-                STATUS.set_status("Settings updated", busy=False)
-                STATUS.log(f"Parallel tool calls: {'ON' if new_val == 'true' else 'OFF'}")
+                STATUS.set_status(_("Settings updated"), busy=False)
+                STATUS.log(_("Parallel tool calls: {state}").format(state=_("ON") if new_val == "true" else _("OFF")))
             except Exception:
                 pass
             self.plugin.register_or_update_parallel_action()
         except Exception as e:
             try:
-                print(f"Failed to toggle parallel tool calls: {e}")
+                print(_("Failed to toggle parallel tool calls: {error}").format(error=e))
             except Exception:
                 pass
         return 1

@@ -175,31 +175,8 @@ def _convert_tools(tools):
     (e.g., {"google_search": {}}, {"code_execution": {}}, {"url_context": {}})
     alongside function declarations.
     """
-    # out = []
     function_decls = []
     for t in tools or []:
-        # # Native Gemini tool passthroughs
-        # if isinstance(t, dict) and (
-        #     "google_search" in t or "code_execution" in t or "url_context" in t
-        # ):
-        #     try:
-        #         if "google_search" in t:
-        #             gs = t.get("google_search") or {}
-        #             out.append(types.Tool(google_search=gs))
-        #             continue
-        #         if "code_execution" in t:
-        #             ce = t.get("code_execution") or {}
-        #             out.append(types.Tool(code_execution=ce))
-        #             continue
-        #         if "url_context" in t:
-        #             uc = t.get("url_context") or {}
-        #             out.append(types.Tool(url_context=uc))
-        #             continue
-        #     except Exception:
-        #         # Fallback to raw dict tool if typed construction is unavailable
-        #         out.append(t)
-        #         continue
-
         # Function tools (Chat Completions or Responses style)
         if _get(t, "type") != "function":
             continue
@@ -234,17 +211,12 @@ def _convert_tools(tools):
     if function_decls:
         return [types.Tool(function_declarations=function_decls)]
     return None
-    #     try:
-    #         out.append(types.Tool(function_declarations=function_decls))
-    #     except Exception:
-    #         out.append({"function_declarations": function_decls})
-    # return out or None
 
 
 class Gemini(LanguageModel):
     @staticmethod
     def get_menu_name() -> str:
-        return "Google Gemini"
+        return _("Google Gemini")
 
     @staticmethod
     def supported_models():
@@ -305,44 +277,6 @@ class Gemini(LanguageModel):
         tools = None
         if "tools" in additional_model_options:
             tools = _convert_tools(additional_model_options.pop("tools"))
-
-        # # Build tools list: caller's function tools + optional native Gemini tools
-        # tools_list = []
-        # if "tools" in additional_model_options:
-        #     tconv = _convert_tools(additional_model_options.pop("tools")) or []
-        #     if isinstance(tconv, list):
-        #         tools_list.extend(tconv)
-        # # Optional native tools via config flags
-        # def _truthy(val):
-        #     try:
-        #         return str(val).strip().lower() in ("1", "true", "yes", "on")
-        #     except Exception:
-        #         return False
-        # try:
-        #     if _truthy(gepetto.config.get_config("Gemini", "ENABLE_GOOGLE_SEARCH", default="false")):
-        #         try:
-        #             tools_list.append(types.Tool(google_search={}))
-        #         except Exception:
-        #             tools_list.append({"google_search": {}})
-        # except Exception:
-        #     pass
-        # try:
-        #     if _truthy(gepetto.config.get_config("Gemini", "ENABLE_CODE_EXECUTION", default="false")):
-        #         try:
-        #             tools_list.append(types.Tool(code_execution={}))
-        #         except Exception:
-        #             tools_list.append({"code_execution": {}})
-        # except Exception:
-        #     pass
-        # try:
-        #     if _truthy(gepetto.config.get_config("Gemini", "ENABLE_URL_CONTEXT", default="false")):
-        #         try:
-        #             tools_list.append(types.Tool(url_context={}))
-        #         except Exception:
-        #             tools_list.append({"url_context": {}})
-        # except Exception:
-        #     pass
-        # tools = tools_list or None
 
         safety_settings = [
             types.SafetySetting(

@@ -175,7 +175,7 @@ def rename_callback(address, view, response):
 
     chooser = RenameChoose(rename_pairs)
     if chooser.Show(modal=True) < 0:
-        print("Rename cancelled by user.")
+        print(_("Rename cancelled by user."))
         return
 
     # Get all selected rows
@@ -264,7 +264,6 @@ class SwapModelHandler(idaapi.action_handler_t):
 
         # Update status panel
         try:
-            from gepetto.ida.status_panel import panel as STATUS
             STATUS.ensure_shown()
             STATUS.set_model(str(gepetto.config.model))
             STATUS.set_status(_("Switched model"), busy=False)

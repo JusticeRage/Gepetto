@@ -3,9 +3,12 @@ from typing import Optional
 
 import ida_hexrays
 import ida_kernwin
+import gepetto.config
 
 from gepetto.ida.tools.function_utils import parse_ea, resolve_ea, resolve_func, get_func_name
 from gepetto.ida.tools.tools import add_result_to_messages
+
+_ = gepetto.config._
 
 
 
@@ -41,7 +44,7 @@ def rename_lvar(
 ) -> dict:
     """Rename a local variable in a function."""
     if not old_name or not new_name:
-        raise ValueError("old_name and new_name are required")
+        raise ValueError(_("old_name and new_name are required"))
 
     f = resolve_func(ea=ea, name=func_name)
     func_name = func_name or get_func_name(f)
@@ -53,7 +56,7 @@ def rename_lvar(
     def _do():
         try:
             if not ida_hexrays.rename_lvar(ea, old_name, new_name):
-                out["error"] = f"Failed to rename lvar {old_name!r}"
+                out["error"] = _("Failed to rename lvar {old_name!r}").format(old_name=old_name)
                 return 0
             out["ok"] = True
             return 1
@@ -64,5 +67,5 @@ def rename_lvar(
     ida_kernwin.execute_sync(_do, ida_kernwin.MFF_WRITE)
 
     if not out["ok"]:
-        raise ValueError(out.get("error", "Failed to rename lvar"))
+        raise ValueError(out.get("error", _("Failed to rename lvar")))
     return out

@@ -92,7 +92,7 @@ def comment_callback(decompiler_output, pseudocode_lines, view, response, start_
             except Exception:
                 pass
             try:
-                print(f"[ERROR] Malformed JSON from model: {e}")
+                print(_("Error: Malformed JSON from model: {error}").format(error=e))
             except Exception:
                 pass
             return
@@ -116,7 +116,7 @@ def comment_callback(decompiler_output, pseudocode_lines, view, response, start_
             model=str(gepetto.config.model), time=elapsed_time))
         
     except Exception as e:
-        print("[ERROR] comment_callback:", e)
+        print(_("Error in comment callback: {error}").format(error=e))
         raise
 
 

@@ -40,7 +40,7 @@ class NovitaAI(GPT):
         if not api_key:
             print(_("Please edit the configuration file to insert your {api_provider} API key!")
                   .format(api_provider="Novita AI"))
-            raise ValueError("No valid Novita AI API key found")
+            raise ValueError(_("No valid Novita AI API key found"))
 
         proxy = gepetto.config.get_config("Gepetto", "PROXY")
 

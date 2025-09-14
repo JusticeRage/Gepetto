@@ -6,9 +6,12 @@ import ida_funcs
 import ida_hexrays
 import ida_kernwin
 import ida_name
+import gepetto.config
 
 from gepetto.ida.tools.function_utils import parse_ea, resolve_ea, resolve_func, get_func_name
 from gepetto.ida.tools.tools import add_result_to_messages
+
+_ = gepetto.config._
 
 
 def handle_get_function_code_tc(tc, messages):
@@ -51,7 +54,7 @@ def _decompile_func(ea) -> str:
             decompiled = ida_hexrays.decompile(ea)
             if not decompiled:
                 res["ok"] = False
-                res["err"] = "Decompilation failed."
+                res["err"] = _("Decompilation failed.")
                 return 0
             res["text"] = str(decompiled)
             res["ok"] = True
@@ -63,7 +66,7 @@ def _decompile_func(ea) -> str:
     ida_kernwin.execute_sync(_do, ida_kernwin.MFF_FAST)
 
     if not res["ok"]:
-        raise ValueError(res["err"] or "Unknown decompilation error.")
+        raise ValueError(res["err"] or _("Unknown decompilation error."))
     return res["text"]
 
 # -----------------------------------------------------------------------------

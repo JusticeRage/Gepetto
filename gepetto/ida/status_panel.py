@@ -4,6 +4,8 @@ from typing import Optional
 import ida_kernwin
 import gepetto.config
 
+_ = gepetto.config._
+
 # Use PySide6 exclusively (IDA 9.x). Do not mix bindings.
 try:
     from PySide6 import QtWidgets, QtCore, QtGui  # type: ignore
@@ -25,7 +27,6 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     def OnClose(self, form):
         from gepetto.ida.status_panel import panel
         panel.form_closed()
-        pass
 
     def _build_ui(self):
         if QtWidgets is None or self.parent is None:
@@ -46,11 +47,11 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
 
         # Top controls: Show reasoning, Show tool calls, Clear + Stop (right-aligned)
         controls_top = QtWidgets.QHBoxLayout()
-        self._show_reasoning = QtWidgets.QCheckBox("Show reasoning")
+        self._show_reasoning = QtWidgets.QCheckBox(_("Show reasoning"))
         self._show_reasoning.setChecked(True)
-        self._show_tool_calls = QtWidgets.QCheckBox("Show tool calls")
+        self._show_tool_calls = QtWidgets.QCheckBox(_("Show tool calls"))
         self._show_tool_calls.setChecked(True)
-        self._btn_clear = QtWidgets.QPushButton("Clear")
+        self._btn_clear = QtWidgets.QPushButton(_("Clear"))
         self._btn_clear.clicked.connect(self._log.clear)
         controls_top.addWidget(self._show_reasoning)
         controls_top.addWidget(self._show_tool_calls)
@@ -84,13 +85,13 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._reason_container.setVisible(False)
 
         # Bottom row: Status + progress on left; Model on right
-        self._model_label = QtWidgets.QLabel(f"Model: {gepetto.config.get_config('Gepetto', 'MODEL')}")
-        self._status_label = QtWidgets.QLabel("Status: Idle")
+        self._model_label = QtWidgets.QLabel(_("Model: {model}").format(model=gepetto.config.get_config('Gepetto', 'MODEL')))
+        self._status_label = QtWidgets.QLabel(_("Status: Idle"))
         self._progress = QtWidgets.QProgressBar()
         self._progress.setFixedHeight(15)
         self._progress.setRange(0, 0)
         self._progress.setVisible(False)
-        self._btn_stop = QtWidgets.QPushButton("Stop")
+        self._btn_stop = QtWidgets.QPushButton(_("Stop"))
         # late import to avoid circular refs
         try:
             from gepetto.ida.status_panel import panel  
@@ -120,15 +121,6 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             self._reason_timer.timeout.connect(self._tick_reasoning)
         except Exception:
             pass
-        # try:
-        #     # Status text animated ellipses
-        #     self._status_base = ""
-        #     self._status_dot_idx = 0
-        #     self._status_timer = QtCore.QTimer(self.parent)
-        #     self._status_timer.setInterval(300)
-        #     self._status_timer.timeout.connect(self._tick_status)
-        # except Exception:
-        #     pass
 
         # Mark as ready and request flush of any pending logs/status
         try:
@@ -205,7 +197,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     def set_model(self, model_name: str):
         if QtWidgets is None or self.parent is None:
             return
-        self._model_label.setText(f"Model: {model_name}")
+        self._model_label.setText(_("Model: {model_name}").format(model_name=model_name))
 
     def set_status(self, text: str, busy: Optional[bool] = None):
         if QtWidgets is None or self.parent is None:
@@ -227,13 +219,13 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
                 self._status_timer.stop()
             lower = (text or "").strip().lower()
             if lower == "done":
-                self._status_label.setText("Status: Done")
+                self._status_label.setText(_("Status: Done"))
             elif lower == "idle" or not lower:
-                self._status_label.setText("Status: Idle")
+                self._status_label.setText(_("Status: Idle"))
             else:
                 self._status_label.setText(text)
         except Exception:
-            self._status_label.setText(text or "Status: Idle")
+            self._status_label.setText(text or _("Status: Idle"))
         if busy is not None:
             self._progress.setVisible(bool(busy))
 
@@ -267,7 +259,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             return
         # Update base text and render without altering animation state
         try:
-            self._reason_base = text or "Reasoning"
+            self._reason_base = text or _("Reasoning")
             self.start_reasoning_animation()
             if hasattr(self, "_render_reasoning"):
                 self._render_reasoning()
@@ -298,23 +290,20 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             self._reason_label.setText("")
             self._reason_container.setVisible(False)
         except Exception:
-            print("ERROR")
             pass
 
     # Stream text into the log without creating new lines per chunk.
     # Starts a new timestamped row with the given prefix on first call,
     # then appends subsequent text to the same row.
-    def append_stream(self, text: str, prefix: str = "Gepetto: "):
+    def append_stream(self, text: str, prefix: str = _("Gepetto: ")):
         if QtWidgets is None or self.parent is None or QtGui is None:
-            print("ERROR")
-            # Console fallback handled by manager
             return
         # Apply filters: hide tool streaming and detailed reasoning when unchecked
         if hasattr(self, "_show_tool_calls") and not self._show_tool_calls.isChecked():
             if str(prefix).startswith("→ "):
                 return
         if hasattr(self, "_show_reasoning") and not self._show_reasoning.isChecked():
-            if str(prefix).startswith("Reasoning: "):
+            if str(prefix).startswith(_("Reasoning: ")):
                 return
 
         # Move cursor to the very end of the document
@@ -437,29 +426,12 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         cursor.setCharFormat(prev_fmt)
         # Always autoscroll
         self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
-        # Update reasoning label base text and re-render
-        # try:
-        #     delta = (text or "").replace("\n", " ")
-        #     self._reason_base = (self._reason_base or "") + delta
-        #     if hasattr(self, "_render_reasoning"):
-        #         self._render_reasoning()
-        # except Exception:
-        #     pass
 
     def end_summary_stream(self):
         # Finish with exactly one newline for clean separation
         self._ensure_trailing_newline()
         # Reset format so following lines are not italic or dimmed
         self._reset_char_format()
-        # Always autoscroll
-        # self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
-        # Stop reasoning animation and auto-hide the reasoning container
-        # try:
-        #     self.stop_reasoning_animation()
-        #     # if hasattr(self, "_reason_container"):
-        #     #     self._reason_container.setVisible(False)
-        # except Exception:
-        #     pass
 
     # Reasoning animation helpers
     def _render_reasoning(self):
@@ -468,7 +440,6 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             idx = getattr(self, "_dot_idx", 0) % len(dots)
             self._reason_label.setText(f"{self._reason_base or ''}{dots[idx]}")
         except Exception:
-            print("ERROR")
             try:
                 self._reason_label.setText(self._reason_base or "")
             except Exception:
@@ -513,7 +484,6 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
                 self._reason_timer.start()
             self._render_reasoning()
         except Exception:
-            print("ERROR")
             pass
 
     def stop_reasoning_animation(self):
@@ -610,7 +580,7 @@ class _StatusPanelManager:
         # Apply any pending stream text (keeps it on the same line)
         if self._pending_stream_text:
             try:
-                prefix = self._pending_stream_prefix or "Gepetto: "
+        prefix = self._pending_stream_prefix or _("Gepetto: ")
                 self._form.append_stream("".join(self._pending_stream_text), prefix)
             except Exception:
                 pass
@@ -647,7 +617,7 @@ class _StatusPanelManager:
                 self._form = GepettoStatusForm()
                 # Persist and dock to the right by default
                 self._form.Show(
-                    "Gepetto Status",
+                    _("Gepetto Status"),
                     options=(ida_kernwin.PluginForm.WOPN_PERSIST | ida_kernwin.PluginForm.WOPN_DP_RIGHT),
                 )
                 # Request a flush on next loop to apply any pending updates
@@ -662,7 +632,7 @@ class _StatusPanelManager:
                 if self._form is None:
                     self._form = GepettoStatusForm()
                     self._form.Show(
-                        "Gepetto Status",
+                        _("Gepetto Status"),
                         options=(ida_kernwin.PluginForm.WOPN_PERSIST | ida_kernwin.PluginForm.WOPN_DP_RIGHT),
                     )
                     if QtCore is not None:
@@ -675,7 +645,7 @@ class _StatusPanelManager:
         except Exception:
             # Last-resort fallback to simple print
             try:
-                print("Could not show Gepetto Status panel.")
+                print(_("Could not show Gepetto Status panel."))
             except Exception:
                 pass
 
@@ -733,7 +703,7 @@ class _StatusPanelManager:
         except Exception:
             pass
 
-    def log_stream(self, text: str, prefix: str = "Gepetto: "):
+    def log_stream(self, text: str, prefix: str = _("Gepetto: ")):
         if getattr(self, "_stopped", False):
             return
         # If panel not ready, buffer and print to console without newlines
@@ -763,7 +733,7 @@ class _StatusPanelManager:
     # ----------------------- Styled convenience APIs ---------------------
     def log_user(self, text: str):
         if not self._is_ready():
-            self._pending_logs.append(f"User: {text}")
+            self._pending_logs.append(_("User: {text}").format(text=text))
             return
         def _do():
             try:
@@ -780,7 +750,7 @@ class _StatusPanelManager:
         # Reset stop flag at the start of a new reasoning stream
         self._stopped = False
         if not self._is_ready():
-            self._pending_logs.append(f"{model_name} reasoning...")
+            self._pending_logs.append(_("{model_name} reasoning...").format(model_name=model_name))
             return
         def _do():
             try:
@@ -955,26 +925,26 @@ class _StatusPanelManager:
             pass
         # Update status/log
         try:
-            self.set_status("Idle", busy=False)
+            self.set_status(_("Idle"), busy=False)
             # Ensure the stop log message appears even if streaming is stopped
             def _do_log():
                 try:
                     # Add a concise cancellation footer and provider-specific note
                     try:
                         import gepetto.config as _cfg
-                        provider = getattr(_cfg.model, "get_menu_name", lambda: "Model")()
+                        provider = getattr(_cfg.model, "get_menu_name", lambda: _("Model"))()
                         note = None
                         if provider == "OpenAI":
-                            note = "Requested stream close; server cancels promptly. Residual buffered tokens may appear; ignored."
+                            note = _("Requested stream close; server cancels promptly. Residual buffered tokens may appear; ignored.")
                         elif provider == "Google Gemini":
-                            note = "Best-effort stream close requested; upstream may compute briefly; further output is ignored."
+                            note = _("Best-effort stream close requested; upstream may compute briefly; further output is ignored.")
                         else:
-                            note = "Cancellation requested upstream; further output (if any) is ignored."
-                        self._form.append_log("Canceled.")
+                            note = _("Cancellation requested upstream; further output (if any) is ignored.")
+                        self._form.append_log(_("Canceled."))
                         if note:
                             self._form.append_log(note)
                     except Exception:
-                        self._form.append_log("Canceled.")
+                        self._form.append_log(_("Canceled."))
                         pass
                     self._reason_container.setVisible(False)
                 except Exception:

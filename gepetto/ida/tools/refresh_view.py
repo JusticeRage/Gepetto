@@ -1,15 +1,17 @@
-+44-0
 import json
 
 import ida_kernwin
+import gepetto.config
 
 from gepetto.ida.tools.tools import add_result_to_messages
+
+_ = gepetto.config._
 
 
 def handle_refresh_view_tc(tc, messages):
     """Handle a tool call to refresh the current IDA view."""
     # The tool takes no arguments but parse for forward compatibility.
-    _ = json.loads(tc.function.arguments or "{}")
+    json.loads(tc.function.arguments or "{}")
 
     try:
         result = refresh_view()
@@ -17,6 +19,7 @@ def handle_refresh_view_tc(tc, messages):
         result = {"ok": False, "error": str(ex)}
 
     add_result_to_messages(messages, tc, result)
+
 
 # -----------------------------------------------------------------------------
 
@@ -36,5 +39,6 @@ def refresh_view() -> dict:
     ida_kernwin.execute_sync(_do, ida_kernwin.MFF_FAST)
 
     if not out["ok"]:
-        raise ValueError(out.get("error", "Failed to refresh view"))
+        raise ValueError(out.get("error", _("Failed to refresh view")))
     return out
+

@@ -76,7 +76,7 @@ def load_config():
         print(_("Attempting to load the first available model..."))
         try:
             model = get_fallback_model()
-            print(f"Defaulted to {str(model)}.")
+            print(_("Defaulted to {model}.").format(model=str(model)))
         except RuntimeError:
             print(_("Gepetto: No model available. Please edit the configuration file and try again."))
             model = None
