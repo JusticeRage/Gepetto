@@ -216,7 +216,7 @@ def _convert_tools(tools):
 class Gemini(LanguageModel):
     @staticmethod
     def get_menu_name() -> str:
-        return _("Google Gemini")
+        return "Google Gemini"
 
     @staticmethod
     def supported_models():

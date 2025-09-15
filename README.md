@@ -130,6 +130,15 @@ you can contribute to the project by adding it yourself! Create a new folder for
 create by copying and editing `gepetto/locales/gepetto.pot` (replace all the lines starting with `msgstr` with the
 localized version).  
 
+To regenerate the translation template and update compiled files:
+
+- `make i18n` – runs `scripts/update_i18n.sh` to:
+  - rebuild `gepetto/locales/gepetto.pot` from all Python sources (strings wrapped in `_(...)`),
+  - merge the template into each `gepetto.po`, and
+  - compile `gepetto.mo` files.
+
+Requirements: GNU gettext tools (`xgettext`, `msgmerge`, `msgfmt`). On macOS: `brew install gettext && export PATH="$(brew --prefix gettext)/bin:$PATH"`.
+
 ## Acknowledgements
 
 - [OpenAI](https://openai.com), for making these incredible models, obviously
