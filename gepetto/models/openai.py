@@ -395,26 +395,12 @@ class GPT(LanguageModel):
 
         # Map Chat options to Responses options
         opts = dict(additional_model_options or {})
-        # response_format -> text.format
-        text_opts = {}
-        rf = opts.pop("response_format", None)
-        if isinstance(rf, dict):
-            if rf.get("type") == "json_object":
-                text_opts["format"] = "json"
-            elif rf.get("type") == "json_schema":
-                # Minimal wrapper for JSON Schema in Responses
-                js = rf.get("json_schema", {})
-                name = js.get("name") or "Output"
-                text_opts["format"] = {
-                    "type": "json_schema",
-                    "name": name,
-                    "json_schema": {
-                        "strict": True,
-                        "schema": js.get("schema", {"type": "object"}),
-                    },
-                }
-        if text_opts:
-            opts["text"] = text_opts
+        # Temporary compatibility: older python SDKs for Responses do not accept
+        # a top-level `response_format` kwarg. Our prompts already demand JSON
+        # where needed (rename/comment), so drop it for Responses path.
+        # Chat Completions path still supports response_format and retains mapping.
+        if "response_format" in opts:
+            opts.pop("response_format", None)
 
         # max_tokens -> max_output_tokens
         if "max_tokens" in opts and "max_output_tokens" not in opts:

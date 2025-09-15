@@ -22,6 +22,7 @@ MISSING=0
 need xgettext
 need msgmerge
 need msgfmt
+need msgattrib
 if [ "${MISSING}" -ne 0 ]; then
   cat >&2 <<EOF
 One or more gettext tools are missing.
@@ -79,6 +80,11 @@ echo "[i18n] Compiling MO files"
 for PO in $LOCALES_DIR/*/LC_MESSAGES/gepetto.po; do
   MO="${PO%.po}.mo"
   msgfmt --output-file "$MO" "$PO"
+done
+
+echo "[i18n] Stripping obsolete (#~) entries from PO files"
+for PO in $LOCALES_DIR/*/LC_MESSAGES/gepetto.po; do
+  msgattrib --no-obsolete --output-file "$PO" "$PO"
 done
 
 echo "[i18n] Done. Updated: $POT_FILE and compiled .mo files."
