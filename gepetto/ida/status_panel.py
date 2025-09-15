@@ -580,7 +580,7 @@ class _StatusPanelManager:
         # Apply any pending stream text (keeps it on the same line)
         if self._pending_stream_text:
             try:
-        prefix = self._pending_stream_prefix or _("Gepetto: ")
+                prefix = self._pending_stream_prefix or _("Gepetto: ")
                 self._form.append_stream("".join(self._pending_stream_text), prefix)
             except Exception:
                 pass
