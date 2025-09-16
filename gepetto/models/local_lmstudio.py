@@ -59,23 +59,46 @@ class LMStudio(GPT):
             ) if proxy else None
         )
 
-    def query_model(self, query, cb, additional_model_options=None):
-        if additional_model_options is not None and additional_model_options.get("response_format", {}).get("type") == "json_object":
-            additional_model_options.update({
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "schema": {
-                            "type": "object"
-                        }
-                    }
-                }
-            })
+    def query_model(self, query, cb, *args, **kwargs):
+        """
+        Compatible with callers that may pass an extra positional 'context' arg:
+          - query_model(query, cb, additional_model_options)
+          - query_model(query, cb, context, additional_model_options)
+          - query_model(query, cb, context=?, additional_model_options=?)
+        We ACCEPT extra positional args but DO NOT forward them to super(),
+        because GPT.query_model(...) doesn't expect them.
+        """
+        pos_args = list(args)
+
+        # 1) Determine additional_model_options from kwargs or trailing positional dict
+        if "additional_model_options" in kwargs:
+            opt = kwargs.get("additional_model_options") or {}
+            # If caller also gave a trailing positional dict, drop it to avoid dup binding
+            if pos_args and isinstance(pos_args[-1], dict):
+                pos_args.pop()
         else:
-            additional_model_options = {}
+            if pos_args and isinstance(pos_args[-1], dict):
+                opt = pos_args.pop()  # treat last positional dict as options
+            else:
+                opt = {}
 
-        super().query_model(query, cb, additional_model_options)
+        # 2) Make a copy so we don't mutate caller state
+        additional_model_options = dict(opt)
 
-    # -----------------------------------------------------------------------------
+        # 3) Keep your JSON response_format compatibility shim
+        rf = additional_model_options.get("response_format", {})
+        if isinstance(rf, dict) and rf.get("type") == "json_object":
+            additional_model_options["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"schema": {"type": "object"}}
+            }
+
+        # 4) IMPORTANT: do NOT forward any other positional args to super()
+        #    GPT.query_model only expects (query, cb, additional_model_options)
+        return super().query_model(
+            query,
+            cb,
+            additional_model_options=additional_model_options,
+        )
 
 gepetto.models.model_manager.register_model(LMStudio)
