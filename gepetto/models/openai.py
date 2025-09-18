@@ -17,11 +17,11 @@ GPT_5_MODEL_NAME = "gpt-5"
 GPT_5_MINI_MODEL_NAME = "gpt-5-mini"
 GPT_5_NANO_MODEL_NAME = "gpt-5-nano"
 GPT4_MODEL_NAME = "gpt-4-turbo"
-GPT4o_MODEL_NAME = "gpt-4o"
-GPTo4_MINI_MODEL_NAME = "o4-mini"
+GPT4O_MODEL_NAME = "gpt-4o"
+GPTO4_MINI_MODEL_NAME = "o4-mini"
 GPT41_MODEL_NAME = "gpt-4.1"
-GPTo3_MODEL_NAME = "o3"
-GPTo3_PRO_MODEL_NAME = "o3-pro"
+GPTO3_MODEL_NAME = "o3"
+GPTO3_MINI_MODEL_NAME = "o3-mini"
 
 
 class GPT(LanguageModel):
@@ -35,11 +35,11 @@ class GPT(LanguageModel):
                 GPT_5_MINI_MODEL_NAME,
                 GPT_5_NANO_MODEL_NAME,
                 GPT4_MODEL_NAME,
-                GPT4o_MODEL_NAME,
-                GPTo4_MINI_MODEL_NAME,
+                GPT4O_MODEL_NAME,
+                GPTO4_MINI_MODEL_NAME,
                 GPT41_MODEL_NAME,
-                GPTo3_MODEL_NAME,
-                GPTo3_PRO_MODEL_NAME]
+                GPTO3_MODEL_NAME,
+                GPTO3_MINI_MODEL_NAME]
 
     @staticmethod
     def is_configured_properly() -> bool:

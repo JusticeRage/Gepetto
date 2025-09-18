@@ -7,8 +7,12 @@ import ida_hexrays
 import ida_kernwin
 import ida_name
 
-from gepetto.ida.tools.function_utils import parse_ea, resolve_ea, resolve_func, get_func_name
+from gepetto.ida.utils.ida9_utils import parse_ea, run_on_main_thread, touch_last_ea
+from gepetto.ida.tools.function_utils import resolve_ea, resolve_func, get_func_name
 from gepetto.ida.tools.tools import add_result_to_messages
+
+import gepetto.config
+_ = gepetto.config._
 
 
 def handle_get_function_code_tc(tc, messages):
@@ -60,10 +64,10 @@ def _decompile_func(ea) -> str:
             res["err"] = str(e)
             return 0
 
-    ida_kernwin.execute_sync(_do, ida_kernwin.MFF_FAST)
+    run_on_main_thread(_do, write=False)
 
     if not res["ok"]:
-        raise ValueError(res["err"] or "Unknown decompilation error.")
+        raise ValueError(res["err"] or _("Unknown decompilation error."))
     return res["text"]
 
 # -----------------------------------------------------------------------------
@@ -87,6 +91,8 @@ def get_function_code(ea: Optional[int] = None,
           "pseudocode": str | None
         }
     """
+    if ea is not None:
+        ea = parse_ea(ea)
     result = {
         "ok": False,
         "error": None,
@@ -101,6 +107,7 @@ def get_function_code(ea: Optional[int] = None,
         func_name = name or get_func_name(f)
         if not ea:
             ea = resolve_ea(func_name)
+        touch_last_ea(ea)
         pseudocode = _decompile_func(ea)
 
         result.update(

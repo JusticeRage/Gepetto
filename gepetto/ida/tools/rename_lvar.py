@@ -3,9 +3,18 @@ from typing import Optional
 
 import ida_hexrays
 import ida_kernwin
+import ida_frame
+import ida_typeinf
+import ida_funcs
+import idaapi
+import gepetto.config
 
-from gepetto.ida.tools.function_utils import parse_ea, resolve_ea, resolve_func, get_func_name
+from gepetto.ida.utils.ida9_utils import parse_ea, hexrays_available, decompile_func, run_on_main_thread, touch_last_ea
+from gepetto.ida.utils.ida_compat import is_ida_ge
+from gepetto.ida.tools.function_utils import resolve_ea, resolve_func, get_func_name
 from gepetto.ida.tools.tools import add_result_to_messages
+
+_ = gepetto.config._
 
 
 
@@ -39,21 +48,35 @@ def rename_lvar(
     old_name: Optional[str] = None,
     new_name: Optional[str] = None,
 ) -> dict:
-    """Rename a local variable in a function."""
+    """Rename a local (stack frame) variable by updating the frame member name."""
     if not old_name or not new_name:
         raise ValueError("old_name and new_name are required")
 
+    if ea is not None:
+        ea = parse_ea(ea)
     f = resolve_func(ea=ea, name=func_name)
     func_name = func_name or get_func_name(f)
     if ea is None:
         ea = resolve_ea(func_name)
+    touch_last_ea(ea)
 
     out = {"ok": False, "ea": int(f.start_ea), "func_name": func_name, "old_name": old_name, "new_name": new_name}
 
     def _do():
         try:
-            if not ida_hexrays.rename_lvar(ea, old_name, new_name):
-                out["error"] = f"Failed to rename lvar {old_name!r}"
+            # Prefer Hex-Rays convenience API (added in IDA 7.6, continues in 9.x)
+            if not is_ida_ge(7, 6):
+                out["error"] = _("rename_lvar requires IDA 7.6 or newer.")
+                return 0
+            if not hexrays_available():
+                out["error"] = _("Hex-Rays Decompiler is not available.")
+                return 0
+            try:
+                ok = bool(ida_hexrays.rename_lvar(ea, old_name, new_name))
+            except Exception:
+                ok = False
+            if not ok:
+                out["error"] = _("Failed to rename lvar {old_name!r}").format(old_name=old_name)
                 return 0
             out["ok"] = True
             return 1
@@ -61,7 +84,9 @@ def rename_lvar(
             out["error"] = str(e)
             return 0
 
-    ida_kernwin.execute_sync(_do, ida_kernwin.MFF_WRITE)
+    if not run_on_main_thread(_do, write=True):
+        if not out.get("error"):
+            out["error"] = "Failed to execute on main thread"
 
     if not out["ok"]:
         raise ValueError(out.get("error", "Failed to rename lvar"))
