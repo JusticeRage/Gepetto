@@ -4,8 +4,9 @@ from typing import Dict
 import ida_lines
 import ida_kernwin
 
-from gepetto.ida.tools.function_utils import parse_ea
+from gepetto.ida.utils.ida9_utils import parse_ea, run_on_main_thread
 from gepetto.ida.tools.tools import add_result_to_messages
+from gepetto.ida.utils.ida9_utils import touch_last_ea
 
 
 def handle_get_disasm_tc(tc, messages):
@@ -18,6 +19,7 @@ def handle_get_disasm_tc(tc, messages):
     ea = args.get("ea")
     try:
         ea = parse_ea(ea)
+        touch_last_ea(ea)
         result = get_disasm(ea)
     except Exception as ex:
         result = {
@@ -38,7 +40,7 @@ def _get_disasm_line(ea: int) -> str:
         out["text"] = ida_lines.generate_disasm_line(ea, 0) or ""
         return 1
 
-    ida_kernwin.execute_sync(_do, ida_kernwin.MFF_READ)
+    run_on_main_thread(_do, write=False)
     return out["text"]
 
 # -----------------------------------------------------------------------------
@@ -57,6 +59,7 @@ def get_disasm(ea: int) -> Dict:
             "disasm": str | None,
         }
     """
+    ea = parse_ea(ea)
     result = {
         "ok": False,
         "error": None,

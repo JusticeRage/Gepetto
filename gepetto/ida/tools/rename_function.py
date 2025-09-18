@@ -7,7 +7,8 @@ from typing import Optional
 import ida_name
 import ida_kernwin
 
-from gepetto.ida.tools.function_utils import parse_ea, resolve_ea, resolve_func, get_func_name
+from gepetto.ida.utils.ida9_utils import parse_ea, run_on_main_thread, touch_last_ea
+from gepetto.ida.tools.function_utils import resolve_ea, resolve_func, get_func_name
 from gepetto.ida.tools.tools import add_result_to_messages
 
 
@@ -46,6 +47,7 @@ def rename_function(
     f = resolve_func(ea=ea, name=name)
     old_name = name or get_func_name(f)
     ea = int(f.start_ea)
+    touch_last_ea(ea)
 
     out = {"ok": False, "ea": ea, "old_name": old_name, "new_name": new_name}
 
@@ -60,7 +62,9 @@ def rename_function(
             out["error"] = str(e)
             return 0
 
-    ida_kernwin.execute_sync(_do, ida_kernwin.MFF_WRITE)
+    if not run_on_main_thread(_do, write=True):
+        if not out.get("error"):
+            out["error"] = "Failed to execute on main thread"
 
     if not out["ok"]:
         raise ValueError(out.get("error", "Failed to rename function"))

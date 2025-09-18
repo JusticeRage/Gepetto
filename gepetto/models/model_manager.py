@@ -4,6 +4,12 @@ import pathlib
 
 from gepetto.models.base import LanguageModel
 
+try:
+    import gepetto.config as _cfg
+    _ = _cfg._
+except Exception:
+    _ = lambda s: s
+
 MODEL_LIST: list[LanguageModel] = list()
 
 
@@ -47,9 +53,7 @@ def get_fallback_model():
                 return model_plugin(m)
             except:
                 continue
-    raise RuntimeError(
-        "No models available! Edit your configuration file and try again."
-    )
+    raise RuntimeError(_("No models available! Edit your configuration file and try again."))
 
 
 def load_available_models():

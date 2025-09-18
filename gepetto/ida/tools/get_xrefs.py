@@ -8,7 +8,8 @@ import ida_kernwin
 import ida_name
 import ida_xref
 
-from gepetto.ida.tools.function_utils import parse_ea, resolve_ea, resolve_func, get_func_name
+from gepetto.ida.utils.ida9_utils import parse_ea, touch_last_ea, run_on_main_thread
+from gepetto.ida.tools.function_utils import resolve_ea, resolve_func, get_func_name
 from gepetto.ida.tools.tools import add_result_to_messages
 
 def handle_get_xrefs_tc(tc, messages):
@@ -156,6 +157,7 @@ def get_xrefs_unified(
 
             subj_name = _ea_func_name(target_ea) if enrich_names else None
             out["subject"] = {"ea": int(target_ea), "name": subj_name or "", "kind": subject_kind}
+            touch_last_ea(target_ea)
 
             # Build list of items to scan
             items: Iterable[int]
@@ -239,5 +241,5 @@ def get_xrefs_unified(
             out["error"] = str(e)
             return 0
 
-    ida_kernwin.execute_sync(_do, ida_kernwin.MFF_READ)
+    run_on_main_thread(_do, write=False)
     return out

@@ -1,8 +1,8 @@
 import json
 import idaapi
-import ida_kernwin
 
 from gepetto.ida.tools.tools import add_result_to_messages
+from gepetto.ida.utils.ida9_utils import safe_get_screen_ea, touch_last_ea
 
 
 def handle_get_screen_ea_tc(tc, messages):
@@ -19,16 +19,17 @@ def handle_get_screen_ea_tc(tc, messages):
     else:
         payload = {
             "ok": False,
-            "error": "The cursor isn't set to a valid address. Click in a disassembly view first."
+            "error": "No focused view: returning BADADDR. Provide EA explicitly or call an operation that sets last_ea."
         }
 
     add_result_to_messages(messages, tc, payload)
 
 # -----------------------------------------------------------------------------
 
-def get_screen_ea() -> str | None:
-    """Return the current effective address, or None if no valid EA."""
-    ea = ida_kernwin.execute_sync(ida_kernwin.get_screen_ea, ida_kernwin.MFF_FAST)
+def get_screen_ea() -> int | None:
+    """Return the current effective address (int), or None if no valid EA."""
+    ea = safe_get_screen_ea()
     if ea == idaapi.BADADDR:
         return None
-    return ea
+    touch_last_ea(ea)
+    return int(ea)
