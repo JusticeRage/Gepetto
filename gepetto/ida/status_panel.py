@@ -187,13 +187,15 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             self._log.clear()
 
     # ------------------------------------------------------------------
-    def append_log(self, message: str) -> None:
+    def append_log(self, message: str, newline: Optional[bool] = False) -> None:
         if not self._log:
             return
         entry = f"{_timestamp()} : {message}"
         self._ensure_line_start()
         self._force_cursor_to_end()
         self._log.insertPlainText(entry)
+        if newline:
+            self._ensure_trailing_newline()
         if QtWidgets:
             self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
 
@@ -206,9 +208,9 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self.append_log(f"[{_('Gepetto')}] {text}")
 
     # ------------------------------------------------------------------
-    def start_stream(self, model_name: Optional[str]) -> None:
-        if model_name:
-            self.set_model(model_name)
+    def start_stream(self) -> None:
+        model_name = str(gepetto.config.model)
+        self._form.set_model(model_name)
         if not self._log or QtGui is None:
             return
         header = f"[{_('Gepetto')} ({model_name})] " if model_name is not None else f"[{_('Gepetto')}]"
@@ -269,9 +271,10 @@ class _StatusPanelManager:
     # ------------------------------------------------------------------
     def on_form_ready(self) -> None:
         self._dock()
+        self.set_model(str(gepetto.config.model))
         if self._stop_callback:
             self._form.set_stop_callback(self._stop_callback)  # type: ignore[union-attr]
-            self._form.reset_stop()
+            self.reset_stop()
 
     # ------------------------------------------------------------------
     def _dock(self) -> None:
@@ -318,8 +321,8 @@ class _StatusPanelManager:
                 self.reset_stop()
 
     # ------------------------------------------------------------------
-    def start_stream(self, model_name: Optional[str]) -> None:
-        self._dispatch(lambda form: form.start_stream(model_name))
+    def start_stream(self) -> None:
+        self._dispatch(lambda form: form.start_stream())
 
     # ------------------------------------------------------------------
     def append_stream(self, chunk: str) -> None:
@@ -335,7 +338,7 @@ class _StatusPanelManager:
 
     # ------------------------------------------------------------------
     def log(self, message: str) -> None:
-        self._dispatch(lambda form: form.append_log(message))
+        self._dispatch(lambda form: form.append_log(message, True))
 
     # ------------------------------------------------------------------
     def mark_error(self, message: str) -> None:

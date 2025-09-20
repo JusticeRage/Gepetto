@@ -242,6 +242,7 @@ class SwapModelHandler(idaapi.action_handler_t):
             STATUS_PANEL.log(error_msg)
             return
         gepetto.config.update_config("Gepetto", "MODEL", self.new_model)
+        STATUS_PANEL.set_model(str(gepetto.config.model))
         # Refresh the menus to reflect which model is currently selected.
         self.plugin.generate_model_select_menu()
 

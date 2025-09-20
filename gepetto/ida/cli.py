@@ -62,24 +62,22 @@ class GepettoCLI(ida_kernwin.cli_t):
         STATUS_PANEL.ensure_shown()
         STATUS_PANEL.set_stop_callback(getattr(gepetto.config.model, "cancel_current_request", None))
         STATUS_PANEL.reset_stop()
-        STATUS_PANEL.set_model(str(gepetto.config.model))
         STATUS_PANEL.set_status(_("Waiting for model..."), busy=True)
         STATUS_PANEL.log_user(line)
         STATUS_PANEL.start_stream(str(gepetto.config.model))
 
         def handle_response(response):
             if hasattr(response, "tool_calls") and response.tool_calls:
-                tool_calls = [
-                    {
+                tool_calls = []
+                for tc in response.tool_calls:
+                    tool_calls.append({
                         "id": tc.id,
                         "type": tc.type,
                         "function": {
                             "name": tc.function.name,
                             "arguments": tc.function.arguments,
                         },
-                    }
-                    for tc in response.tool_calls
-                ]
+                    })
                 MESSAGES.append(
                     {
                         "role": "assistant",
@@ -87,8 +85,13 @@ class GepettoCLI(ida_kernwin.cli_t):
                         "tool_calls": tool_calls,
                     }
                 )
-                STATUS_PANEL.log(_("→ Model requested tool: {tool_name} ({tool_args}...)").format(tool_name=tc.function.name, tool_args=(tc.function.arguments or '')[:120]))
-                STATUS_PANEL.set_status(_("Using tool: {tool_name}").format(tool_name=tc.function.name), busy=True)
+                for tc in response.tool_calls:
+                    STATUS_PANEL.log(_("→ Model requested tool: {tool_name} ({tool_args}...)").format(
+                        tool_name=tc.function.name,
+                        tool_args=(tc.function.arguments or "")[:120],
+                    ))
+                first_tool_name = response.tool_calls[0].function.name
+                STATUS_PANEL.set_status(_("Using tool: {tool_name}").format(tool_name=first_tool_name), busy=True)
                 for tc in response.tool_calls:
                     if tc.function.name == "get_screen_ea":
                         gepetto.ida.tools.get_screen_ea.handle_get_screen_ea_tc(tc, MESSAGES)
