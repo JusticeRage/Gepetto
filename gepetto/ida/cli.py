@@ -59,7 +59,8 @@ class GepettoCLI(ida_kernwin.cli_t):
             return True
 
         MESSAGES.append({"role": "user", "content": line})
-        STATUS_PANEL.ensure_shown()
+        if gepetto.config.auto_show_status_panel_enabled():
+            STATUS_PANEL.ensure_shown()
         STATUS_PANEL.set_stop_callback(getattr(gepetto.config.model, "cancel_current_request", None))
         STATUS_PANEL.reset_stop()
         STATUS_PANEL.set_status(_("Waiting for model..."), busy=True)
