@@ -89,6 +89,9 @@ def load_config():
         # parsed_ini.set("Gemini", "BASE_URL", "https://generativelanguage.googleapis.com")
         # However, get_config handles defaults, so explicit setting might not be needed unless you want to persist them.
 
+    if not parsed_ini.has_option("Gepetto", "AUTO_SHOW_STATUS_PANEL"):
+        parsed_ini.set("Gepetto", "AUTO_SHOW_STATUS_PANEL", "true")
+
 
 def get_config(section, option, environment_variable=None, default=None):
     """
@@ -129,6 +132,12 @@ def update_config(section, option, new_value):
     with open(path, "w", encoding="utf-8") as f:
         config.write(f)
 
+    global parsed_ini
+    if parsed_ini is not None:
+        if not parsed_ini.has_section(section):
+            parsed_ini.add_section(section)
+        parsed_ini.set(section, option, str(new_value))
+
 
 def get_localization_locale():
     """
@@ -144,3 +153,10 @@ def get_localization_locale():
     
     # Return default locale if current language is invalid
     return 'en_US'
+
+def auto_show_status_panel_enabled() -> bool:
+    return get_config("Gepetto", "AUTO_SHOW_STATUS_PANEL", default="true") == "true"
+
+
+def set_auto_show_status_panel(enabled: bool) -> None:
+    update_config("Gepetto", "AUTO_SHOW_STATUS_PANEL", "true" if enabled else "false")
