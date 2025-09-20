@@ -12,6 +12,7 @@ import gepetto.config
 from gepetto.ida.handlers import ExplainHandler, RenameHandler, SwapModelHandler, GenerateCCodeHandler, GeneratePythonCodeHandler
 from gepetto.ida.comment_handler import CommentHandler
 from gepetto.ida.cli import register_cli
+from gepetto.ida.status_panel import get_status_panel
 import gepetto.models.model_manager
 
 _ = gepetto.config._
@@ -123,6 +124,7 @@ class GepettoPlugin(idaapi.plugin_t):
 
         # Register CLI
         register_cli()
+        ida_kernwin.execute_sync(lambda: get_status_panel().ensure_shown(), ida_kernwin.MFF_FAST)
 
         return idaapi.PLUGIN_KEEP
 
@@ -192,6 +194,7 @@ class GepettoPlugin(idaapi.plugin_t):
         self.detach_actions()
         if self.menu:
             self.menu.unhook()
+        get_status_panel().close()
         return
 
 
@@ -206,4 +209,3 @@ class ContextMenuHooks(idaapi.UI_Hooks):
             idaapi.attach_action_to_popup(form, popup, GepettoPlugin.rename_action_name, "Gepetto/")
             idaapi.attach_action_to_popup(form, popup, GepettoPlugin.c_code_action_name, "Gepetto/")
             idaapi.attach_action_to_popup(form, popup, GepettoPlugin.python_code_action_name, "Gepetto/")
-
