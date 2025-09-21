@@ -9,13 +9,26 @@ import ida_hexrays
 import ida_kernwin
 
 import gepetto.config
-from gepetto.ida.handlers import ExplainHandler, RenameHandler, SwapModelHandler, GenerateCCodeHandler, GeneratePythonCodeHandler
+from gepetto.ida.handlers import (
+    ExplainHandler,
+    GenerateCCodeHandler,
+    GeneratePythonCodeHandler,
+    RenameHandler,
+    SwapModelHandler,
+)
 from gepetto.ida.comment_handler import CommentHandler
 from gepetto.ida.cli import register_cli
 from gepetto.ida.status_panel import get_status_panel
 import gepetto.models.model_manager
 
 _ = gepetto.config._
+
+
+def _safe_execute_sync(callback):
+    try:
+        ida_kernwin.execute_sync(callback, ida_kernwin.MFF_FAST)
+    except Exception:
+        pass
 
 
 # =============================================================================
@@ -195,22 +208,18 @@ class GepettoPlugin(idaapi.plugin_t):
     def _register_auto_show_action(self):
         if not hasattr(self, "auto_show_menu_path"):
             return
-        try:
-            ida_kernwin.execute_sync(
-                functools.partial(idaapi.detach_action_from_menu, self.auto_show_menu_path, self.auto_show_action_name),
-                ida_kernwin.MFF_FAST,
+        _safe_execute_sync(
+            functools.partial(
+                idaapi.detach_action_from_menu,
+                self.auto_show_menu_path,
+                self.auto_show_action_name,
             )
-        except Exception:
-            pass
-        try:
-            ida_kernwin.execute_sync(
-                functools.partial(idaapi.unregister_action, self.auto_show_action_name),
-                ida_kernwin.MFF_FAST,
-            )
-        except Exception:
-            pass
+        )
+        _safe_execute_sync(
+            functools.partial(idaapi.unregister_action, self.auto_show_action_name)
+        )
 
-        icon = 208 if gepetto.config.auto_show_status_panel_enabled() else 0
+        icon = 208 if gepetto.config.auto_show_status_panel_enabled() else -1
         self._auto_show_handler = ToggleStatusPanelAutoShowHandler(self)
         action = idaapi.action_desc_t(
             self.auto_show_action_name,
@@ -220,17 +229,14 @@ class GepettoPlugin(idaapi.plugin_t):
             _("Automatically focus the Gepetto status panel when a request starts."),
             icon,
         )
-        ida_kernwin.execute_sync(
-            functools.partial(idaapi.register_action, action), ida_kernwin.MFF_FAST
-        )
-        ida_kernwin.execute_sync(
+        _safe_execute_sync(functools.partial(idaapi.register_action, action))
+        _safe_execute_sync(
             functools.partial(
                 idaapi.attach_action_to_menu,
                 self.auto_show_menu_path,
                 self.auto_show_action_name,
                 idaapi.SETMENU_APP,
-            ),
-            ida_kernwin.MFF_FAST,
+            )
         )
 
     # -----------------------------------------------------------------------------
@@ -243,20 +249,16 @@ class GepettoPlugin(idaapi.plugin_t):
     def _unregister_auto_show_action(self):
         if not hasattr(self, "auto_show_menu_path"):
             return
-        try:
-            ida_kernwin.execute_sync(
-                functools.partial(idaapi.detach_action_from_menu, self.auto_show_menu_path, self.auto_show_action_name),
-                ida_kernwin.MFF_FAST,
+        _safe_execute_sync(
+            functools.partial(
+                idaapi.detach_action_from_menu,
+                self.auto_show_menu_path,
+                self.auto_show_action_name,
             )
-        except Exception:
-            pass
-        try:
-            ida_kernwin.execute_sync(
-                functools.partial(idaapi.unregister_action, self.auto_show_action_name),
-                ida_kernwin.MFF_FAST,
-            )
-        except Exception:
-            pass
+        )
+        _safe_execute_sync(
+            functools.partial(idaapi.unregister_action, self.auto_show_action_name)
+        )
 
     # -----------------------------------------------------------------------------
 

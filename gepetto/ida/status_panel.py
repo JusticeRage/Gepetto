@@ -11,6 +11,11 @@ import gepetto.config
 
 _ = gepetto.config._
 
+_DEFAULT_DOCK_OPTIONS = (
+    getattr(ida_kernwin.PluginForm, "WOPN_PERSIST", 0)
+    | getattr(ida_kernwin.PluginForm, "WOPN_RESTORE", 0)
+)
+
 try:  # Prefer PyQt5 on IDA 7.x; fall back to PySide6 for newer builds.
     from PyQt5 import QtCore, QtGui, QtWidgets  # type: ignore
 except ImportError:  # pragma: no cover - executed on IDA >= 9.2 with PySide6
@@ -114,29 +119,24 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     # ------------------------------------------------------------------
 
     def _force_cursor_to_end(self):
-        if QtGui is None:
+        if QtGui is None or self._log is None:
             return
         self._log.moveCursor(QtGui.QTextCursor.End)
 
-    def _ensure_line_start(self):
-        if QtGui is None:
+    def _ensure_newline(self, *, require_existing_text: bool) -> None:
+        if QtGui is None or self._log is None:
             return
         try:
             doc_text = self._log.toPlainText()
-            if doc_text and not doc_text.endswith("\n"):
-                self._log.moveCursor(QtGui.QTextCursor.End)
-                self._log.insertPlainText("\n")
         except Exception:
-            pass
-
-    def _ensure_trailing_newline(self):
-        if QtGui is None:
             return
+        if require_existing_text and not doc_text:
+            return
+        if doc_text.endswith("\n"):
+            return
+        self._force_cursor_to_end()
         try:
-            doc_text = self._log.toPlainText()
-            if not doc_text.endswith("\n"):
-                self._log.moveCursor(QtGui.QTextCursor.End)
-                self._log.insertPlainText("\n")
+            self._log.insertPlainText("\n")
         except Exception:
             pass
 
@@ -187,15 +187,15 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             self._log.clear()
 
     # ------------------------------------------------------------------
-    def append_log(self, message: str, newline: Optional[bool] = False) -> None:
+    def append_log(self, message: str, newline: bool = False) -> None:
         if not self._log:
             return
         entry = f"{_timestamp()} : {message}"
-        self._ensure_line_start()
+        self._ensure_newline(require_existing_text=True)
         self._force_cursor_to_end()
         self._log.insertPlainText(entry)
         if newline:
-            self._ensure_trailing_newline()
+            self._ensure_newline(require_existing_text=False)
         if QtWidgets:
             self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
 
@@ -210,7 +210,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     # ------------------------------------------------------------------
     def start_stream(self) -> None:
         model_name = str(gepetto.config.model)
-        self._form.set_model(model_name)
+        self.set_model(model_name)
         if not self._log or QtGui is None:
             return
         header = f"[{_('Gepetto')} ({model_name})] " if model_name is not None else f"[{_('Gepetto')}]"
@@ -235,7 +235,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             return
         if final_text != finished_message:
             self.log_assistant(final_text)
-        self._ensure_trailing_newline()
+        self._ensure_newline(require_existing_text=False)
 
 
 class _StatusPanelManager:
@@ -250,10 +250,8 @@ class _StatusPanelManager:
     def ensure_shown(self) -> None:
         if self._form is None:
             self._form = GepettoStatusForm(self)
-            options = getattr(ida_kernwin.PluginForm, "WOPN_PERSIST", 0)
-            options |= getattr(ida_kernwin.PluginForm, "WOPN_RESTORE", 0)
             try:
-                self._form.Show(_("Gepetto Status"), options=options)
+                self._form.Show(_("Gepetto Status"), options=_DEFAULT_DOCK_OPTIONS)
             except Exception:
                 print(_("Could not show Gepetto Status panel."))
                 return
@@ -274,7 +272,7 @@ class _StatusPanelManager:
         self.set_model(str(gepetto.config.model))
         if self._stop_callback:
             self._form.set_stop_callback(self._stop_callback)  # type: ignore[union-attr]
-            self.reset_stop()
+            self._form.reset_stop()  # type: ignore[union-attr]
 
     # ------------------------------------------------------------------
     def _dock(self) -> None:
@@ -299,11 +297,12 @@ class _StatusPanelManager:
     # ------------------------------------------------------------------
     def set_stop_callback(self, callback: Optional[Callable[[], None]]) -> None:
         self._stop_callback = callback
+
         def apply(form: GepettoStatusForm) -> None:
             form.set_stop_callback(callback)
-            form.reset_stop()
 
         self._dispatch(apply)
+        self.reset_stop()
 
     # ------------------------------------------------------------------
     def has_stop_callback(self) -> bool:
@@ -341,6 +340,21 @@ class _StatusPanelManager:
         self._dispatch(lambda form: form.append_log(message, True))
 
     # ------------------------------------------------------------------
+    def log_request_started(self) -> str:
+        message = _("Request to {model} sent...").format(model=str(gepetto.config.model))
+        self.log(message)
+        return message
+
+    # ------------------------------------------------------------------
+    def log_request_finished(self, elapsed_seconds: float) -> str:
+        message = _("{model} query finished in {time:.2f} seconds!").format(
+            model=str(gepetto.config.model),
+            time=elapsed_seconds,
+        )
+        self.log(message)
+        return message
+
+    # ------------------------------------------------------------------
     def mark_error(self, message: str) -> None:
         self._dispatch(lambda form: form.mark_error(message))
 
@@ -374,8 +388,12 @@ class _StatusPanelManager:
             except Exception:
                 pass
 
-        widget = self._form.widget() if self._form else None
-        if QtCore and widget:
+        if QtCore is None:
+            runner()
+            return
+
+        widget = self._form.widget()
+        if widget:
             current_thread = QtCore.QThread.currentThread()
             widget_thread = widget.thread()
             if widget_thread == current_thread:

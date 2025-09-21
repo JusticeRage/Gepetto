@@ -48,10 +48,9 @@ def comment_callback(address, view, response, start_time):
     # Refresh the window so the comment is displayed properly
     if view:
         view.refresh_view(False)
-        response_finished = _("{model} query finished in {time:.2f} seconds!").format(
-            model=str(gepetto.config.model), time=elapsed_time)
-        print(response_finished)
-        STATUS_PANEL.log(response_finished)
+
+    response_finished = STATUS_PANEL.log_request_finished(elapsed_time)
+    print(response_finished)
 
 # -----------------------------------------------------------------------------
 
@@ -94,9 +93,8 @@ class ExplainHandler(idaapi.action_handler_t):
             f"Your response should use the following locale as a language: {gepetto.config.get_localization_locale()}\n"
             f"{decompiler_output}",
             functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=v, start_time=start_time))
-        request_sent = _("Request to {model} sent...").format(model=str(gepetto.config.model))
+        request_sent = STATUS_PANEL.log_request_started()
         print(request_sent)
-        STATUS_PANEL.log(request_sent)
         return 1
 
     # This action is always available.
@@ -211,9 +209,8 @@ class RenameHandler(idaapi.action_handler_t):
             f"Your response should suggest names in the following locale: {gepetto.config.get_localization_locale()}",
             functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=v),
             additional_model_options={"response_format": {"type": "json_object"}})
-        request_sent = _("Request to {model} sent...").format(model=str(gepetto.config.model))
+        request_sent = STATUS_PANEL.log_request_started()
         print(request_sent)
-        STATUS_PANEL.log(request_sent)
         return 1
 
     # This action is always available.
@@ -268,9 +265,8 @@ class GenerateCCodeHandler(idaapi.action_handler_t):
             _("Please generate executable C code based on the following decompiled C code and ensure it includes all necessary header files and other information:\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
             functools.partial(self._save_c_code, view=v)
         )
-        request_sent = _("Request to {model} sent...").format(model=str(gepetto.config.model))
+        request_sent = STATUS_PANEL.log_request_started()
         print(request_sent)
-        STATUS_PANEL.log(request_sent)
         return 1
 
     def _save_c_code(self, view, response):
@@ -314,9 +310,8 @@ class GeneratePythonCodeHandler(idaapi.action_handler_t):
             _("Please generate equivalent Python code based on the following decompiled C code, and provide an example of the function call:\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
             functools.partial(self._save_python_code, view=v)
         )
-        request_sent = _("Request to {model} sent...").format(model=str(gepetto.config.model))
+        request_sent = STATUS_PANEL.log_request_started()
         print(request_sent)
-        STATUS_PANEL.log(request_sent)
         return 1
 
     def _save_python_code(self, view, response):

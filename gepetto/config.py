@@ -26,6 +26,12 @@ available_locales = None
 # =============================================================================
 
 
+def _stringify_config_value(value) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
 def _get_translator():
     global _translator
     if _translator is None:
@@ -128,7 +134,7 @@ def update_config(section, option, new_value):
     path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "config.ini")
     config = configparser.RawConfigParser()
     config.read(path, encoding="utf-8")
-    config.set(section, option, new_value)
+    config.set(section, option, _stringify_config_value(new_value))
     with open(path, "w", encoding="utf-8") as f:
         config.write(f)
 
@@ -136,7 +142,7 @@ def update_config(section, option, new_value):
     if parsed_ini is not None:
         if not parsed_ini.has_section(section):
             parsed_ini.add_section(section)
-        parsed_ini.set(section, option, str(new_value))
+        parsed_ini.set(section, option, _stringify_config_value(new_value))
 
 
 def get_localization_locale():
@@ -155,8 +161,14 @@ def get_localization_locale():
     return 'en_US'
 
 def auto_show_status_panel_enabled() -> bool:
-    return get_config("Gepetto", "AUTO_SHOW_STATUS_PANEL", default="true") == "true"
+    global parsed_ini
+    if parsed_ini is None:
+        load_config()
+    try:
+        return parsed_ini.getboolean("Gepetto", "AUTO_SHOW_STATUS_PANEL")
+    except (configparser.NoOptionError, configparser.NoSectionError, ValueError):
+        return True
 
 
 def set_auto_show_status_panel(enabled: bool) -> None:
-    update_config("Gepetto", "AUTO_SHOW_STATUS_PANEL", "true" if enabled else "false")
+    update_config("Gepetto", "AUTO_SHOW_STATUS_PANEL", enabled)
