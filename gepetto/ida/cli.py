@@ -1,5 +1,4 @@
 import functools
-import json
 from types import SimpleNamespace
 
 import ida_kernwin

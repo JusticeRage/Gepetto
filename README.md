@@ -28,15 +28,15 @@ method with the corresponding provider.
 ## Supported models
 
 - [OpenAI](https://playground.openai.com/)
-  - "gpt-5"
-  - "gpt-5-mini"
-  - "gpt-5-nano"
-  - "gpt-4-turbo"
-  - "gpt-4o"
-  - "o4-mini"
-  - "gpt-4.1"
-  - "o3"
-  - "o3-pro"
+  - gpt-5
+  - gpt-5-mini
+  - gpt-5-nano
+  - gpt-4-turbo
+  - gpt-4o
+  - o4-mini
+  - gpt-4.1
+  - o3
+  - o3-pro
 - [Google Gemini](https://ai.google.dev/)
   - gemini-2.0-flash
   - gemini-2.5-pro
@@ -128,7 +128,7 @@ The chosen locale must match the folder names in `gepetto/locales`. If the desir
 you can contribute to the project by adding it yourself! Create a new folder for the desired locale
 (ex: `gepetto/locales/de_DE/LC_MESSAGES/`), and open a new pull request with the updated `.po` file, which you can
 create by copying and editing `gepetto/locales/gepetto.pot` (replace all the lines starting with `msgstr` with the
-localized version).  
+localized version).
 
 ## Acknowledgements
 
