@@ -8,28 +8,17 @@ rename its variables. Here is a simple example of what results it can provide in
 
 ## Setup
 
-### Using hcli (Recommended)
-The easiest way to install Gepetto is using the [Hex-Rays CLI tool (hcli)](https://github.com/HexRaysSA/ida-hcli):
-```bash
-pip install ida-hcli
-hcli plugin install gepetto
+Simply drop this script (`gepetto.py`, as well as the `gepetto/` folder) into your IDA plugins folder (`$IDAUSR/plugins`). 
+By default, on Windows, this should be `%AppData%\Hex-Rays\IDA Pro\plugins` (you may need to create it).
+
+You will need to add the required packages to IDA's Python installation for the script to work.
+Find which interpreter IDA is using by checking the following registry key: 
+`Computer\HKEY_CURRENT_USER\Software\Hex-Rays\IDA` (default on Windows: `%LOCALAPPDATA%\Programs\Python\Python39`).
+Finally, with the corresponding interpreter, simply run: 
+
 ```
-
-This will automatically install the plugin to your IDA user directory.
-
-### Manual Installation
-Alternatively, you can manually install the plugin:
-1. Drop this script (`gepetto.py`, as well as the `gepetto/` folder) into your IDA plugins folder (`$IDAUSR/plugins`).
-2. The plugins directory location depends on your system:
-   - **Windows**: `%APPDATA%\Hex-Rays\IDA Pro\plugins\`
-   - **macOS**: `~/Library/Application Support/IDA Pro/plugins/`
-   - **Linux**: `~/.idapro/plugins/`
-3. Install the required packages to IDA's Python installation. Find which interpreter IDA is using by checking the following registry key:
-   `Computer\HKEY_CURRENT_USER\Software\Hex-Rays\IDA` (default on Windows: `%LOCALAPPDATA%\Programs\Python\Python39`).
-4. With the corresponding interpreter, simply run:
-   ```bash
-   [/path/to/python] -m pip install -r requirements.txt
-   ```
+[/path/to/python] -m pip install -r requirements.txt
+```
 
 ⚠️ You will also need to edit the configuration file (found as `gepetto/config.ini`) and add your own API keys. For 
 OpenAI, it can be found on [this page](https://platform.openai.com/api-keys).
