@@ -26,6 +26,12 @@ available_locales = None
 # =============================================================================
 
 
+def _stringify_config_value(value) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
 def _get_translator():
     global _translator
     if _translator is None:
@@ -89,6 +95,9 @@ def load_config():
         # parsed_ini.set("Gemini", "BASE_URL", "https://generativelanguage.googleapis.com")
         # However, get_config handles defaults, so explicit setting might not be needed unless you want to persist them.
 
+    if not parsed_ini.has_option("Gepetto", "AUTO_SHOW_STATUS_PANEL"):
+        parsed_ini.set("Gepetto", "AUTO_SHOW_STATUS_PANEL", "true")
+
 
 def get_config(section, option, environment_variable=None, default=None):
     """
@@ -125,9 +134,15 @@ def update_config(section, option, new_value):
     path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "config.ini")
     config = configparser.RawConfigParser()
     config.read(path, encoding="utf-8")
-    config.set(section, option, new_value)
+    config.set(section, option, _stringify_config_value(new_value))
     with open(path, "w", encoding="utf-8") as f:
         config.write(f)
+
+    global parsed_ini
+    if parsed_ini is not None:
+        if not parsed_ini.has_section(section):
+            parsed_ini.add_section(section)
+        parsed_ini.set(section, option, _stringify_config_value(new_value))
 
 
 def get_localization_locale():
@@ -144,3 +159,16 @@ def get_localization_locale():
     
     # Return default locale if current language is invalid
     return 'en_US'
+
+def auto_show_status_panel_enabled() -> bool:
+    global parsed_ini
+    if parsed_ini is None:
+        load_config()
+    try:
+        return parsed_ini.getboolean("Gepetto", "AUTO_SHOW_STATUS_PANEL")
+    except (configparser.NoOptionError, configparser.NoSectionError, ValueError):
+        return True
+
+
+def set_auto_show_status_panel(enabled: bool) -> None:
+    update_config("Gepetto", "AUTO_SHOW_STATUS_PANEL", enabled)

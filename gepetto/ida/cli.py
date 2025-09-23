@@ -6,6 +6,7 @@ import ida_idaapi
 
 import gepetto.config
 import gepetto.ida.handlers
+from gepetto.ida.status_panel import get_status_panel
 from gepetto.ida.tools.tools import TOOLS
 import gepetto.ida.tools.call_graph
 import gepetto.ida.tools.get_ea
@@ -43,6 +44,8 @@ MESSAGES: list[dict] = [
     }
 ]  # Keep a history of the conversation to simulate LLM memory.
 
+STATUS_PANEL = get_status_panel()
+
 
 class GepettoCLI(ida_kernwin.cli_t):
     flags = 0
@@ -55,20 +58,25 @@ class GepettoCLI(ida_kernwin.cli_t):
             return True
 
         MESSAGES.append({"role": "user", "content": line})
+        if gepetto.config.auto_show_status_panel_enabled():
+            STATUS_PANEL.ensure_shown()
+        STATUS_PANEL.set_stop_callback(getattr(gepetto.config.model, "cancel_current_request", None))
+        STATUS_PANEL.set_status(_("Waiting for model..."), busy=True)
+        STATUS_PANEL.log_user(line)
+        STATUS_PANEL.start_stream()
 
         def handle_response(response):
             if hasattr(response, "tool_calls") and response.tool_calls:
-                tool_calls = [
-                    {
+                tool_calls = []
+                for tc in response.tool_calls:
+                    tool_calls.append({
                         "id": tc.id,
                         "type": tc.type,
                         "function": {
                             "name": tc.function.name,
                             "arguments": tc.function.arguments,
                         },
-                    }
-                    for tc in response.tool_calls
-                ]
+                    })
                 MESSAGES.append(
                     {
                         "role": "assistant",
@@ -76,6 +84,13 @@ class GepettoCLI(ida_kernwin.cli_t):
                         "tool_calls": tool_calls,
                     }
                 )
+                for tc in response.tool_calls:
+                    STATUS_PANEL.log(_("→ Model requested tool: {tool_name} ({tool_args}...)").format(
+                        tool_name=tc.function.name,
+                        tool_args=(tc.function.arguments or "")[:120],
+                    ))
+                first_tool_name = response.tool_calls[0].function.name
+                STATUS_PANEL.set_status(_("Using tool: {tool_name}").format(tool_name=first_tool_name), busy=True)
                 for tc in response.tool_calls:
                     if tc.function.name == "get_screen_ea":
                         gepetto.ida.tools.get_screen_ea.handle_get_screen_ea_tc(tc, MESSAGES)
@@ -109,7 +124,11 @@ class GepettoCLI(ida_kernwin.cli_t):
                         gepetto.ida.tools.refresh_view.handle_refresh_view_tc(tc, MESSAGES)
                 stream_and_handle()
             else:
-                MESSAGES.append({"role": "assistant", "content": response.content or ""})
+                content = response.content or ""
+                MESSAGES.append({"role": "assistant", "content": content})
+                STATUS_PANEL.set_status(_("Done"), busy=False)
+                STATUS_PANEL.finish_stream(content)
+                STATUS_PANEL.log(_("✔ Completed turn"))
 
         def stream_and_handle():
             message = SimpleNamespace(content="", tool_calls=[])
@@ -118,10 +137,12 @@ class GepettoCLI(ida_kernwin.cli_t):
                 if isinstance(delta, str):
                     print(delta, end="", flush=True)
                     message.content += delta
+                    STATUS_PANEL.append_stream(delta)
                     return
                 if getattr(delta, "content", None):
                     print(delta.content, end="", flush=True)
                     message.content += delta.content
+                    STATUS_PANEL.append_stream(delta.content)
                 if getattr(delta, "tool_calls", None):
                     for tc in delta.tool_calls:
                         idx = tc.index

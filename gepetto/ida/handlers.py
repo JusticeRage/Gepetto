@@ -10,9 +10,11 @@ import idc
 
 import gepetto.config
 from gepetto.models.model_manager import instantiate_model
+from gepetto.ida.status_panel import get_status_panel
 
 _ = gepetto.config._
 
+STATUS_PANEL = get_status_panel()
 
 def comment_callback(address, view, response, start_time):
     """Callback that sets a comment at the given address.
@@ -46,7 +48,9 @@ def comment_callback(address, view, response, start_time):
     # Refresh the window so the comment is displayed properly
     if view:
         view.refresh_view(False)
-    print(_("{model} query finished in {time:.2f} seconds!").format(model=str(gepetto.config.model), time=elapsed_time))
+
+    response_finished = STATUS_PANEL.log_request_finished(elapsed_time)
+    print(response_finished)
 
 # -----------------------------------------------------------------------------
 
@@ -89,7 +93,8 @@ class ExplainHandler(idaapi.action_handler_t):
             f"Your response should use the following locale as a language: {gepetto.config.get_localization_locale()}\n"
             f"{decompiler_output}",
             functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=v, start_time=start_time))
-        print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
+        request_sent = STATUS_PANEL.log_request_started()
+        print(request_sent)
         return 1
 
     # This action is always available.
@@ -175,7 +180,9 @@ def rename_callback(address, view, response):
 
     if view:
         view.refresh_view(True)
-    print(_("Done! {count} name(s) renamed.").format(count=len(replaced)))
+    response_finished = _("Done! {count} name(s) renamed.").format(count=len(replaced))
+    print(response_finished)
+    STATUS_PANEL.log(response_finished)
 
 
 # -----------------------------------------------------------------------------
@@ -202,7 +209,8 @@ class RenameHandler(idaapi.action_handler_t):
             f"Your response should suggest names in the following locale: {gepetto.config.get_localization_locale()}",
             functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=v),
             additional_model_options={"response_format": {"type": "json_object"}})
-        print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
+        request_sent = STATUS_PANEL.log_request_started()
+        print(request_sent)
         return 1
 
     # This action is always available.
@@ -226,9 +234,12 @@ class SwapModelHandler(idaapi.action_handler_t):
         try:
             gepetto.config.model = instantiate_model(self.new_model)
         except ValueError as e:  # Raised if an API key is missing. In which case, don't switch.
-            print(_("Couldn't change model to {model}: {error}").format(model=self.new_model, error=str(e)))
+            error_msg = _("Couldn't change model to {model}: {error}").format(model=self.new_model, error=str(e))
+            print(error_msg)
+            STATUS_PANEL.log(error_msg)
             return
         gepetto.config.update_config("Gepetto", "MODEL", self.new_model)
+        STATUS_PANEL.set_model(str(gepetto.config.model))
         # Refresh the menus to reflect which model is currently selected.
         self.plugin.generate_model_select_menu()
 
@@ -254,7 +265,8 @@ class GenerateCCodeHandler(idaapi.action_handler_t):
             _("Please generate executable C code based on the following decompiled C code and ensure it includes all necessary header files and other information:\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
             functools.partial(self._save_c_code, view=v)
         )
-        print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
+        request_sent = STATUS_PANEL.log_request_started()
+        print(request_sent)
         return 1
 
     def _save_c_code(self, view, response):
@@ -271,7 +283,10 @@ class GenerateCCodeHandler(idaapi.action_handler_t):
 
         if view:
             view.refresh_view(False)
-        print(_("{model} generated code saved to {file_name}").format(model=str(gepetto.config.model), file_name=file_name))
+        response_finished = _("{model} generated code saved to {file_name}").format(
+            model=str(gepetto.config.model), file_name=file_name)
+        print(response_finished)
+        STATUS_PANEL.log(response_finished)
 
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
@@ -295,7 +310,8 @@ class GeneratePythonCodeHandler(idaapi.action_handler_t):
             _("Please generate equivalent Python code based on the following decompiled C code, and provide an example of the function call:\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
             functools.partial(self._save_python_code, view=v)
         )
-        print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
+        request_sent = STATUS_PANEL.log_request_started()
+        print(request_sent)
         return 1
 
     def _save_python_code(self, view, response):
@@ -312,7 +328,11 @@ class GeneratePythonCodeHandler(idaapi.action_handler_t):
 
         if view:
             view.refresh_view(False)
-        print(_("{model} generated code saved to {file_name}").format(model=str(gepetto.config.model), file_name=file_name))
+        response_finished = _("{model} generated code saved to {file_name}").format(
+            model=str(gepetto.config.model), file_name=file_name)
+        print(response_finished)
+        STATUS_PANEL.log(response_finished)
+        
 
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS

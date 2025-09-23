@@ -9,12 +9,26 @@ import ida_hexrays
 import ida_kernwin
 
 import gepetto.config
-from gepetto.ida.handlers import ExplainHandler, RenameHandler, SwapModelHandler, GenerateCCodeHandler, GeneratePythonCodeHandler
+from gepetto.ida.handlers import (
+    ExplainHandler,
+    GenerateCCodeHandler,
+    GeneratePythonCodeHandler,
+    RenameHandler,
+    SwapModelHandler,
+)
 from gepetto.ida.comment_handler import CommentHandler
 from gepetto.ida.cli import register_cli
+from gepetto.ida.status_panel import get_status_panel
 import gepetto.models.model_manager
 
 _ = gepetto.config._
+
+
+def _safe_execute_sync(callback):
+    try:
+        ida_kernwin.execute_sync(callback, ida_kernwin.MFF_FAST)
+    except Exception:
+        pass
 
 
 # =============================================================================
@@ -33,6 +47,7 @@ class GepettoPlugin(idaapi.plugin_t):
     c_code_menu_path = "Edit/Gepetto/" + _("Generate C Code")
     python_code_action_name = "gepetto:generate_python_code"
     python_code_menu_path = "Edit/Gepetto/" + _("Generate Python Code")
+    auto_show_action_name = "gepetto:toggle_status_panel_auto_show"
     wanted_name = 'Gepetto'
     wanted_hotkey = ''
     comment = _("Uses {model} to enrich the decompiler's output").format(model=str(gepetto.config.model))
@@ -124,6 +139,13 @@ class GepettoPlugin(idaapi.plugin_t):
         # Register CLI
         register_cli()
 
+        options_menu = "Edit/Gepetto/" + _("Options")
+        toggle_label = _("Auto-open status panel")
+        self.auto_show_menu_path = f"{options_menu}/{toggle_label}"
+        self._register_auto_show_action()
+        if gepetto.config.auto_show_status_panel_enabled():
+            ida_kernwin.execute_sync(lambda: get_status_panel().ensure_shown(), ida_kernwin.MFF_FAST)
+
         return idaapi.PLUGIN_KEEP
 
     # -----------------------------------------------------------------------------
@@ -183,6 +205,63 @@ class GepettoPlugin(idaapi.plugin_t):
 
     # -----------------------------------------------------------------------------
 
+    def _register_auto_show_action(self):
+        if not hasattr(self, "auto_show_menu_path"):
+            return
+        _safe_execute_sync(
+            functools.partial(
+                idaapi.detach_action_from_menu,
+                self.auto_show_menu_path,
+                self.auto_show_action_name,
+            )
+        )
+        _safe_execute_sync(
+            functools.partial(idaapi.unregister_action, self.auto_show_action_name)
+        )
+
+        icon = 208 if gepetto.config.auto_show_status_panel_enabled() else -1
+        self._auto_show_handler = ToggleStatusPanelAutoShowHandler(self)
+        action = idaapi.action_desc_t(
+            self.auto_show_action_name,
+            _("Auto-open status panel"),
+            self._auto_show_handler,
+            "",
+            _("Automatically focus the Gepetto status panel when a request starts."),
+            icon,
+        )
+        _safe_execute_sync(functools.partial(idaapi.register_action, action))
+        _safe_execute_sync(
+            functools.partial(
+                idaapi.attach_action_to_menu,
+                self.auto_show_menu_path,
+                self.auto_show_action_name,
+                idaapi.SETMENU_APP,
+            )
+        )
+
+    # -----------------------------------------------------------------------------
+
+    def refresh_auto_show_action(self):
+        self._register_auto_show_action()
+
+    # -----------------------------------------------------------------------------
+
+    def _unregister_auto_show_action(self):
+        if not hasattr(self, "auto_show_menu_path"):
+            return
+        _safe_execute_sync(
+            functools.partial(
+                idaapi.detach_action_from_menu,
+                self.auto_show_menu_path,
+                self.auto_show_action_name,
+            )
+        )
+        _safe_execute_sync(
+            functools.partial(idaapi.unregister_action, self.auto_show_action_name)
+        )
+
+    # -----------------------------------------------------------------------------
+
     def run(self, arg):
         pass
 
@@ -192,7 +271,28 @@ class GepettoPlugin(idaapi.plugin_t):
         self.detach_actions()
         if self.menu:
             self.menu.unhook()
+        self._unregister_auto_show_action()
+        get_status_panel().close()
         return
+
+
+# -----------------------------------------------------------------------------
+
+class ToggleStatusPanelAutoShowHandler(idaapi.action_handler_t):
+    def __init__(self, plugin: "GepettoPlugin"):
+        super().__init__()
+        self._plugin = plugin
+
+    def activate(self, ctx):
+        new_state = not gepetto.config.auto_show_status_panel_enabled()
+        gepetto.config.set_auto_show_status_panel(new_state)
+        if new_state:
+            ida_kernwin.execute_sync(lambda: get_status_panel().ensure_shown(), ida_kernwin.MFF_FAST)
+        self._plugin.refresh_auto_show_action()
+        return 1
+
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
 
 
 # -----------------------------------------------------------------------------
@@ -206,4 +306,3 @@ class ContextMenuHooks(idaapi.UI_Hooks):
             idaapi.attach_action_to_popup(form, popup, GepettoPlugin.rename_action_name, "Gepetto/")
             idaapi.attach_action_to_popup(form, popup, GepettoPlugin.c_code_action_name, "Gepetto/")
             idaapi.attach_action_to_popup(form, popup, GepettoPlugin.python_code_action_name, "Gepetto/")
-

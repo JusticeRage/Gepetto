@@ -12,8 +12,11 @@ import idc
 
 import gepetto.config
 from gepetto.models.model_manager import instantiate_model
+from gepetto.ida.status_panel import get_status_panel
 
 _ = gepetto.config._
+
+STATUS_PANEL = get_status_panel()
 
 # -----------------------------------------------------------------------------
 
@@ -50,7 +53,8 @@ class CommentHandler(idaapi.action_handler_t):
               """,
             functools.partial(comment_callback, decompiler_output=decompiler_output, pseudocode_lines=pseudocode_lines, view=v, start_time=start_time),
             additional_model_options={"response_format": {"type": "json_object"}})
-        print(_("Request to {model} sent...").format(model=str(gepetto.config.model)))
+        request_sent = STATUS_PANEL.log_request_started()
+        print(request_sent)
         return 1
 
     # This action is always available.
@@ -90,9 +94,9 @@ def comment_callback(decompiler_output, pseudocode_lines, view, response, start_
         if view:
             view.refresh_view(True)
 
-        print(_("{model} query finished in {time:.2f} seconds!").format(
-            model=str(gepetto.config.model), time=elapsed_time))
-        
+        response_finished = STATUS_PANEL.log_request_finished(elapsed_time)
+        print(response_finished)
+
     except Exception as e:
         print("[ERROR] comment_callback:", e)
         raise
