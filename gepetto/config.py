@@ -2,6 +2,8 @@ import configparser
 import gettext
 import os
 
+import ida_settings
+
 from gepetto.models.model_manager import instantiate_model, load_available_models, get_fallback_model
 
 # =============================================================================
@@ -73,7 +75,7 @@ def load_config():
     _translator = translate.gettext
 
     # Select model
-    requested_model = parsed_ini.get('Gepetto', 'MODEL')
+    requested_model = ida_settings.get_current_plugin_setting("model")
     load_available_models()
     # Attempt to load the requested model, otherwise get the first available one, or don't load Gepetto
     try:
