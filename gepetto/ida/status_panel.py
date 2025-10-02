@@ -91,10 +91,6 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._log = QtWidgets.QTextEdit()
         self._log.setReadOnly(True)
         self._log.setMinimumHeight(160)
-        try:
-            self._log.document().setMaximumBlockCount(2000)
-        except Exception:
-            pass
         layout.addWidget(self._log, stretch=1)
 
         bottom_row = QtWidgets.QHBoxLayout()
@@ -118,8 +114,14 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     def _force_cursor_to_end(self):
         if QtGui is None or self._log is None:
             return
-        self._log.moveCursor(QtGui.QTextCursor.End)
-
+        # AGENT: this and other gating added to this file is to lay the groundwork for switching between PySide6 and PyQt5
+        if getattr(QtGui.QTextCursor, "End", None) is not None:
+            self._log.moveCursor(QtGui.QTextCursor.End)
+            return
+        move_operation = getattr(QtGui.QTextCursor, "MoveOperation", None)
+        if move_operation is not None:
+            self._log.moveCursor(move_operation.End)
+       
     def _ensure_newline(self, *, require_existing_text: bool) -> None:
         if QtGui is None or self._log is None:
             return
@@ -148,16 +150,6 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             return
         status_text = text or _("Idle")
         self._status_label.setText(_("Status: {status}").format(status=status_text))
-        if QtGui is None:
-            return
-        palette = self._status_label.palette()
-        if error:
-            palette.setColor(QtGui.QPalette.WindowText, QtGui.QColor("#c92a2a"))
-        elif busy:
-            palette.setColor(QtGui.QPalette.WindowText, QtGui.QColor("#e67700"))
-        else:
-            palette.setColor(QtGui.QPalette.WindowText, QtGui.QColor("#2f9e44"))
-        self._status_label.setPalette(palette)
 
     # ------------------------------------------------------------------
     def reset_stop(self) -> None:
@@ -194,9 +186,9 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         if newline:
             self._ensure_newline(require_existing_text=False)
         if QtWidgets:
-            self._log.verticalScrollBar().setValue(self._log.verticalScrollBar().maximum())
-
-    # ------------------------------------------------------------------
+            scrollbar = self._log.verticalScrollBar()
+            if scrollbar is not None:
+                scrollbar.setValue(scrollbar.maximum())
     def log_user(self, text: str) -> None:
         self.append_log(f"[{_('You')}] {text}")
 
