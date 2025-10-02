@@ -39,13 +39,14 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._clear_button: QtWidgets.QPushButton | None
         self._stream_active = False
         self._stream_text: list[str] = []
+        self._log_markdown: str = ''
         self._ready = False
 
     # ------------------------------------------------------------------
     def OnCreate(self, form):  # noqa: N802 - IDA callback signature
         if QtWidgets is None:
             return
-        self._widget = ida_kernwin.PluginForm.FormToPyQtWidget(form)
+        self._widget = self.FormToPyQtWidget(form)
         self._build_ui()
         self._ready = True
         self._owner.on_form_ready()
@@ -61,6 +62,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._clear_button = None
         self._stream_active = False
         self._stream_text = []
+        self._log_markdown = ''
         self._ready = False
         self._owner.form_closed()
 
@@ -92,6 +94,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._log.setReadOnly(True)
         self._log.setMinimumHeight(160)
         layout.addWidget(self._log, stretch=1)
+        self._refresh_log_widget(scroll=False)
 
         bottom_row = QtWidgets.QHBoxLayout()
         self._model_label = QtWidgets.QLabel(_("Model: {model}").format(model=str(gepetto.config.model)))
@@ -123,21 +126,35 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             self._log.moveCursor(move_operation.End)
        
     def _ensure_newline(self, *, require_existing_text: bool) -> None:
-        if QtGui is None or self._log is None:
+        if require_existing_text and not self._log_markdown:
+            return
+        if not self._log_markdown:
+            return
+        if self._log_markdown.endswith("  \n") or self._log_markdown.endswith("\n\n"):
+            return
+        if self._log_markdown.endswith("\n"):
+            self._log_markdown = self._log_markdown[:-1] + "  \n"
+            return
+        self._log_markdown += "  \n"
+
+    def _refresh_log_widget(self, *, scroll: bool) -> None:
+        if not self._log:
             return
         try:
-            doc_text = self._log.toPlainText()
+            if hasattr(self._log, "setMarkdown"):
+                self._log.setMarkdown(self._log_markdown)
+            elif hasattr(self._log.document(), "setMarkdown"):
+                self._log.document().setMarkdown(self._log_markdown)
+            else:
+                self._log.setPlainText(self._log_markdown)
         except Exception:
-            return
-        if require_existing_text and not doc_text:
-            return
-        if doc_text.endswith("\n"):
-            return
-        self._force_cursor_to_end()
-        try:
-            self._log.insertPlainText("\n")
-        except Exception:
-            pass
+            self._log.setPlainText(self._log_markdown)
+        if scroll:
+            self._force_cursor_to_end()
+            if QtWidgets:
+                scrollbar = self._log.verticalScrollBar()
+                if scrollbar is not None:
+                    scrollbar.setValue(scrollbar.maximum())
 
     # ------------------------------------------------------------------
     def set_model(self, model_name: str) -> None:
@@ -172,29 +189,25 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
 
     # ------------------------------------------------------------------
     def clear_log(self) -> None:
-        if self._log:
-            self._log.clear()
+        self._log_markdown = ""
+        self._refresh_log_widget(scroll=False)
 
     # ------------------------------------------------------------------
     def append_log(self, message: str, newline: bool = False) -> None:
-        if not self._log:
-            return
-        entry = f"{_timestamp()} : {message}"
+        entry = f"{_timestamp()} | {message}"
         self._ensure_newline(require_existing_text=True)
-        self._force_cursor_to_end()
-        self._log.insertPlainText(entry)
+        self._log_markdown += entry
         if newline:
             self._ensure_newline(require_existing_text=False)
-        if QtWidgets:
-            scrollbar = self._log.verticalScrollBar()
-            if scrollbar is not None:
-                scrollbar.setValue(scrollbar.maximum())
+        self._refresh_log_widget(scroll=True)
+
+    # ------------------------------------------------------------------
     def log_user(self, text: str) -> None:
-        self.append_log(f"[{_('You')}] {text}")
+        self.append_log(f"**[{_('You')}] :** {text}")
 
     # ------------------------------------------------------------------
     def log_assistant(self, text: str) -> None:
-        self.append_log(f"[{_('Gepetto')}] {text}")
+        self.append_log(f"**[{_('Gepetto')}] :** {text}")
 
     # ------------------------------------------------------------------
     def start_stream(self) -> None:
@@ -202,29 +215,28 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self.set_model(model_name)
         if not self._log or QtGui is None:
             return
-        header = f"[{_('Gepetto')} ({model_name})] " if model_name is not None else f"[{_('Gepetto')}]"
+        header = f"**[{_('Gepetto')}] ({model_name}) :** " if model_name is not None else f"__**[{_('Gepetto')}]**__"
         self._stream_text = []
         self._stream_active = True
         self.append_log(header)
 
     # ------------------------------------------------------------------
     def append_stream(self, chunk: str) -> None:
-        if not self._stream_active or not chunk or not self._log or QtGui is None:
+        if not self._stream_active or not chunk:
             return
         self._stream_text.append(chunk)
-        self._force_cursor_to_end()
-        self._log.insertPlainText(chunk)
+        self._log_markdown += chunk
+        self._refresh_log_widget(scroll=True)
 
     # ------------------------------------------------------------------
     def finish_stream(self, final_text: str) -> None:
         finished_message = "".join(self._stream_text)
         self._stream_text = []
         self._stream_active = False
-        if not self._log or QtGui is None:
-            return
         if final_text != finished_message:
             self.log_assistant(final_text)
         self._ensure_newline(require_existing_text=False)
+        self._refresh_log_widget(scroll=True)
 
 
 class _StatusPanelManager:
@@ -239,11 +251,12 @@ class _StatusPanelManager:
     def ensure_shown(self) -> None:
         if self._form is None:
             self._form = GepettoStatusForm(self)
-            try:
-                self._form.Show(_("Gepetto Status"), options=_DEFAULT_DOCK_OPTIONS)
-            except Exception:
-                print(_("Could not show Gepetto Status panel."))
-                return
+            if self._form is not None:
+                try:
+                    self._form.Show(_("Gepetto Status"), options=_DEFAULT_DOCK_OPTIONS)
+                except Exception:
+                    print(_("Could not show Gepetto Status panel."))
+                    return
         try:
             ida_kernwin.activate_widget(_("Gepetto Status"), True)
             self._dock()
