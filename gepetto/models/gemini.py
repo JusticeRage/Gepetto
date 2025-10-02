@@ -14,10 +14,11 @@ import gepetto.config
 _ = gepetto.config._
 
 
+GEMINI_FLASH_LATEST_MODEL_NAME = "gemini-flash-latest"
+GEMINI_FLASH_LITE_LATEST_MODEL_NAME = "gemini-flash-lite-latest"
 GEMINI_2_0_FLASH_MODEL_NAME = "gemini-2.0-flash"
 GEMINI_2_5_PRO_MODEL_NAME = "gemini-2.5-pro"
 GEMINI_2_5_FLASH_MODEL_NAME = "gemini-2.5-flash"
-GEMINI_2_5_FLASH_LITE_PREVIEW_MODEL_NAME = "gemini-2.5-flash-lite-preview-06-17"
 
 
 def _get(obj, key, default=None):
@@ -221,10 +222,11 @@ class Gemini(LanguageModel):
     @staticmethod
     def supported_models():
         return [
+            GEMINI_FLASH_LATEST_MODEL_NAME,
+            GEMINI_FLASH_LITE_LATEST_MODEL_NAME,
             GEMINI_2_0_FLASH_MODEL_NAME,
             GEMINI_2_5_PRO_MODEL_NAME,
             GEMINI_2_5_FLASH_MODEL_NAME,
-            GEMINI_2_5_FLASH_LITE_PREVIEW_MODEL_NAME,
         ]
 
     @staticmethod

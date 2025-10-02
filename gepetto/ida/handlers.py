@@ -27,7 +27,6 @@ def comment_callback(address, view, response, start_time):
     to remain backwards compatible this function accepts either and extracts
         the textual content when necessary.
     """
-    elapsed_time = time.time() - start_time
 
     response_text = response.content if hasattr(response, "content") else response
     response_text = "\n".join(textwrap.wrap(response_text, 80, replace_whitespace=False))
@@ -49,6 +48,7 @@ def comment_callback(address, view, response, start_time):
     if view:
         view.refresh_view(False)
 
+    elapsed_time = time.time() - start_time
     response_finished = STATUS_PANEL.log_request_finished(elapsed_time)
     print(response_finished)
 
@@ -104,7 +104,7 @@ class ExplainHandler(idaapi.action_handler_t):
 
 # -----------------------------------------------------------------------------
 
-def rename_callback(address, view, response):
+def rename_callback(address, view, response, start_time):
     """
     Callback that extracts a JSON object of old names and new names from the response,
     displays a table UI where the user can select which identifiers to rename,
@@ -116,6 +116,10 @@ def rename_callback(address, view, response):
     import ida_kernwin
     import json
     import re
+
+    elapsed_time = time.time() - start_time
+    timer_finished = STATUS_PANEL.log_request_finished(elapsed_time)
+    print(timer_finished)
 
     response_text = response.content if hasattr(response, "content") else response
     names = json.loads(response_text)
@@ -199,6 +203,7 @@ class RenameHandler(idaapi.action_handler_t):
     def activate(self, ctx):
         decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
         v = ida_hexrays.get_widget_vdui(ctx.widget)
+        start_time = time.time()
         gepetto.config.model.query_model_async(
             f"Analyze the following C function:\n{decompiler_output}"
             f"\nSuggest better names for the variables and, if helpful, the function itself."
@@ -207,7 +212,7 @@ class RenameHandler(idaapi.action_handler_t):
             f" Use the special key '__function__' to rename the function. Do not provide any explanation,"
             f" only the JSON object.\n"
             f"Your response should suggest names in the following locale: {gepetto.config.get_localization_locale()}",
-            functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=v),
+            functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=v, start_time=start_time),
             additional_model_options={"response_format": {"type": "json_object"}})
         request_sent = STATUS_PANEL.log_request_started()
         print(request_sent)
@@ -263,7 +268,7 @@ class GenerateCCodeHandler(idaapi.action_handler_t):
 
         start_time = time.time()
         gepetto.config.model.query_model_async(
-            f"Please generate executable C code based on the following decompiled C code and ensure it includes all necessary header files and other information:"
+            f"Please generate executable C code based on the following decompiled C code and ensure it includes all necessary header files and other information:\n"
             f"{decompiler_output}",
             functools.partial(self._save_c_code, view=v, start_time=start_time)
         )
@@ -278,6 +283,11 @@ class GenerateCCodeHandler(idaapi.action_handler_t):
         :param response: The generated C code from the model
         :param start_time: When the request was initiated
         """
+
+        elapsed_time = time.time() - start_time
+        timer_finished = STATUS_PANEL.log_request_finished(elapsed_time)
+        print(timer_finished)
+        
         code_text = response.content if hasattr(response, "content") else response
         project_name = idaapi.get_root_filename()
         func_name = idc.get_func_name(idaapi.get_screen_ea())
@@ -290,10 +300,7 @@ class GenerateCCodeHandler(idaapi.action_handler_t):
         response_finished = _("{model} generated code saved to {file_name}").format(
             model=str(gepetto.config.model), file_name=file_name)
 
-        elapsed_time = time.time() - start_time
-        timer_finished = STATUS_PANEL.log_request_finished(elapsed_time)
         STATUS_PANEL.log(response_finished)
-        print(timer_finished)
         print(response_finished)
 
     def update(self, ctx):
@@ -331,6 +338,11 @@ class GeneratePythonCodeHandler(idaapi.action_handler_t):
         :param response: The generated python code from the model
         :param start_time: When the request was initiated
         """
+
+        elapsed_time = time.time() - start_time
+        timer_finished = STATUS_PANEL.log_request_finished(elapsed_time)
+        print(timer_finished)
+        
         code_text = response.content if hasattr(response, "content") else response
         project_name = idaapi.get_root_filename()
         func_name = idc.get_func_name(idaapi.get_screen_ea())
@@ -343,10 +355,7 @@ class GeneratePythonCodeHandler(idaapi.action_handler_t):
         response_finished = _("{model} generated code saved to {file_name}").format(
             model=str(gepetto.config.model), file_name=file_name)
 
-        elapsed_time = time.time() - start_time
-        timer_finished = STATUS_PANEL.log_request_finished(elapsed_time)
         STATUS_PANEL.log(response_finished)
-        print(timer_finished)
         print(response_finished)
 
     def update(self, ctx):
