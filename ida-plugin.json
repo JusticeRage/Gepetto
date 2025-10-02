@@ -19,7 +19,8 @@
       "together>=1.2.0",
       "ollama>=0.4.5",
       "azure-identity>=1.21.0",
-      "google-generativeai"
+      "google-generativeai",
+      "ida-settings>=3.0.0"
     ],
     "urls": {
       "repository": "https://github.com/JusticeRage/Gepetto"
@@ -45,6 +46,16 @@
       "groq",
       "together",
       "deepseek"
+    ],
+    "settings": [
+      {
+        "key": "model",
+        "type": "string",
+        "required": true,
+        "default": "gpt-4o",
+        "name": "model",
+        "documentation": "model to use"
+      }
     ]
   }
 }
