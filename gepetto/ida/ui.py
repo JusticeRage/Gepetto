@@ -165,7 +165,7 @@ class GepettoPlugin(idaapi.plugin_t):
                                       else SwapModelHandler(model_name, self),
                                       "",
                                       "",
-                                      208 if str(gepetto.config.model) == model_name else 0)  # Icon #208 == check mark.
+                                      208 if str(gepetto.config.model) == model_name else -1)  # Icon #208 == check mark.
         ida_kernwin.execute_sync(functools.partial(idaapi.register_action, action), ida_kernwin.MFF_FAST)
         ida_kernwin.execute_sync(functools.partial(idaapi.attach_action_to_menu, menu_path, action_name, idaapi.SETMENU_APP),
                                  ida_kernwin.MFF_FAST)
@@ -205,7 +205,7 @@ class GepettoPlugin(idaapi.plugin_t):
 
     # -----------------------------------------------------------------------------
 
-    def _register_auto_show_action(self):
+    def _register_auto_show_action(self, force_state=None):
         if not hasattr(self, "auto_show_menu_path"):
             return
         _safe_execute_sync(
@@ -219,7 +219,11 @@ class GepettoPlugin(idaapi.plugin_t):
             functools.partial(idaapi.unregister_action, self.auto_show_action_name)
         )
 
-        icon = 208 if gepetto.config.auto_show_status_panel_enabled() else -1
+        if force_state is None:
+            enabled = gepetto.config.auto_show_status_panel_enabled()
+        else:
+            enabled = bool(force_state)
+        icon = 208 if enabled else -1
         self._auto_show_handler = ToggleStatusPanelAutoShowHandler(self)
         action = idaapi.action_desc_t(
             self.auto_show_action_name,
@@ -238,14 +242,20 @@ class GepettoPlugin(idaapi.plugin_t):
                 idaapi.SETMENU_APP,
             )
         )
+        _safe_execute_sync(
+            functools.partial(
+                ida_kernwin.update_action_icon,
+                self.auto_show_action_name,
+                icon,
+            )
+        )
 
     # -----------------------------------------------------------------------------
 
-    def refresh_auto_show_action(self):
-        self._register_auto_show_action()
+    def refresh_auto_show_action(self, force_state=None):
+        self._register_auto_show_action(force_state=force_state)
 
     # -----------------------------------------------------------------------------
-
     def _unregister_auto_show_action(self):
         if not hasattr(self, "auto_show_menu_path"):
             return
@@ -284,11 +294,12 @@ class ToggleStatusPanelAutoShowHandler(idaapi.action_handler_t):
         self._plugin = plugin
 
     def activate(self, ctx):
-        new_state = not gepetto.config.auto_show_status_panel_enabled()
+        current_state = gepetto.config.auto_show_status_panel_enabled()
+        new_state = not current_state
         gepetto.config.set_auto_show_status_panel(new_state)
         if new_state:
             ida_kernwin.execute_sync(lambda: get_status_panel().ensure_shown(), ida_kernwin.MFF_FAST)
-        self._plugin.refresh_auto_show_action()
+        self._plugin.refresh_auto_show_action(force_state=new_state)
         return 1
 
     def update(self, ctx):
@@ -298,11 +309,18 @@ class ToggleStatusPanelAutoShowHandler(idaapi.action_handler_t):
 # -----------------------------------------------------------------------------
 
 class ContextMenuHooks(idaapi.UI_Hooks):
-    def finish_populating_widget_popup(self, form, popup):
-        # Add actions to the context menu of the Pseudocode view
-        if idaapi.get_widget_type(form) == idaapi.BWN_PSEUDOCODE:
-            idaapi.attach_action_to_popup(form, popup, GepettoPlugin.explain_action_name, "Gepetto/")
-            idaapi.attach_action_to_popup(form, popup, GepettoPlugin.comment_action_name, "Gepetto/")
-            idaapi.attach_action_to_popup(form, popup, GepettoPlugin.rename_action_name, "Gepetto/")
-            idaapi.attach_action_to_popup(form, popup, GepettoPlugin.c_code_action_name, "Gepetto/")
-            idaapi.attach_action_to_popup(form, popup, GepettoPlugin.python_code_action_name, "Gepetto/")
+    def populating_widget_popup(self, form, popup, ctx=None):
+        """Accept both legacy and new signatures to avoid SWIG signature introspection issues."""
+        return 0
+
+    def finish_populating_widget_popup(self, form, popup, ctx=None):
+        widget = form
+        popup_handle = popup
+        if ctx is not None and hasattr(ctx, "widget") and ctx.widget is not None:
+            widget = ctx.widget
+        if idaapi.get_widget_type(widget) == idaapi.BWN_PSEUDOCODE:
+            idaapi.attach_action_to_popup(widget, popup_handle, GepettoPlugin.explain_action_name, "Gepetto/")
+            idaapi.attach_action_to_popup(widget, popup_handle, GepettoPlugin.comment_action_name, "Gepetto/")
+            idaapi.attach_action_to_popup(widget, popup_handle, GepettoPlugin.rename_action_name, "Gepetto/")
+            idaapi.attach_action_to_popup(widget, popup_handle, GepettoPlugin.c_code_action_name, "Gepetto/")
+            idaapi.attach_action_to_popup(widget, popup_handle, GepettoPlugin.python_code_action_name, "Gepetto/")

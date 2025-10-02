@@ -261,32 +261,40 @@ class GenerateCCodeHandler(idaapi.action_handler_t):
         if not decompiler_output:
             return 0
 
+        start_time = time.time()
         gepetto.config.model.query_model_async(
-            _("Please generate executable C code based on the following decompiled C code and ensure it includes all necessary header files and other information:\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
-            functools.partial(self._save_c_code, view=v)
+            f"Please generate executable C code based on the following decompiled C code and ensure it includes all necessary header files and other information:"
+            f"{decompiler_output}",
+            functools.partial(self._save_c_code, view=v, start_time=start_time)
         )
         request_sent = STATUS_PANEL.log_request_started()
         print(request_sent)
         return 1
 
-    def _save_c_code(self, view, response):
+    def _save_c_code(self, view, response, start_time):
         """
         Callback that saves the generated C code to a file.
         :param view: A handle to the decompiler window
         :param response: The generated C code from the model
+        :param start_time: When the request was initiated
         """
+        code_text = response.content if hasattr(response, "content") else response
         project_name = idaapi.get_root_filename()
         func_name = idc.get_func_name(idaapi.get_screen_ea())
         file_name = f"{project_name}_{func_name}.c"
         with open(file_name, "w", encoding="utf-8") as f:
-            f.write(response)
+            f.write(str(code_text))
 
         if view:
             view.refresh_view(False)
         response_finished = _("{model} generated code saved to {file_name}").format(
             model=str(gepetto.config.model), file_name=file_name)
-        print(response_finished)
+
+        elapsed_time = time.time() - start_time
+        timer_finished = STATUS_PANEL.log_request_finished(elapsed_time)
         STATUS_PANEL.log(response_finished)
+        print(timer_finished)
+        print(response_finished)
 
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
@@ -306,33 +314,40 @@ class GeneratePythonCodeHandler(idaapi.action_handler_t):
         if not decompiler_output:
             return 0
 
+        start_time = time.time()
         gepetto.config.model.query_model_async(
-            _("Please generate equivalent Python code based on the following decompiled C code, and provide an example of the function call:\n{decompiler_output}").format(decompiler_output=str(decompiler_output)),
-            functools.partial(self._save_python_code, view=v)
+            f"Please generate equivalent Python code based on the following decompiled C code, and provide an example of the function call:"
+            f"{decompiler_output}",
+            functools.partial(self._save_python_code, view=v, start_time=start_time)
         )
         request_sent = STATUS_PANEL.log_request_started()
         print(request_sent)
         return 1
 
-    def _save_python_code(self, view, response):
+    def _save_python_code(self, view, response, start_time):
         """
         Callback that saves the generated python code to a file.
         :param view: A handle to the decompiler window
         :param response: The generated python code from the model
+        :param start_time: When the request was initiated
         """
+        code_text = response.content if hasattr(response, "content") else response
         project_name = idaapi.get_root_filename()
         func_name = idc.get_func_name(idaapi.get_screen_ea())
         file_name = f"{project_name}_{func_name}.py"
         with open(file_name, "w", encoding="utf-8") as f:
-            f.write(response)
+            f.write(str(code_text))
 
         if view:
             view.refresh_view(False)
         response_finished = _("{model} generated code saved to {file_name}").format(
             model=str(gepetto.config.model), file_name=file_name)
-        print(response_finished)
+
+        elapsed_time = time.time() - start_time
+        timer_finished = STATUS_PANEL.log_request_finished(elapsed_time)
         STATUS_PANEL.log(response_finished)
-        
+        print(timer_finished)
+        print(response_finished)
 
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS

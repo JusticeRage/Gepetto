@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 from typing import Callable, Optional
+from PyQt5 import QtCore, QtGui, QtWidgets
 
 import ida_kernwin
 
@@ -16,13 +17,6 @@ _DEFAULT_DOCK_OPTIONS = (
     | getattr(ida_kernwin.PluginForm, "WOPN_RESTORE", 0)
 )
 
-try:  # Prefer PyQt5 on IDA 7.x; fall back to PySide6 for newer builds.
-    from PyQt5 import QtCore, QtGui, QtWidgets  # type: ignore
-except ImportError:  # pragma: no cover - executed on IDA >= 9.2 with PySide6
-    try:
-        from PySide6 import QtCore, QtGui, QtWidgets  # type: ignore
-    except ImportError:  # pragma: no cover - headless testing environment
-        QtCore = QtGui = QtWidgets = None  # type: ignore
 
 
 def _timestamp() -> str:
@@ -33,14 +27,16 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     """Dockable widget that displays the streaming answer and log."""
 
     def __init__(self, owner: "_StatusPanelManager") -> None:
+        if QtWidgets is None:
+            return
         super().__init__()
         self._owner = owner
-        self._widget: Optional[QtWidgets.QWidget] = None if QtWidgets else None
-        self._log: Optional[QtWidgets.QTextEdit] = None
-        self._model_label: Optional[QtWidgets.QLabel] = None
-        self._status_label: Optional[QtWidgets.QLabel] = None
-        self._stop_button: Optional[QtWidgets.QPushButton] = None
-        self._clear_button: Optional[QtWidgets.QPushButton] = None
+        self._widget: QtWidgets.QWidget | None
+        self._log: QtWidgets.QTextEdit | None
+        self._model_label: QtWidgets.QLabel | None
+        self._status_label: QtWidgets.QLabel | None
+        self._stop_button: QtWidgets.QPushButton | None
+        self._clear_button: QtWidgets.QPushButton | None
         self._stream_active = False
         self._stream_text: list[str] = []
         self._ready = False
@@ -115,6 +111,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         bottom_row.addWidget(self._stop_button)
 
         layout.addLayout(bottom_row)
+        self._widget.setLayout(layout)
 
     # ------------------------------------------------------------------
 
@@ -342,7 +339,11 @@ class _StatusPanelManager:
     # ------------------------------------------------------------------
     def log_request_started(self) -> str:
         message = _("Request to {model} sent...").format(model=str(gepetto.config.model))
-        self.log(message)
+        try:
+            self.log(message)
+            self.set_status(_("Waiting for model..."), busy=True)
+        except:
+            pass
         return message
 
     # ------------------------------------------------------------------
@@ -351,7 +352,11 @@ class _StatusPanelManager:
             model=str(gepetto.config.model),
             time=elapsed_seconds,
         )
-        self.log(message)
+        try:
+            self.log(message)
+            self.set_status(_("Done"), busy=False)
+        except:
+            pass
         return message
 
     # ------------------------------------------------------------------
