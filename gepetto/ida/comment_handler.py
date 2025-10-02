@@ -78,15 +78,32 @@ def comment_callback(decompiler_output, pseudocode_lines, view, response, start_
         print(f"Response: {response_text}")
 
         items = json.loads(response_text)
-        pairs = [(int(line), comment) for line, comment in items.items()]
 
-        for line, comment in pairs:
-            comment_address = pseudocode_lines[line][2]  # Get the comment address
-            comment_placement = pseudocode_lines[line][3]  # Get the comment placement
+        for line_key, raw_comment in items.items():
+            try:
+                line_index = int(line_key)
+            except (TypeError, ValueError):
+                continue
+
+            if line_index < 0 or line_index >= len(pseudocode_lines):
+                continue
+
+            comment_address = pseudocode_lines[line_index][2]
+            comment_placement = pseudocode_lines[line_index][3]
+            if comment_placement is None:
+                comment_placement = idaapi.ITP_SEMI
+
+            if comment_address is None or comment_address == idaapi.BADADDR:
+                continue
+
+            comment_text = str(raw_comment).strip()
+            if not comment_text:
+                continue
+
             target = idaapi.treeloc_t()
-            target.ea = comment_address
+            target.ea = int(comment_address)
             target.itp = comment_placement
-            decompiler_output.set_user_cmt(target, comment)
+            decompiler_output.set_user_cmt(target, comment_text)
 
         decompiler_output.save_user_cmts()
         decompiler_output.del_orphan_cmts()
