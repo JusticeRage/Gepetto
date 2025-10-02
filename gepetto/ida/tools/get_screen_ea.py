@@ -26,9 +26,11 @@ def handle_get_screen_ea_tc(tc, messages):
 
 # -----------------------------------------------------------------------------
 
-def get_screen_ea() -> str | None:
-    """Return the current effective address, or None if no valid EA."""
-    ea = ida_kernwin.execute_sync(ida_kernwin.get_screen_ea, ida_kernwin.MFF_FAST)
-    if ea == idaapi.BADADDR:
-        return None
-    return ea
+def get_screen_ea() -> int | None:
+    ea = idaapi.BADADDR
+    def _cb():
+        nonlocal ea
+        ea = ida_kernwin.get_screen_ea()
+        return 0
+    ida_kernwin.execute_sync(_cb, ida_kernwin.MFF_READ)
+    return None if ea == idaapi.BADADDR else ea
