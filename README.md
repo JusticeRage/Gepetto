@@ -1,7 +1,7 @@
 # Gepetto
 
 Gepetto is a Python plugin which uses various large language models to provide meaning to functions 
-decompiled by IDA Pro (≥ 7.4). It can leverage them to explain what a function does, and to automatically 
+decompiled by IDA Pro (≥ 7.6). It can leverage them to explain what a function does, and to automatically 
 rename its variables. Here is a simple example of what results it can provide in mere seconds:
 
 ![](https://github.com/JusticeRage/Gepetto/blob/main/readme/comparison.png?raw=true)

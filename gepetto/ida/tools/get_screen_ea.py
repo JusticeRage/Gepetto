@@ -26,11 +26,12 @@ def handle_get_screen_ea_tc(tc, messages):
 
 # -----------------------------------------------------------------------------
 
-def get_screen_ea() -> int | None:
+def get_screen_ea() -> str | None:
     ea = idaapi.BADADDR
     def _cb():
         nonlocal ea
         ea = ida_kernwin.get_screen_ea()
         return 0
     ida_kernwin.execute_sync(_cb, ida_kernwin.MFF_READ)
-    return None if ea == idaapi.BADADDR else ea
+    return None if ea == idaapi.BADADDR else hex(ea)
+
