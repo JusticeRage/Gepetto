@@ -3,8 +3,8 @@
   "plugin": {
     "name": "gepetto",
     "entryPoint": "gepetto.py",
-    "version": "1.4.1",
-    "idaVersions": ">=7.4",
+    "version": "1.5.0",
+    "idaVersions": ">=7.6",
     "description": "Gepetto is a Python plugin which uses various large language models to provide meaning to functions decompiled by IDA Pro. It can leverage them to explain what a function does, and to automatically rename its variables.",
     "license": "GPL-3.0",
     "categories": [
@@ -19,7 +19,7 @@
       "together>=1.2.0",
       "ollama>=0.4.5",
       "azure-identity>=1.21.0",
-      "google-generativeai"
+      "google-genai>=1.36.0",
     ],
     "urls": {
       "repository": "https://github.com/JusticeRage/Gepetto"
@@ -44,7 +44,8 @@
       "azure-openai",
       "groq",
       "together",
-      "deepseek"
+      "deepseek",
+      "agent"
     ]
   }
 }
