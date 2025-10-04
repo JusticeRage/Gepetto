@@ -19,7 +19,7 @@
       "together>=1.2.0",
       "ollama>=0.4.5",
       "azure-identity>=1.21.0",
-      "google-genai>=1.36.0",
+      "google-genai>=1.36.0"
     ],
     "urls": {
       "repository": "https://github.com/JusticeRage/Gepetto"
