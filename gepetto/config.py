@@ -87,17 +87,6 @@ def load_config():
             print(_("No model available. Please edit the configuration file and try again."))
             model = None
 
-    # Ensure Gemini section exists - this is a good place to initialize default sections if they don't exist
-    if not parsed_ini.has_section("Gemini"):
-        parsed_ini.add_section("Gemini")
-        # Optionally, set default values here if you want them written to config.ini
-        # For example:
-        # parsed_ini.set("Gemini", "BASE_URL", "https://generativelanguage.googleapis.com")
-        # However, get_config handles defaults, so explicit setting might not be needed unless you want to persist them.
-
-    if not parsed_ini.has_option("Gepetto", "AUTO_SHOW_STATUS_PANEL"):
-        parsed_ini.set("Gepetto", "AUTO_SHOW_STATUS_PANEL", "true")
-
 
 def get_config(section, option, environment_variable=None, default=None):
     """
