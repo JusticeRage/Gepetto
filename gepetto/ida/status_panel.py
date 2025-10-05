@@ -244,12 +244,11 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             button = QtWidgets.QToolButton()
             button.setText(category.display_name())
             button.setCheckable(True)
+            button.setChecked(True)
             button.clicked.connect(self._make_filter_callback(category))  # type: ignore[arg-type]
+            # turn off repeat of final message in log by default
             if category is LogCategory.ASSISTANT:
-                button.setChecked(False)
                 button.click()
-            else:
-                button.setChecked(True)
             filters_row.addWidget(button)
             self._filter_buttons[category] = button
         self._apply_filter_styles()
