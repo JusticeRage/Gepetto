@@ -6,6 +6,7 @@ import httpx as _httpx
 import ida_kernwin
 import openai
 from pyexpat.errors import messages
+from types import SimpleNamespace
 
 from gepetto.models.base import LanguageModel
 import gepetto.models.model_manager
@@ -22,6 +23,17 @@ GPTo4_MINI_MODEL_NAME = "o4-mini"
 GPT41_MODEL_NAME = "gpt-4.1"
 GPTo3_MODEL_NAME = "o3"
 GPTo3_PRO_MODEL_NAME = "o3-pro"
+
+
+def _notify_stream_error(callback, message: str) -> None:
+    if callback is None:
+        return
+
+    payload = SimpleNamespace(error=message)
+    try:
+        callback(payload, "error")
+    except TypeError:
+        callback(payload)
 
 
 class GPT(LanguageModel):
@@ -108,18 +120,32 @@ class GPT(LanguageModel):
                     delta = chunk.choices[0].delta
                     finished = chunk.choices[0].finish_reason
                     cb(delta, finished)
-
         except openai.BadRequestError as e:
             # Context length exceeded. Determine the max number of tokens we can ask for and retry.
             m = re.search(r'maximum context length is \d+ tokens, however you requested \d+ tokens', str(e))
             if m:
-                print(_("Unfortunately, this function is too big to be analyzed with the model's current API limits."))
+                error_message = _(
+                    "Unfortunately, this function is too big to be analyzed with the model's current API limits."
+                )
             else:
-                print(_("General exception encountered while running the query: {error}").format(error=str(e)))
+                error_message = _(
+                    "General exception encountered while running the query: {error}"
+                ).format(error=str(e))
+            print(error_message)
+            if stream:
+                _notify_stream_error(cb, error_message)
         except openai.OpenAIError as e:
-            print(_("{model} could not complete the request: {error}").format(model=self.model, error=str(e)))
+            error_message = _("{model} could not complete the request: {error}").format(
+                model=self.model, error=str(e)
+            )
+            print(error_message)
+            if stream:
+                _notify_stream_error(cb, error_message)
         except Exception as e:
-            print(_("General exception encountered while running the query: {error}").format(error=str(e)))
+            error_message = _("General exception encountered while running the query: {error}").format(error=str(e))
+            print(error_message)
+            if stream:
+                _notify_stream_error(cb, error_message)
 
     # -----------------------------------------------------------------------------
 

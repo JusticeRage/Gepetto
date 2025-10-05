@@ -11,8 +11,7 @@ import ida_kernwin
 import idc
 
 import gepetto.config
-from gepetto.models.model_manager import instantiate_model
-from gepetto.ida.status_panel import get_status_panel
+from gepetto.ida.status_panel import LogCategory, LogLevel, get_status_panel
 
 _ = gepetto.config._
 
@@ -79,6 +78,8 @@ def comment_callback(decompiler_output, pseudocode_lines, view, response, start_
 
         items = json.loads(response_text)
 
+        applied = 0
+
         for line_key, raw_comment in items.items():
             try:
                 line_index = int(line_key)
@@ -104,6 +105,7 @@ def comment_callback(decompiler_output, pseudocode_lines, view, response, start_
             target.ea = int(comment_address)
             target.itp = comment_placement
             decompiler_output.set_user_cmt(target, comment_text)
+            applied += 1
 
         decompiler_output.save_user_cmts()
         decompiler_output.del_orphan_cmts()
@@ -111,11 +113,25 @@ def comment_callback(decompiler_output, pseudocode_lines, view, response, start_
         if view:
             view.refresh_view(True)
 
+        if applied:
+            STATUS_PANEL.log(
+                _("Applied {count} comments.").format(count=applied),
+                category=LogCategory.TOOL,
+                level=LogLevel.SUCCESS,
+            )
+        else:
+            STATUS_PANEL.log(
+                _("No comments were applied."),
+                category=LogCategory.TOOL,
+            )
+
         response_finished = STATUS_PANEL.log_request_finished(elapsed_time)
         print(response_finished)
 
     except Exception as e:
-        print("[ERROR] comment_callback:", e)
+        error_message = _("[ERROR] comment_callback: {error}").format(error=e)
+        print(error_message)
+        STATUS_PANEL.mark_error(error_message)
         raise
 
 

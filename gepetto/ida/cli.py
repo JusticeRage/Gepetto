@@ -1,12 +1,13 @@
 import functools
 from types import SimpleNamespace
+from typing import List, Optional
 
 import ida_kernwin
 import ida_idaapi
 
 import gepetto.config
 import gepetto.ida.handlers
-from gepetto.ida.status_panel import get_status_panel
+from gepetto.ida.status_panel import LogCategory, LogLevel, get_status_panel
 from gepetto.ida.tools.tools import TOOLS
 import gepetto.ida.tools.call_graph
 import gepetto.ida.tools.get_ea
@@ -24,7 +25,7 @@ import gepetto.ida.tools.get_bytes
 
 _ = gepetto.config._
 CLI: ida_kernwin.cli_t = None
-MESSAGES: list[dict] = [
+MESSAGES: List[dict] = [
     {
         "role": "system",
         "content":
@@ -47,6 +48,81 @@ MESSAGES: list[dict] = [
 STATUS_PANEL = get_status_panel()
 
 
+_REASONING_KEYS = ("reasoning", "thinking", "thought", "internal_monologue")
+_REASONING_TYPES = {"reasoning", "thinking", "thought"}
+
+
+def _collect_reasoning_text(value, collector, depth=0):
+    if depth > 5 or value is None:
+        return
+    if isinstance(value, str):
+        if value.strip():
+            collector.append(value)
+        return
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            _collect_reasoning_text(item, collector, depth + 1)
+        return
+    if isinstance(value, dict):
+        value_type = value.get("type")
+        if value_type in _REASONING_TYPES:
+            candidate = value.get("text") or value.get("content")
+            _collect_reasoning_text(candidate, collector, depth + 1)
+            return
+        for key in _REASONING_KEYS:
+            if key in value:
+                _collect_reasoning_text(value[key], collector, depth + 1)
+        if "text" in value:
+            _collect_reasoning_text(value["text"], collector, depth + 1)
+        if "content" in value:
+            _collect_reasoning_text(value["content"], collector, depth + 1)
+        return
+
+    for attr in ("text", "content"):
+        if hasattr(value, attr):
+            _collect_reasoning_text(getattr(value, attr), collector, depth + 1)
+    remaining = str(value).strip()
+    if remaining:
+        collector.append(remaining)
+
+
+def _append_reasoning_from_delta(delta) -> None:
+    if delta is None:
+        return
+    containers = []
+    if isinstance(delta, dict):
+        containers.extend(delta.get(key) for key in _REASONING_KEYS if delta.get(key))
+        content = delta.get("content")
+    elif isinstance(delta, str):
+        return
+    else:
+        for key in _REASONING_KEYS:
+            value = getattr(delta, key, None)
+            if value:
+                containers.append(value)
+        content = getattr(delta, "content", None)
+
+    if isinstance(content, (list, tuple)):
+        for item in content:
+            item_type = None
+            item_text = None
+            if isinstance(item, dict):
+                item_type = item.get("type")
+                item_text = item.get("text") or item.get("content")
+            else:
+                item_type = getattr(item, "type", None)
+                item_text = getattr(item, "text", None) or getattr(item, "content", None)
+            if item_type in _REASONING_TYPES:
+                containers.append(item_text)
+
+    texts: List[str] = []
+    for container in containers:
+        _collect_reasoning_text(container, texts)
+
+    for chunk in texts:
+        STATUS_PANEL.append_reasoning(chunk)
+
+
 class GepettoCLI(ida_kernwin.cli_t):
     flags = 0
     sname = "Gepetto"
@@ -61,13 +137,15 @@ class GepettoCLI(ida_kernwin.cli_t):
         if gepetto.config.auto_show_status_panel_enabled():
             STATUS_PANEL.ensure_shown()
         STATUS_PANEL.set_stop_callback(getattr(gepetto.config.model, "cancel_current_request", None))
-        STATUS_PANEL.set_status(_("Waiting for model..."), busy=True)
         STATUS_PANEL.log_user(line)
         STATUS_PANEL.start_stream()
+        STATUS_PANEL.log_request_started()
 
         def handle_response(response):
             if hasattr(response, "tool_calls") and response.tool_calls:
                 tool_calls = []
+                STATUS_PANEL.finish_stream(response.content or "")
+                STATUS_PANEL.finish_reasoning()
                 for tc in response.tool_calls:
                     tool_calls.append({
                         "id": tc.id,
@@ -85,10 +163,13 @@ class GepettoCLI(ida_kernwin.cli_t):
                     }
                 )
                 for tc in response.tool_calls:
-                    STATUS_PANEL.log(_("→ Model requested tool: {tool_name} ({tool_args}...)").format(
-                        tool_name=tc.function.name,
-                        tool_args=(tc.function.arguments or "")[:120],
-                    ))
+                    STATUS_PANEL.log(
+                        _("→ Model requested tool: {tool_name} ({tool_args}...)").format(
+                            tool_name=tc.function.name,
+                            tool_args=(tc.function.arguments or "")[:120],
+                        ),
+                        category=LogCategory.MODEL,
+                    )
                 first_tool_name = response.tool_calls[0].function.name
                 STATUS_PANEL.set_status(_("Using tool: {tool_name}").format(tool_name=first_tool_name), busy=True)
                 for tc in response.tool_calls:
@@ -122,27 +203,54 @@ class GepettoCLI(ida_kernwin.cli_t):
                         gepetto.ida.tools.call_graph.handle_get_callees_tc(tc, MESSAGES)
                     elif tc.function.name == "refresh_view":
                         gepetto.ida.tools.refresh_view.handle_refresh_view_tc(tc, MESSAGES)
+                STATUS_PANEL.start_stream()
                 stream_and_handle()
             else:
                 content = response.content or ""
                 MESSAGES.append({"role": "assistant", "content": content})
-                STATUS_PANEL.set_status(_("Done"), busy=False)
                 STATUS_PANEL.finish_stream(content)
-                STATUS_PANEL.log(_("✔ Completed turn"))
+                STATUS_PANEL.finish_reasoning()
+                STATUS_PANEL.log(
+                    _("✔ Completed turn"),
+                    category=LogCategory.SYSTEM,
+                    level=LogLevel.SUCCESS,
+                )
 
         def stream_and_handle():
             message = SimpleNamespace(content="", tool_calls=[])
+            last_error_message = ""
+
+            def handle_model_error(text: Optional[str]) -> None:
+                nonlocal last_error_message
+                error_text = (text or "").strip()
+                if not error_text:
+                    error_text = _("Model request failed.")
+                last_error_message = error_text
+                STATUS_PANEL.finish_stream(message.content)
+                STATUS_PANEL.finish_reasoning()
+                STATUS_PANEL.mark_error(error_text)
 
             def on_chunk(delta, finish_reason):
+                nonlocal last_error_message
+                delta_error = None
+                if isinstance(delta, dict):
+                    delta_error = delta.get("error")
+                elif delta is not None:
+                    delta_error = getattr(delta, "error", None)
+                if delta_error:
+                    handle_model_error(str(delta_error))
+                    return
                 if isinstance(delta, str):
                     print(delta, end="", flush=True)
                     message.content += delta
                     STATUS_PANEL.append_stream(delta)
+                    _append_reasoning_from_delta(delta)
                     return
                 if getattr(delta, "content", None):
                     print(delta.content, end="", flush=True)
                     message.content += delta.content
                     STATUS_PANEL.append_stream(delta.content)
+                _append_reasoning_from_delta(delta)
                 if getattr(delta, "tool_calls", None):
                     for tc in delta.tool_calls:
                         idx = tc.index
@@ -166,8 +274,12 @@ class GepettoCLI(ida_kernwin.cli_t):
                             if getattr(fn, "arguments", None):
                                 current.function.arguments += fn.arguments
                 if finish_reason:
+                    if finish_reason == "error":
+                        handle_model_error(last_error_message)
+                        return
                     if finish_reason != "tool_calls":
                         print("\n\n")  # Add a blank line after the model's reply for readability.
+                    STATUS_PANEL.finish_reasoning()
                     handle_response(message)
 
             gepetto.config.model.query_model_async(
