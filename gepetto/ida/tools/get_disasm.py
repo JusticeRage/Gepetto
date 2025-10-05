@@ -5,7 +5,11 @@ import ida_lines
 import ida_kernwin
 
 from gepetto.ida.tools.function_utils import parse_ea
-from gepetto.ida.tools.tools import add_result_to_messages
+from gepetto.ida.tools.tools import (
+    add_result_to_messages,
+    tool_error_payload,
+    tool_result_payload,
+)
 
 
 def handle_get_disasm_tc(tc, messages):
@@ -18,16 +22,15 @@ def handle_get_disasm_tc(tc, messages):
     ea = args.get("ea")
     try:
         ea = parse_ea(ea)
-        result = get_disasm(ea)
+        data = get_disasm(ea)
+        payload = tool_result_payload(data)
     except Exception as ex:
-        result = {
-            "ok": False,
-            "error": str(ex),
-            "ea": ea if isinstance(ea, int) else None,
-            "disasm": None,
-        }
+        payload = tool_error_payload(
+            str(ex),
+            ea=ea if isinstance(ea, int) else None,
+        )
 
-    add_result_to_messages(messages, tc, result)
+    add_result_to_messages(messages, tc, payload)
 
 # -----------------------------------------------------------------------------
 
@@ -44,33 +47,10 @@ def _get_disasm_line(ea: int) -> str:
 # -----------------------------------------------------------------------------
 
 def get_disasm(ea: int) -> Dict:
-    """Return the disassembly line at a given EA.
+    """Return the disassembly line at a given EA."""
 
-    Parameters:
-        ea (int): Effective address to disassemble.
-
-    Returns:
-        dict: {
-            "ok": bool,
-            "error": str | None,
-            "ea": int,
-            "disasm": str | None,
-        }
-    """
-    result = {
-        "ok": False,
-        "error": None,
+    line = _get_disasm_line(ea)
+    return {
         "ea": ea,
-        "disasm": None,
+        "disasm": line,
     }
-
-    try:
-        line = _get_disasm_line(ea)
-        result.update(
-            ok=True,
-            disasm=line,
-        )
-    except Exception as e:
-        result["error"] = str(e)
-
-    return result

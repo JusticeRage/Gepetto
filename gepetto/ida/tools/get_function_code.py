@@ -8,7 +8,11 @@ import ida_kernwin
 import ida_name
 
 from gepetto.ida.tools.function_utils import parse_ea, resolve_ea, resolve_func, get_func_name
-from gepetto.ida.tools.tools import add_result_to_messages
+from gepetto.ida.tools.tools import (
+    add_result_to_messages,
+    tool_error_payload,
+    tool_result_payload,
+)
 
 
 def handle_get_function_code_tc(tc, messages):
@@ -24,18 +28,16 @@ def handle_get_function_code_tc(tc, messages):
     name = args.get("name", None)
 
     try:
-        result = get_function_code(ea=ea, name=name)
+        data = get_function_code(ea=ea, name=name)
+        payload = tool_result_payload(data)
     except Exception as ex:
-        result = {
-            "ok": False,
-            "error": str(ex),
-            "ea": None,
-            "end_ea": None,
-            "func_name": None,
-            "pseudocode": None,
-        }
+        payload = tool_error_payload(
+            str(ex),
+            ea=ea,
+            name=name,
+        )
 
-    add_result_to_messages(messages, tc, result)
+    add_result_to_messages(messages, tc, payload)
 
 # -----------------------------------------------------------------------------
 
@@ -44,17 +46,15 @@ def _decompile_func(ea) -> str:
     Decompile with Hex-Rays on the UI thread and return pseudocode.
     Raises ValueError if decompilation fails.
     """
-    res = {"ok": False, "text": None, "err": None}
+    res: dict[str, str | None] = {"text": None, "err": None}
 
     def _do():
         try:
             decompiled = ida_hexrays.decompile(ea)
             if not decompiled:
-                res["ok"] = False
                 res["err"] = "Decompilation failed."
                 return 0
             res["text"] = str(decompiled)
-            res["ok"] = True
             return 1
         except Exception as e:
             res["err"] = str(e)
@@ -62,7 +62,7 @@ def _decompile_func(ea) -> str:
 
     ida_kernwin.execute_sync(_do, ida_kernwin.MFF_FAST)
 
-    if not res["ok"]:
+    if res["text"] is None:
         raise ValueError(res["err"] or "Unknown decompilation error.")
     return res["text"]
 
@@ -70,47 +70,16 @@ def _decompile_func(ea) -> str:
 
 def get_function_code(ea: Optional[int] = None,
                       name: Optional[str] = None) -> Dict:
-    """
-    Return Hex-Rays pseudocode for the target function.
+    """Return Hex-Rays pseudocode for the target function."""
 
-    Parameters:
-        ea (int, optional): Effective address inside the function.
-        name (str, optional): Function name.
+    f = resolve_func(ea=ea, name=name)
+    func_name = name or get_func_name(f)
+    target_ea = ea or resolve_ea(func_name)
+    pseudocode = _decompile_func(target_ea)
 
-    Returns:
-        dict: {
-          "ok": bool,
-          "error": str | None,
-          "ea": int | None,        # start EA
-          "end_ea": int | None,    # end EA (IDA-exclusive)
-          "func_name": str | None,
-          "pseudocode": str | None
-        }
-    """
-    result = {
-        "ok": False,
-        "error": None,
-        "ea": None,
-        "end_ea": None,
-        "func_name": None,
-        "pseudocode": None,
+    return {
+        "ea": int(f.start_ea),
+        "end_ea": int(f.end_ea),
+        "func_name": func_name,
+        "pseudocode": pseudocode,
     }
-
-    try:
-        f = resolve_func(ea=ea, name=name)
-        func_name = name or get_func_name(f)
-        if not ea:
-            ea = resolve_ea(func_name)
-        pseudocode = _decompile_func(ea)
-
-        result.update(
-            ok=True,
-            ea=int(f.start_ea),
-            end_ea=int(f.end_ea),
-            func_name=func_name,
-            pseudocode=pseudocode,
-        )
-    except Exception as e:
-        result["error"] = str(e)
-
-    return result

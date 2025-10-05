@@ -2,7 +2,11 @@ import json
 import idaapi
 import ida_kernwin
 
-from gepetto.ida.tools.tools import add_result_to_messages
+from gepetto.ida.tools.tools import (
+    add_result_to_messages,
+    tool_error_payload,
+    tool_result_payload,
+)
 
 
 def handle_get_screen_ea_tc(tc, messages):
@@ -15,12 +19,11 @@ def handle_get_screen_ea_tc(tc, messages):
     ea = get_screen_ea()
 
     if ea is not None:
-        payload = {"ok": True, "ea": ea}
+        payload = tool_result_payload({"ea": ea})
     else:
-        payload = {
-            "ok": False,
-            "error": "The cursor isn't set to a valid address. Click in a disassembly view first."
-        }
+        payload = tool_error_payload(
+            "The cursor isn't set to a valid address. Click in a disassembly view first."
+        )
 
     add_result_to_messages(messages, tc, payload)
 

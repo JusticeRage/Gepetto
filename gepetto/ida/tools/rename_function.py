@@ -1,14 +1,15 @@
 import json
 from typing import Optional
 
-import json
-from typing import Optional
-
 import ida_name
 import ida_kernwin
 
 from gepetto.ida.tools.function_utils import parse_ea, resolve_ea, resolve_func, get_func_name
-from gepetto.ida.tools.tools import add_result_to_messages
+from gepetto.ida.tools.tools import (
+    add_result_to_messages,
+    tool_error_payload,
+    tool_result_payload,
+)
 
 
 def handle_rename_function_tc(tc, messages):
@@ -25,10 +26,11 @@ def handle_rename_function_tc(tc, messages):
     new_name = args.get("new_name")
 
     try:
-        result = rename_function(ea=ea, name=name, new_name=new_name)
+        data = rename_function(ea=ea, name=name, new_name=new_name)
+        payload = tool_result_payload(data)
     except Exception as ex:
-        result = {"ok": False, "error": str(ex)}
-    add_result_to_messages(messages, tc, result)
+        payload = tool_error_payload(str(ex), ea=ea, name=name, new_name=new_name)
+    add_result_to_messages(messages, tc, payload)
 
 
 # -----------------------------------------------------------------------------
@@ -47,21 +49,21 @@ def rename_function(
     old_name = name or get_func_name(f)
     ea = int(f.start_ea)
 
-    out = {"ok": False, "ea": ea, "old_name": old_name, "new_name": new_name}
+    error: dict[str, Optional[str]] = {"message": None}
 
     def _do():
         try:
             if not ida_name.set_name(ea, new_name):
-                out["error"] = f"Failed to rename function {old_name!r}"
+                error["message"] = f"Failed to rename function {old_name!r}"
                 return 0
-            out["ok"] = True
             return 1
         except Exception as e:
-            out["error"] = str(e)
+            error["message"] = str(e)
             return 0
 
     ida_kernwin.execute_sync(_do, ida_kernwin.MFF_WRITE)
 
-    if not out["ok"]:
-        raise ValueError(out.get("error", "Failed to rename function"))
-    return out
+    if error["message"]:
+        raise RuntimeError(error["message"])
+
+    return {"ea": ea, "old_name": old_name, "new_name": new_name}

@@ -1,11 +1,16 @@
 import json
 
 import ida_kernwin
+
 import ida_funcs
 import ida_name
 import idautils
 
-from gepetto.ida.tools.tools import add_result_to_messages
+from gepetto.ida.tools.tools import (
+    add_result_to_messages,
+    tool_error_payload,
+    tool_result_payload,
+)
 
 
 
@@ -20,11 +25,12 @@ def handle_list_symbols_tc(tc, messages):
     include_globals = bool(args.get("include_globals", False))
 
     try:
-        result = list_symbols(prefix=prefix, include_globals=include_globals)
+        data = list_symbols(prefix=prefix, include_globals=include_globals)
+        payload = tool_result_payload(data)
     except Exception as ex:
-        result = {"ok": False, "error": str(ex)}
+        payload = tool_error_payload(str(ex), prefix=prefix, include_globals=include_globals)
 
-    add_result_to_messages(messages, tc, result)
+    add_result_to_messages(messages, tc, payload)
 
 
 # -----------------------------------------------------------------------------
@@ -32,7 +38,9 @@ def handle_list_symbols_tc(tc, messages):
 
 def list_symbols(prefix: str = "", include_globals: bool = False) -> dict:
     """Return names and EAs for functions and (optionally) global symbols."""
-    out = {"ok": False, "symbols": [], "error": None}
+
+    out: dict[str, list[dict[str, object]]] = {"symbols": []}
+    error: dict[str, str | None] = {"message": None}
 
     def _do():
         try:
@@ -53,11 +61,14 @@ def list_symbols(prefix: str = "", include_globals: bool = False) -> dict:
                     results.append({"name": name, "ea": int(ea), "type": "global"})
 
             out["symbols"] = results
-            out["ok"] = True
             return 1
         except Exception as e:
-            out["error"] = str(e)
+            error["message"] = str(e)
             return 0
 
     ida_kernwin.execute_sync(_do, ida_kernwin.MFF_READ)
+
+    if error["message"]:
+        raise RuntimeError(error["message"])
+
     return out
