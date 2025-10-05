@@ -5,7 +5,11 @@ import ida_hexrays
 import ida_kernwin
 
 from gepetto.ida.tools.function_utils import parse_ea, resolve_ea, resolve_func, get_func_name
-from gepetto.ida.tools.tools import add_result_to_messages
+from gepetto.ida.tools.tools import (
+    add_result_to_messages,
+    tool_error_payload,
+    tool_result_payload,
+)
 
 
 
@@ -24,11 +28,18 @@ def handle_rename_lvar_tc(tc, messages):
     new_name = args.get("new_name")
 
     try:
-        result = rename_lvar(ea=ea, func_name=func_name, old_name=old_name, new_name=new_name)
+        data = rename_lvar(ea=ea, func_name=func_name, old_name=old_name, new_name=new_name)
+        payload = tool_result_payload(data)
     except Exception as ex:
-        result = {"ok": False, "error": str(ex)}
+        payload = tool_error_payload(
+            str(ex),
+            ea=ea,
+            func_name=func_name,
+            old_name=old_name,
+            new_name=new_name,
+        )
 
-    add_result_to_messages(messages, tc, result)
+    add_result_to_messages(messages, tc, payload)
 
 
 # -----------------------------------------------------------------------------
@@ -48,21 +59,21 @@ def rename_lvar(
     if ea is None:
         ea = resolve_ea(func_name)
 
-    out = {"ok": False, "ea": int(f.start_ea), "func_name": func_name, "old_name": old_name, "new_name": new_name}
+    result = {"ea": int(f.start_ea), "func_name": func_name, "old_name": old_name, "new_name": new_name}
+    error: dict[str, str | None] = {"message": None}
 
     def _do():
         try:
             if not ida_hexrays.rename_lvar(ea, old_name, new_name):
-                out["error"] = f"Failed to rename lvar {old_name!r}"
+                error["message"] = f"Failed to rename lvar {old_name!r}"
                 return 0
-            out["ok"] = True
             return 1
         except Exception as e:
-            out["error"] = str(e)
+            error["message"] = str(e)
             return 0
 
     ida_kernwin.execute_sync(_do, ida_kernwin.MFF_WRITE)
 
-    if not out["ok"]:
-        raise ValueError(out.get("error", "Failed to rename lvar"))
-    return out
+    if error["message"]:
+        raise RuntimeError(error["message"])
+    return result

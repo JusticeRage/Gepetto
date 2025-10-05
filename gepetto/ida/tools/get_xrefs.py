@@ -1,5 +1,5 @@
 import json
-from typing import Dict, Optional, Iterable, Tuple
+from typing import Any, Dict, Optional, Iterable, Tuple
 
 import idaapi
 import ida_bytes
@@ -9,7 +9,11 @@ import ida_name
 import ida_xref
 
 from gepetto.ida.tools.function_utils import parse_ea, resolve_ea, resolve_func, get_func_name
-from gepetto.ida.tools.tools import add_result_to_messages
+from gepetto.ida.tools.tools import (
+    add_result_to_messages,
+    tool_error_payload,
+    tool_result_payload,
+)
 
 def handle_get_xrefs_tc(tc, messages):
     """Handle a tool call to fetch cross-references (EA/function/name)."""
@@ -41,7 +45,7 @@ def handle_get_xrefs_tc(tc, messages):
     enrich_names  = bool(args.get("enrich_names", True))
 
     try:
-        result = get_xrefs_unified(
+        data = get_xrefs_unified(
             scope=scope,
             subject=subject,
             direction=direction,
@@ -52,10 +56,16 @@ def handle_get_xrefs_tc(tc, messages):
             collapse_by=collapse_by,
             enrich_names=enrich_names,
         )
+        payload = tool_result_payload(data)
     except Exception as ex:
-        result = {"ok": False, "error": str(ex), "scope": scope, "subject": subject, "direction": direction}
+        payload = tool_error_payload(
+            str(ex),
+            scope=scope,
+            subject=subject,
+            direction=direction,
+        )
 
-    add_result_to_messages(messages, tc, result)
+    add_result_to_messages(messages, tc, payload)
 
 # -----------------------------------------------------------------------------
 
@@ -129,7 +139,15 @@ def get_xrefs_unified(
     if scope not in {"ea","function","name"}:
         raise ValueError("scope must be 'ea'|'function'|'name'")
 
-    out = {"ok": False, "scope": scope, "subject": {}, "direction": direction, "filters": {}, "xrefs": [], "stats": {}}
+    out: Dict[str, Any] = {
+        "scope": scope,
+        "subject": {},
+        "direction": direction,
+        "filters": {},
+        "xrefs": [],
+        "stats": {},
+    }
+    error: Dict[str, Optional[str]] = {"message": None}
 
     def _do():
         try:
@@ -233,11 +251,14 @@ def get_xrefs_unified(
                 "exclude_flow": exclude_flow,
                 "collapse_by": collapse_by or "site",
             }
-            out["ok"] = True
             return 1
         except Exception as e:
-            out["error"] = str(e)
+            error["message"] = str(e)
             return 0
 
     ida_kernwin.execute_sync(_do, ida_kernwin.MFF_READ)
+
+    if error["message"]:
+        raise RuntimeError(error["message"])
+
     return out

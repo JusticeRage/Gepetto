@@ -5,7 +5,11 @@ import ida_bytes
 import ida_kernwin
 
 from gepetto.ida.tools.function_utils import parse_ea
-from gepetto.ida.tools.tools import add_result_to_messages
+from gepetto.ida.tools.tools import (
+    add_result_to_messages,
+    tool_error_payload,
+    tool_result_payload,
+)
 
 
 def handle_get_bytes_tc(tc, messages):
@@ -20,17 +24,16 @@ def handle_get_bytes_tc(tc, messages):
     try:
         ea = parse_ea(ea)
         size = int(size)
-        result = get_bytes(ea, size)
+        data = get_bytes(ea, size)
+        payload = tool_result_payload(data)
     except Exception as ex:
-        result = {
-            "ok": False,
-            "error": str(ex),
-            "ea": ea if isinstance(ea, int) else None,
-            "size": size if isinstance(size, int) else None,
-            "bytes": None,
-        }
+        payload = tool_error_payload(
+            str(ex),
+            ea=ea if isinstance(ea, int) else None,
+            size=size if isinstance(size, int) else None,
+        )
 
-    add_result_to_messages(messages, tc, result)
+    add_result_to_messages(messages, tc, payload)
 
 
 # -----------------------------------------------------------------------------
@@ -53,18 +56,13 @@ def _format_bytes(bs: bytes) -> str:
 
 def get_bytes(ea: int, size: int = 0x20) -> Dict:
     """Return raw bytes starting at a given EA."""
-    result = {
-        "ok": False,
-        "error": None,
+
+    if size <= 0:
+        raise ValueError("size must be a positive integer")
+
+    bs = _read_bytes(ea, size)
+    return {
         "ea": ea,
         "size": size,
-        "bytes": None,
+        "bytes": _format_bytes(bs),
     }
-
-    try:
-        bs = _read_bytes(ea, size)
-        result.update(ok=True, bytes=_format_bytes(bs))
-    except Exception as e:
-        result["error"] = str(e)
-
-    return result

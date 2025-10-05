@@ -1,4 +1,5 @@
 import json
+from typing import Any, Dict
 
 import ida_kernwin
 
@@ -367,6 +368,22 @@ TOOLS = [
         },
     },
 ]
+
+
+def tool_result_payload(data: Any) -> Dict[str, Any]:
+    """Wrap successful tool results in a standard payload structure."""
+
+    return {"type": "result", "data": data}
+
+
+def tool_error_payload(message: str, **context: Any) -> Dict[str, Any]:
+    """Create an error payload with an optional context dictionary."""
+
+    error: Dict[str, Any] = {"message": message}
+    if context:
+        error["context"] = context
+    return {"type": "error", "error": error}
+
 
 def add_result_to_messages(messages, tc, result):
     tc_id = getattr(tc, "id", None) or tc.get("id")
