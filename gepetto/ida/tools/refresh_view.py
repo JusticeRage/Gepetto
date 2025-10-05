@@ -1,4 +1,3 @@
-+44-0
 import json
 
 import ida_kernwin
