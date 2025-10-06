@@ -18,9 +18,11 @@ _ = gepetto.config._
 
 STATUS_PANEL_CAPTION = _("Gepetto")
 _DEFAULT_DOCK_OPTIONS = (
-    getattr(ida_kernwin.PluginForm, "WOPN_PERSIST", 0x40)
-    | getattr(ida_kernwin.PluginForm, "WOPN_RESTORE", 0x04)
+    getattr(ida_kernwin.PluginForm, "WOPN_RESTORE", 0x04)
     | getattr(ida_kernwin.PluginForm, "WOPN_MENU", 0x10)
+    | getattr(ida_kernwin.PluginForm, "WOPN_PERSIST", 0x40)
+    | getattr(ida_kernwin.PluginForm, "WOPN_NOT_CLOSED_BY_ESC", 0x100)
+    | getattr(ida_kernwin.PluginForm, "WOPN_DP_SZHINT", 0x200)
 )
 
 class LogLevel(Enum):
@@ -158,7 +160,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     def OnCreate(self, form):  # noqa: N802 - IDA callback signature
         if QtWidgets is None:
             return
-        self._twidget = form
+        self._twidget = self.GetWidget()
         self._widget = self.FormToPyQtWidget(form)
         self._build_ui()
         self._ready = True
@@ -680,17 +682,10 @@ class _StatusPanelManager:
             self._form = GepettoStatusForm(self)
             if self._form is not None:
                 try:
-                    self._form.Show(STATUS_PANEL_CAPTION, options=_DEFAULT_DOCK_OPTIONS) #ida_kernwin.PluginForm.WOPN_CREATE_ONLY
+                    self._form.Show(STATUS_PANEL_CAPTION, options=ida_kernwin.PluginForm.WOPN_CREATE_ONLY)
                 except Exception:
                     print(_("Could not show Gepetto Status panel."))
                     return
-        # try:
-        #     ida_kernwin.activate_widget(STATUS_PANEL_CAPTION, True)
-        #     twidget_getter = getattr(self._form, "twidget", None)
-        #     twidget = twidget_getter() if callable(twidget_getter) else None
-        #     dock_status_panel(STATUS_PANEL_CAPTION, twidget)
-        # except Exception:
-        #     pass
 
     # ------------------------------------------------------------------
     def form_closed(self) -> None:
@@ -703,9 +698,14 @@ class _StatusPanelManager:
             self._form.set_stop_callback(self._stop_callback)  # type: ignore[union-attr]
             self._form.reset_stop()  # type: ignore[union-attr]
 
-        def _dock() -> None:
-            ida_kernwin.set_dock_pos(STATUS_PANEL_CAPTION, None, ida_kernwin.DP_RIGHT)
-        run_when_desktop_ready(_dock)
+        def _show_and_dock() -> None:
+            if self._form is not None:
+                ida_kernwin.display_widget(self._form.twidget(), _DEFAULT_DOCK_OPTIONS, None)
+            orient = getattr(ida_kernwin, "DP_RIGHT", 0)
+            szhint = getattr(ida_kernwin, "DP_SZHINT", 0)
+            ida_kernwin.set_dock_pos(STATUS_PANEL_CAPTION, "IDA", orient | szhint)
+
+        run_when_desktop_ready(_show_and_dock)
 
     # ------------------------------------------------------------------
     def set_model(self, model_name: str) -> None:
