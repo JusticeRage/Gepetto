@@ -11,6 +11,7 @@ import ida_kernwin
 import gepetto.config
 from gepetto.ida.handlers import (
     ExplainHandler,
+    ExplainWithContextHandler,
     GenerateCCodeHandler,
     GeneratePythonCodeHandler,
     RenameHandler,
@@ -39,6 +40,8 @@ class GepettoPlugin(idaapi.plugin_t):
     flags = 0
     explain_action_name = "gepetto:explain_function"
     explain_menu_path = "Edit/Gepetto/" + _("Explain function")
+    explain_with_context_action_name = "gepetto:explain_function_with_context"
+    explain_with_context_menu_path = "Edit/Gepetto/" + _("Explain function with context")
     comment_action_name = "gepetto:comment_function"
     comment_menu_path = "Edit/Gepetto/" + _("Comment function")
     rename_action_name = "gepetto:rename_function"
@@ -77,6 +80,16 @@ class GepettoPlugin(idaapi.plugin_t):
                                                   model=str(gepetto.config.model)),
                                               452)
         idaapi.register_action(explain_action)
+
+        # Function explaining with context action
+        explain_with_context_action = idaapi.action_desc_t(self.explain_with_context_action_name,
+                                              _('Explain function with context'),
+                                              ExplainWithContextHandler(),
+                                              "Ctrl+Alt+Shift+G",
+                                              _('Use {model} to explain the currently selected function with additional context').format(
+                                                  model=str(gepetto.config.model)),
+                                              452)
+        idaapi.register_action(explain_with_context_action)
 
         # Function commenting action
         comment_action = idaapi.action_desc_t(self.comment_action_name,
@@ -125,6 +138,7 @@ class GepettoPlugin(idaapi.plugin_t):
         idaapi.register_action(generate_c_code_action)
 
         idaapi.attach_action_to_menu(self.explain_menu_path, self.explain_action_name, idaapi.SETMENU_APP)
+        idaapi.attach_action_to_menu(self.explain_with_context_menu_path, self.explain_with_context_action_name, idaapi.SETMENU_APP)
         idaapi.attach_action_to_menu(self.comment_menu_path, self.comment_action_name, idaapi.SETMENU_APP)
         idaapi.attach_action_to_menu(self.rename_menu_path, self.rename_action_name, idaapi.SETMENU_APP)
         idaapi.attach_action_to_menu(self.c_code_menu_path, self.c_code_action_name, idaapi.SETMENU_APP)
@@ -320,6 +334,7 @@ class ContextMenuHooks(idaapi.UI_Hooks):
             widget = ctx.widget
         if idaapi.get_widget_type(widget) == idaapi.BWN_PSEUDOCODE:
             idaapi.attach_action_to_popup(widget, popup_handle, GepettoPlugin.explain_action_name, "Gepetto/")
+            idaapi.attach_action_to_popup(widget, popup_handle, GepettoPlugin.explain_with_context_action_name, "Gepetto/")
             idaapi.attach_action_to_popup(widget, popup_handle, GepettoPlugin.comment_action_name, "Gepetto/")
             idaapi.attach_action_to_popup(widget, popup_handle, GepettoPlugin.rename_action_name, "Gepetto/")
             idaapi.attach_action_to_popup(widget, popup_handle, GepettoPlugin.c_code_action_name, "Gepetto/")

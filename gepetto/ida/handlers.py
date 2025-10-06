@@ -102,6 +102,47 @@ class ExplainHandler(idaapi.action_handler_t):
         return idaapi.AST_ENABLE_ALWAYS
 
 
+class ExplainWithContextHandler(idaapi.action_handler_t):
+    """
+    This handler is tasked with querying the model for an explanation of the
+    given function with additional user-provided context. Once the reply is received, 
+    it is added as a function comment.
+    """
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        import ida_kernwin
+        
+        # Prompt user for context
+        context = ida_kernwin.ask_text(0, "", "Please provide additional context for the function explanation:")
+        if context is None:
+            return 0  # User cancelled
+            
+        start_time = time.time()
+        decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
+        v = ida_hexrays.get_widget_vdui(ctx.widget)
+        
+        # Create prompt with user-provided context
+        prompt = f"Can you explain what the following C function does and suggest a better name for it?\n"
+        prompt += f"Your response should use the following locale as a language: {gepetto.config.get_localization_locale()}\n"
+        if context.strip():
+            prompt += f"Additional context: {context}\n"
+        prompt += f"{decompiler_output}"
+        
+        gepetto.config.model.query_model_async(
+            prompt,
+            functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=v, start_time=start_time))
+        request_sent = STATUS_PANEL.log_request_started()
+        print(request_sent)
+        return 1
+
+    # This action is always available.
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
+
 # -----------------------------------------------------------------------------
 
 def rename_callback(address, view, response, start_time):
