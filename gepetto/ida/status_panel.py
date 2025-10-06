@@ -39,6 +39,8 @@ class LogCategory(Enum):
     TOOL = "tool"
     MODEL = "model"
     ASSISTANT = "assistant"
+    # TODO: wire up reasoning. UI placeholder is ready though
+    # REASONING = "reasoning"
 
     def display_name(self) -> str:
         labels = {
@@ -47,6 +49,7 @@ class LogCategory(Enum):
             LogCategory.TOOL: _("Tool"),
             LogCategory.MODEL: _("Model"),
             LogCategory.ASSISTANT: _("Assistant"),
+            # LogCategory.REASONING: _("Reasoning"), # /TODO
         }
         return labels[self]
 
@@ -112,6 +115,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         LogCategory.TOOL: "#f9e2af",
         LogCategory.MODEL: "#f5c2e7",
         LogCategory.ASSISTANT: "#a6e3a1",
+        # LogCategory.REASONING: "#94e2d5", # /TODO
     }
     _LEVEL_COLORS = {
         LogLevel.INFO: "",
@@ -138,12 +142,11 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._status_label: QtWidgets.QLabel | None = None
         self._stop_button: QtWidgets.QPushButton | None = None
         self._clear_button: QtWidgets.QPushButton | None = None
-        self._reasoning_button: QtWidgets.QToolButton | None = None
         self._progress_bar: QtWidgets.QProgressBar | None = None
         self._conversation_view: QtWidgets.QTextBrowser | None = None
-        self._reasoning_view: QtWidgets.QTextBrowser | None = None
-        self._reasoning_frame: QtWidgets.QFrame | None = None
         self._log_view: QtWidgets.QTextBrowser | None = None
+        self._chat_input: QtWidgets.QLineEdit | None = None
+        self._send_button: QtWidgets.QPushButton | None = None
         self._filter_buttons: dict[LogCategory, QtWidgets.QToolButton] = {}
         self._active_filters: set[LogCategory] = set(LogCategory)
         self._log_entries: list[LogEntry] = []
@@ -152,8 +155,8 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._stream_index: int | None = None
         self._stream_active = False
         self._stream_header: str | None = None
-        self._reasoning_chunks: list[str] = []
-        self._reasoning_dirty = False
+        self._reasoning_buffer: list[str] = []
+        self._reasoning_log_index: int | None = None
         self._ready = False
 
     # ------------------------------------------------------------------
@@ -171,16 +174,18 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         del form
         self._twidget = None
         self._widget = self._model_label = self._status_label = None
-        self._stop_button = self._clear_button = self._reasoning_button = self._progress_bar = None
-        self._conversation_view = self._reasoning_view = self._reasoning_frame = self._log_view = None
+        self._stop_button = self._clear_button = self._progress_bar = None
+        self._conversation_view = self._log_view = None
+        self._chat_input = self._send_button = None
         self._filter_buttons = {}
         self._active_filters = set(LogCategory)
         self._log_entries.clear()
         self._conversation_segments.clear()
         self._stream_text.clear()
-        self._reasoning_chunks.clear()
+        self._reasoning_buffer.clear()
         self._stream_index = self._stream_header = None
-        self._stream_active = self._reasoning_dirty = False
+        self._stream_active = False
+        self._reasoning_log_index = None
         self._ready = False
         self._owner.form_closed()
 
@@ -201,120 +206,91 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         if QtWidgets is None or self._widget is None:
             return
 
-        layout = QtWidgets.QVBoxLayout(self._widget)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(6)
+        root_layout = QtWidgets.QVBoxLayout(self._widget)
+        root_layout.setContentsMargins(8, 8, 8, 8)
+        root_layout.setSpacing(10)
 
-        header = QtWidgets.QHBoxLayout()
-        header.setSpacing(8)
-        self._model_label = QtWidgets.QLabel(_("Model: {model}").format(model=str(gepetto.config.model)))
-        self._model_label.setObjectName("gepetto_status_model_label")
-        header.addWidget(self._model_label)
+        top_row = QtWidgets.QHBoxLayout()
+        top_row.setSpacing(8)
 
-        header.addStretch(1)
-
-        self._status_label = QtWidgets.QLabel(_("Status: {status}").format(status=_("Idle")))
-        self._status_label.setObjectName("gepetto_status_label")
-
-        self._progress_bar = QtWidgets.QProgressBar()
-        self._progress_bar.setRange(0, 1)
-        self._progress_bar.setValue(1)
-        self._progress_bar.setFixedWidth(120)
-        self._progress_bar.setTextVisible(False)
-        self._progress_bar.hide()
-        header.addWidget(self._progress_bar)
-
-        self._reasoning_button = QtWidgets.QToolButton()
-        self._reasoning_button.setText(_("Reasoning"))
-        self._reasoning_button.setCheckable(True)
-        self._reasoning_button.setEnabled(False)
-        self._reasoning_button.toggled.connect(self._set_reasoning_visible)  # type: ignore[arg-type]
-        header.addWidget(self._reasoning_button)
-
-        self._stop_button = QtWidgets.QPushButton(_("Stop"))
-        self._stop_button.setEnabled(False)
-        self._stop_button.clicked.connect(self._handle_stop_clicked)  # type: ignore[arg-type]
-        header.addWidget(self._stop_button)
-
-        self._clear_button = QtWidgets.QPushButton(_("Clear"))
-        self._clear_button.clicked.connect(self._owner.clear_log)  # type: ignore[arg-type]
-        header.addWidget(self._clear_button)
-
-        layout.addLayout(header)
-
-        filters_row = QtWidgets.QHBoxLayout()
-        filters_row.setSpacing(4)
-        filters_row_label = QtWidgets.QLabel(_("Log filters:"))
-        filters_row.addWidget(filters_row_label)
+        filters_layout = QtWidgets.QHBoxLayout()
+        filters_layout.setSpacing(4)
+        filters_label = QtWidgets.QLabel(_("Log filters:"))
+        filters_layout.addWidget(filters_label)
         for category in LogCategory:
             button = QtWidgets.QToolButton()
             button.setText(category.display_name())
             button.setCheckable(True)
             button.setChecked(True)
             button.clicked.connect(self._make_filter_callback(category))  # type: ignore[arg-type]
-            filters_row.addWidget(button)
-            # turn off repeat of final message in log by default
+            filters_layout.addWidget(button)
             if category is LogCategory.ASSISTANT:
                 button.click()
             self._filter_buttons[category] = button
         self._apply_filter_styles()
-        filters_row.addSpacing(12)
-        filters_row.addWidget(self._status_label)
-        filters_row.addStretch(1)
-        layout.addLayout(filters_row)
+        filters_layout.addStretch(1)
+        top_row.addLayout(filters_layout, stretch=1)
 
-        splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
+        actions_layout = QtWidgets.QHBoxLayout()
+        actions_layout.setSpacing(6)
+        self._stop_button = QtWidgets.QPushButton(_("Stop"))
+        self._stop_button.setEnabled(False)
+        self._stop_button.clicked.connect(self._handle_stop_clicked)  # type: ignore[arg-type]
+        actions_layout.addWidget(self._stop_button)
+        self._clear_button = QtWidgets.QPushButton(_("Clear"))
+        self._clear_button.clicked.connect(self._owner.clear_log)  # type: ignore[arg-type]
+        actions_layout.addWidget(self._clear_button)
+        top_row.addLayout(actions_layout)
+        root_layout.addLayout(top_row)
 
-        conversation_container = QtWidgets.QWidget()
-        conversation_layout = QtWidgets.QVBoxLayout(conversation_container)
-        conversation_layout.setContentsMargins(0, 0, 0, 0)
-        conversation_layout.setSpacing(6)
+        log_row = QtWidgets.QHBoxLayout()
+        log_row.setSpacing(0)
+        self._log_view = QtWidgets.QTextBrowser()
+        self._log_view.setReadOnly(True)
+        self._log_view.setMinimumHeight(140)
+        log_row.addWidget(self._log_view)
+        root_layout.addLayout(log_row)
+
+        self._progress_bar = QtWidgets.QProgressBar()
+        self._progress_bar.setRange(0, 1)
+        self._progress_bar.setValue(1)
+        self._progress_bar.setFixedHeight(14)
+        self._progress_bar.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self._progress_bar.setTextVisible(False)
+        self._progress_bar.hide()
+        root_layout.addWidget(self._progress_bar)
 
         self._conversation_view = QtWidgets.QTextBrowser()
         self._conversation_view.setReadOnly(True)
-        self._conversation_view.setMinimumHeight(160)
+        self._conversation_view.setMinimumHeight(220)
         self._conversation_view.setOpenExternalLinks(False)
-        conversation_layout.addWidget(self._conversation_view)
+        root_layout.addWidget(self._conversation_view, stretch=1)
 
-        self._reasoning_frame = QtWidgets.QFrame()
-        self._reasoning_frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
-        self._reasoning_frame.setStyleSheet(
-            "QFrame {"
-            "  background-color: rgba(56, 66, 89, 200);"
-            "  border: 1px solid rgba(148, 226, 213, 120);"
-            "  border-radius: 6px;"
-            "}"
-            "QTextBrowser {"
-            "  background: transparent;"
-            "  color: #f8f9fa;"
-            "  font-style: italic;"
-            "}"
-        )
-        reasoning_layout = QtWidgets.QVBoxLayout(self._reasoning_frame)
-        reasoning_layout.setContentsMargins(8, 8, 8, 8)
-        reasoning_layout.setSpacing(4)
-        label = QtWidgets.QLabel(_("Reasoning stream"))
-        label.setStyleSheet("color: #94e2d5;")
-        reasoning_layout.addWidget(label)
-        self._reasoning_view = QtWidgets.QTextBrowser()
-        self._reasoning_view.setReadOnly(True)
-        reasoning_layout.addWidget(self._reasoning_view)
-        self._reasoning_frame.hide()
-        conversation_layout.addWidget(self._reasoning_frame)
+        chat_row = QtWidgets.QHBoxLayout()
+        chat_row.setSpacing(8)
+        self._chat_input = QtWidgets.QLineEdit()
+        self._chat_input.setPlaceholderText(_("Type a prompt and press Enter…"))
+        self._chat_input.returnPressed.connect(self._handle_chat_submit)  # type: ignore[arg-type]
+        chat_row.addWidget(self._chat_input, stretch=1)
+        self._send_button = QtWidgets.QPushButton(_("Send"))
+        self._send_button.clicked.connect(self._handle_chat_submit)  # type: ignore[arg-type]
+        chat_row.addWidget(self._send_button)
+        root_layout.addLayout(chat_row)
 
-        splitter.addWidget(conversation_container)
-
-        self._log_view = QtWidgets.QTextBrowser()
-        self._log_view.setReadOnly(True)
-        self._log_view.setMinimumHeight(120)
-        splitter.addWidget(self._log_view)
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 2)
-
-        layout.addWidget(splitter)
+        footer = QtWidgets.QHBoxLayout()
+        footer.setSpacing(8)
+        self._model_label = QtWidgets.QLabel(_("Model: {model}").format(model=str(gepetto.config.model)))
+        self._model_label.setObjectName("gepetto_status_model_label")
+        footer.addWidget(self._model_label)
+        footer.addStretch(1)
+        self._status_label = QtWidgets.QLabel(_("Status: {status}").format(status=_("Idle")))
+        self._status_label.setObjectName("gepetto_status_label")
+        footer.addWidget(self._status_label)
+        root_layout.addLayout(footer)
 
         self._refresh_conversation(scroll=False)
         self._refresh_log_widget(scroll=False)
+        self._set_chat_controls_enabled(True)
 
     # ------------------------------------------------------------------
     def _make_filter_callback(self, category: LogCategory) -> Callable[[bool], None]:
@@ -392,24 +368,34 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             browser.setPlainText(content)
 
     # ------------------------------------------------------------------
-    def _set_reasoning_visible(self, visible: bool) -> None:
-        if not self._reasoning_frame or not self._reasoning_button:
-            return
-        self._reasoning_frame.setVisible(visible)
-        if visible:
-            self._reasoning_dirty = False
-            self._refresh_reasoning(scroll=True)
-        self._update_reasoning_button()
+    def _set_chat_controls_enabled(self, enabled: bool) -> None:
+        if self._chat_input:
+            self._chat_input.setEnabled(enabled)
+        if self._send_button:
+            self._send_button.setEnabled(enabled)
 
     # ------------------------------------------------------------------
-    def _update_reasoning_button(self) -> None:
-        if not self._reasoning_button:
+    def set_chat_enabled(self, enabled: bool) -> None:
+        self._set_chat_controls_enabled(enabled)
+
+    # ------------------------------------------------------------------
+    def _handle_chat_submit(self) -> None:
+        if not self._chat_input:
             return
-        text = _("Reasoning")
-        if self._reasoning_dirty and not self._reasoning_button.isChecked():
-            text += " ●"
-        self._reasoning_button.setText(text)
-        self._reasoning_button.setEnabled(bool(self._reasoning_chunks))
+        text = self._chat_input.text().strip()
+        if not text:
+            return
+        self._chat_input.clear()
+        self._set_chat_controls_enabled(False)
+        try:
+            self._owner.submit_chat(text)
+        except Exception as exc:  # pragma: no cover - defensive, shouldn't happen in normal flow
+            self.append_log(
+                _("Failed to send prompt: {err}").format(err=str(exc)),
+                category=LogCategory.SYSTEM,
+                level=LogLevel.ERROR,
+            )
+            self._set_chat_controls_enabled(True)
 
     # ------------------------------------------------------------------
     def _refresh_conversation(self, *, scroll: bool) -> None:
@@ -447,11 +433,18 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
                 effective = self._ensure_contrast_color(
                     desired, fallback=default_text_color, background=base_color, palette=palette
                 )
-                line = f"<span style='color:{effective.name()};'>{line}</span>"
-                line += "<br>"
+                container_style = f"color: {effective.name()}; margin-bottom: 4px;"
+                if False: # entry.category is LogCategory.REASONING: # /TODO
+                    container_style += (
+                        " background-color: rgba(148, 226, 213, 0.12);"
+                        " border-left: 3px solid #94e2d5;"
+                        " border-radius: 4px;"
+                        " padding: 4px 6px;"
+                        " font-style: italic;"
+                    )
+                html_parts.append(f"<div style=\"{container_style}\">{line}</div>")
                 if entry.trailing_breaks:
-                    line += "<br>" * entry.trailing_breaks
-                html_parts.append(line)
+                    html_parts.append("<br>" * entry.trailing_breaks)
             self._log_view.setHtml("".join(html_parts))
         if scroll:
             self._log_view.moveCursor(QtGui.QTextCursor.End)
@@ -482,17 +475,6 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         best = _best_text_color(background, palette)
         return best if _contrast_ratio(best, background) >= 4.0 else fallback
 
-    # ------------------------------------------------------------------
-    def _refresh_reasoning(self, *, scroll: bool) -> None:
-        if not self._reasoning_view:
-            return
-        text = "".join(self._reasoning_chunks)
-        self._set_text_browser_content(self._reasoning_view, text)
-        if scroll:
-            self._reasoning_view.moveCursor(QtGui.QTextCursor.End)
-            self._reasoning_view.ensureCursorVisible()
-
-    # ------------------------------------------------------------------
     def set_model(self, model_name: str) -> None:
         if self._model_label:
             self._model_label.setText(_("Model: {model}").format(model=model_name))
@@ -515,6 +497,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
                 self._progress_bar.setRange(0, 1)
                 self._progress_bar.setValue(1)
                 self._progress_bar.hide()
+        self._set_chat_controls_enabled(not busy)
 
     # ------------------------------------------------------------------
     def reset_stop(self) -> None:
@@ -549,17 +532,14 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             self._log_entries,
             self._conversation_segments,
             self._stream_text,
-            self._reasoning_chunks,
+            self._reasoning_buffer,
         ):
             collection.clear()
         self._stream_index = self._stream_header = None
-        self._stream_active = self._reasoning_dirty = False
-        if self._reasoning_button:
-            self._reasoning_button.setChecked(False)
+        self._stream_active = False
+        self._reasoning_log_index = None
         self._refresh_conversation(scroll=False)
         self._refresh_log_widget(scroll=False)
-        self._refresh_reasoning(scroll=False)
-        self._update_reasoning_button()
 
     # ------------------------------------------------------------------
     def append_log(
@@ -616,13 +596,9 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._stream_header = header
         self._stream_index = len(self._conversation_segments)
         self._conversation_segments.append(header)
-        self._reasoning_chunks.clear()
-        self._reasoning_dirty = False
-        if self._reasoning_button:
-            self._reasoning_button.setChecked(False)
+        self._reasoning_buffer.clear()
+        self._reasoning_log_index = None
         self._refresh_conversation(scroll=True)
-        self._refresh_reasoning(scroll=False)
-        self._update_reasoning_button()
 
     # ------------------------------------------------------------------
     def append_stream(self, chunk: str) -> None:
@@ -654,19 +630,32 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
 
     # ------------------------------------------------------------------
     def append_reasoning(self, chunk: str) -> None:
+        return # /TODO
         if not chunk:
             return
-        self._reasoning_chunks.append(chunk)
-        if not self._reasoning_button or not self._reasoning_button.isChecked():
-            self._reasoning_dirty = True
-        self._update_reasoning_button()
-        if self._reasoning_button and self._reasoning_button.isChecked():
-            self._refresh_reasoning(scroll=True)
+        self._reasoning_buffer.append(chunk)
+        current_text = "".join(self._reasoning_buffer)
+        if self._reasoning_log_index is None:
+            entry = LogEntry(
+                timestamp=datetime.datetime.now(),
+                level=LogLevel.INFO,
+                category=LogCategory.REASONING,
+                message=current_text,
+            )
+            self._log_entries.append(entry)
+            self._reasoning_log_index = len(self._log_entries) - 1
+        else:
+            entry = self._log_entries[self._reasoning_log_index]
+            entry.message = current_text
+            entry.timestamp = datetime.datetime.now()
+        self._refresh_log_widget(scroll=True)
 
     # ------------------------------------------------------------------
     def finish_reasoning(self) -> None:
-        self._refresh_reasoning(scroll=True)
-        self._update_reasoning_button()
+        if self._reasoning_log_index is not None:
+            self._refresh_log_widget(scroll=True)
+        self._reasoning_log_index = None
+        self._reasoning_buffer.clear()
 
 
 class _StatusPanelManager:
@@ -744,6 +733,27 @@ class _StatusPanelManager:
                 return
             self.set_status(_("Idle"), busy=False)
             self.reset_stop()
+
+    # ------------------------------------------------------------------
+    def submit_chat(self, text: str) -> None:
+        try:
+            from gepetto.ida import cli as gepetto_cli
+        except Exception as exc:  # pragma: no cover - defensive
+            raise RuntimeError("Gepetto CLI is not available") from exc
+
+        if getattr(gepetto_cli, "CLI", None) is None:
+            try:
+                gepetto_cli.register_cli()
+            except Exception as exc:  # pragma: no cover - defensive
+                raise RuntimeError("Failed to initialize Gepetto CLI") from exc
+
+        cli_instance = getattr(gepetto_cli, "CLI", None)
+        if cli_instance is None:
+            raise RuntimeError("Gepetto CLI is not ready")
+
+        result = cli_instance.OnExecuteLine(text)
+        if result is False:
+            raise RuntimeError("CLI rejected input")
 
     # ------------------------------------------------------------------
     def start_stream(self) -> None:
