@@ -2,7 +2,11 @@
 
 import json
 
-from gepetto.ida.tools.tools import add_result_to_messages
+from gepetto.ida.tools.tools import (
+    add_result_to_messages,
+    tool_error_payload,
+    tool_result_payload,
+)
 
 
 def handle_to_hex_tc(tc, messages):
@@ -16,9 +20,9 @@ def handle_to_hex_tc(tc, messages):
 
     try:
         hex_value = to_hex(value)
-        payload = {"ok": True, "hex": hex_value}
+        payload = tool_result_payload({"hex": hex_value})
     except Exception as ex:
-        payload = {"ok": False, "error": str(ex)}
+        payload = tool_error_payload(str(ex), value=value)
 
     add_result_to_messages(messages, tc, payload)
 

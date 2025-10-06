@@ -13,7 +13,11 @@ import idautils
 import idaapi
 import ida_strlist
 
-from gepetto.ida.tools.tools import add_result_to_messages
+from gepetto.ida.tools.tools import (
+    add_result_to_messages,
+    tool_error_payload,
+    tool_result_payload,
+)
 
 
 # -----------------------------------------------------------------------------
@@ -35,11 +39,12 @@ def handle_search_tc(tc, messages):
     case_sensitive = bool(args.get("case_sensitive", False))
 
     try:
-        result = search(text=text, hex=hex_pattern, case_sensitive=case_sensitive)
+        data = search(text=text, hex=hex_pattern, case_sensitive=case_sensitive)
+        payload = tool_result_payload(data)
     except Exception as ex:
-        result = {"ok": False, "error": str(ex)}
+        payload = tool_error_payload(str(ex), text=text, hex=hex_pattern)
 
-    add_result_to_messages(messages, tc, result)
+    add_result_to_messages(messages, tc, payload)
 
 # -----------------------------------------------------------------------------
 
@@ -54,7 +59,7 @@ def handle_list_strings_tc(tc, messages):
         args = {}
 
     try:
-        result = list_strings(
+        data = list_strings(
             limit=int(args.get("limit", 200)),
             offset=int(args.get("offset", 0)),
             min_len=int(args.get("min_len", 4)),
@@ -66,10 +71,11 @@ def handle_list_strings_tc(tc, messages):
             return_addresses_only=bool(args.get("return_addresses_only", False)),
             sort_by=(args.get("sort_by") or "ea").lower(),
         )
+        payload = tool_result_payload(data)
     except Exception as ex:
-        result = {"ok": False, "error": str(ex)}
+        payload = tool_error_payload(str(ex))
 
-    add_result_to_messages(messages, tc, result)
+    add_result_to_messages(messages, tc, payload)
 
 # -----------------------------------------------------------------------------
 # Shared snapshot utilities
@@ -172,14 +178,10 @@ def _iter_xrefs_to(ea: int, max_items: int = 64):
 # -----------------------------------------------------------------------------
 
 def search(text: str | None = None, hex: str | None = None, case_sensitive: bool = False) -> dict:
-    """
-    Targeted search for text or hex patterns. Returns matching EAs.
-    """
-    out: dict = {"ok": False, "eas": [], "error": None}
+    """Targeted search for text or hex patterns. Returns matching EAs."""
 
     if not text and not hex:
-        out["error"] = "Either text or hex must be provided"
-        return out
+        raise ValueError("Either text or hex must be provided")
 
     snap = _ui_snapshot_wrapper()
     strings = snap.get("strings", [])
@@ -208,9 +210,7 @@ def search(text: str | None = None, hex: str | None = None, case_sensitive: bool
     if matches:
         matches = sorted(set(matches))
 
-    out["eas"] = matches
-    out["ok"] = True
-    return out
+    return {"eas": matches}
 
 # -----------------------------------------------------------------------------
 
@@ -226,19 +226,7 @@ def list_strings(
         return_addresses_only: bool = False,
         sort_by: str = "ea",
 ) -> dict:
-    """
-    Enumerate discovered strings with pagination and filters.
-
-    Returns:
-      {
-        "ok": bool,
-        "error": str|None,
-        "total": int,
-        "next_offset": int|None,
-        "items": [ ... ]  # either EAs or dicts with metadata
-      }
-    """
-    out = {"ok": False, "error": None, "total": 0, "next_offset": None, "items": []}
+    """Enumerate discovered strings with pagination and filters."""
 
     snap = _ui_snapshot_wrapper()
     items = snap.get("strings", [])
@@ -264,15 +252,13 @@ def list_strings(
         items.sort(key=lambda x: x["ea"])
 
     total = len(items)
-    out["total"] = total
 
     # Pagination
     start = max(0, int(offset))
     end = min(total, start + max(1, int(limit)))
     page = items[start:end]
 
-    if end < total:
-        out["next_offset"] = end
+    next_offset = end if end < total else None
 
     # Build payload
     results = []
@@ -305,6 +291,8 @@ def list_strings(
 
         results.append(entry)
 
-    out["items"] = results
-    out["ok"] = True
-    return out
+    return {
+        "total": total,
+        "next_offset": next_offset,
+        "items": results,
+    }

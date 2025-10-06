@@ -1,7 +1,11 @@
 import json
 
 from gepetto.ida.tools.function_utils import resolve_ea
-from gepetto.ida.tools.tools import add_result_to_messages
+from gepetto.ida.tools.tools import (
+    add_result_to_messages,
+    tool_error_payload,
+    tool_result_payload,
+)
 
 
 def handle_get_ea_tc(tc, messages):
@@ -14,9 +18,9 @@ def handle_get_ea_tc(tc, messages):
 
     try:
         ea = get_ea(name)
-        payload = {"ok": True, "ea": ea}
+        payload = tool_result_payload({"ea": ea})
     except Exception as ex:
-        payload = {"ok": False, "error": str(ex)}
+        payload = tool_error_payload(str(ex), name=name)
 
     add_result_to_messages(messages, tc, payload)
 

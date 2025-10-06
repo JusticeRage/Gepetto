@@ -1,7 +1,7 @@
 # gepetto/ida/tools/callgraph.py
 
 import json
-from typing import Dict, Optional, Iterable, Set
+from typing import Any, Dict, Optional, Iterable, Set
 
 import idaapi
 import ida_funcs
@@ -11,7 +11,11 @@ import ida_xref
 import ida_bytes
 
 from gepetto.ida.tools.function_utils import parse_ea, resolve_func, get_func_name
-from gepetto.ida.tools.tools import add_result_to_messages
+from gepetto.ida.tools.tools import (
+    add_result_to_messages,
+    tool_error_payload,
+    tool_result_payload,
+)
 
 # Compatibility with older IDA versions where is_thunk_func is available
 try:
@@ -55,11 +59,12 @@ def handle_get_callers_tc(tc, messages):
     include_thunks = bool(args.get("include_thunks", True))
 
     try:
-        result = get_callers(ea=ea, name=name, include_thunks=include_thunks)
+        data = get_callers(ea=ea, name=name, include_thunks=include_thunks)
+        payload = tool_result_payload(data)
     except Exception as ex:
-        result = {"ok": False, "error": str(ex)}
+        payload = tool_error_payload(str(ex), ea=ea, name=name, include_thunks=include_thunks)
 
-    add_result_to_messages(messages, tc, result)
+    add_result_to_messages(messages, tc, payload)
 
 # -----------------------------------------------------------------------------
 
@@ -80,11 +85,18 @@ def handle_get_callees_tc(tc, messages):
     include_thunks = bool(args.get("include_thunks", True))
 
     try:
-        result = get_callees(ea=ea, name=name, only_direct=only_direct, include_thunks=include_thunks)
+        data = get_callees(ea=ea, name=name, only_direct=only_direct, include_thunks=include_thunks)
+        payload = tool_result_payload(data)
     except Exception as ex:
-        result = {"ok": False, "error": str(ex)}
+        payload = tool_error_payload(
+            str(ex),
+            ea=ea,
+            name=name,
+            only_direct=only_direct,
+            include_thunks=include_thunks,
+        )
 
-    add_result_to_messages(messages, tc, result)
+    add_result_to_messages(messages, tc, payload)
 
 # -----------------------------------------------------------------------------
 
@@ -157,13 +169,14 @@ def _normalize_callee_ea(ea: int, include_thunks: bool) -> int:
 # -----------------------------------------------------------------------------
 
 def get_callers(ea: Optional[int] = None, name: Optional[str] = None,
-                include_thunks: bool = True) -> Dict:
+                include_thunks: bool = True) -> Dict[str, Any]:
     """
     Return unique caller functions that call the target function (by EA or name).
     Only call xrefs are considered. If include_thunks is True and the target is a thunk,
     results will be keyed to the thunk's final target for normalization.
     """
-    out = {"ok": False, "target": {}, "callers": [], "error": None}
+    out: Dict[str, Any] = {"target": {}, "callers": []}
+    error: Dict[str, Optional[str]] = {"message": None}
 
     def _do():
         try:
@@ -201,25 +214,29 @@ def get_callers(ea: Optional[int] = None, name: Optional[str] = None,
                 {"ea": int(c_ea), "name": _func_name(c_ea)}
                 for c_ea in sorted(callers)
             ]
-            out["ok"] = True
             return 1
         except Exception as e:
-            out["error"] = str(e)
+            error["message"] = str(e)
             return 0
 
     ida_kernwin.execute_sync(_do, ida_kernwin.MFF_READ)
+
+    if error["message"]:
+        raise RuntimeError(error["message"])
+
     return out
 
 # -----------------------------------------------------------------------------
 
 def get_callees(ea: Optional[int] = None, name: Optional[str] = None,
-                only_direct: bool = True, include_thunks: bool = True) -> Dict:
+                only_direct: bool = True, include_thunks: bool = True) -> Dict[str, Any]:
     """
     Return unique callee functions reached from the target function.
     - only_direct=True: only consider direct code call xrefs (ignore data/indirect).
     - include_thunks=True: normalize callees that are thunks to their ultimate targets.
     """
-    out = {"ok": False, "source": {}, "callees": [], "error": None}
+    out: Dict[str, Any] = {"source": {}, "callees": []}
+    error: Dict[str, Optional[str]] = {"message": None}
 
     def _do():
         try:
@@ -253,11 +270,14 @@ def get_callees(ea: Optional[int] = None, name: Optional[str] = None,
                 {"ea": int(t_ea), "name": _func_name(t_ea)}
                 for t_ea in sorted(callees)
             ]
-            out["ok"] = True
             return 1
         except Exception as e:
-            out["error"] = str(e)
+            error["message"] = str(e)
             return 0
 
     ida_kernwin.execute_sync(_do, ida_kernwin.MFF_READ)
+
+    if error["message"]:
+        raise RuntimeError(error["message"])
+
     return out
