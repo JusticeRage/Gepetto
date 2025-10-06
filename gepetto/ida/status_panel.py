@@ -34,17 +34,17 @@ class LogLevel(Enum):
 class LogCategory(Enum):
     SYSTEM = "system"
     USER = "user"
-    ASSISTANT = "assistant"
     TOOL = "tool"
     MODEL = "model"
+    ASSISTANT = "assistant"
 
     def display_name(self) -> str:
         labels = {
             LogCategory.SYSTEM: _("System"),
             LogCategory.USER: _("User"),
-            LogCategory.ASSISTANT: _("Assistant"),
             LogCategory.TOOL: _("Tool"),
             LogCategory.MODEL: _("Model"),
+            LogCategory.ASSISTANT: _("Assistant"),
         }
         return labels[self]
 
@@ -90,6 +90,7 @@ def _contrast_ratio(foreground: QtGui.QColor, background: QtGui.QColor) -> float
 
 def _best_text_color(background: QtGui.QColor, palette: QtGui.QPalette) -> QtGui.QColor:
     candidates = [
+        palette.color(QtGui.QPalette.Shadow),
         palette.color(QtGui.QPalette.WindowText),
         palette.color(QtGui.QPalette.Text),
         palette.color(QtGui.QPalette.ButtonText),
@@ -106,9 +107,9 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     _CATEGORY_COLORS = {
         LogCategory.SYSTEM: "#bac2de",
         LogCategory.USER: "#89b4fa",
-        LogCategory.ASSISTANT: "#a6e3a1",
         LogCategory.TOOL: "#f9e2af",
         LogCategory.MODEL: "#f5c2e7",
+        LogCategory.ASSISTANT: "#a6e3a1",
     }
     _LEVEL_COLORS = {
         LogLevel.INFO: "",
@@ -123,6 +124,12 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             return
         super().__init__()
         self._owner = owner
+        self._category_color_map = {
+            category: QtGui.QColor(color) for category, color in self._CATEGORY_COLORS.items() if color
+        }
+        self._level_color_map = {
+            level: QtGui.QColor(color) for level, color in self._LEVEL_COLORS.items() if color
+        }
         self._widget: QtWidgets.QWidget | None = None
         self._model_label: QtWidgets.QLabel | None = None
         self._status_label: QtWidgets.QLabel | None = None
@@ -158,27 +165,17 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     # ------------------------------------------------------------------
     def OnClose(self, form):  # noqa: N802 - IDA callback signature
         del form
-        self._widget = None
-        self._model_label = None
-        self._status_label = None
-        self._stop_button = None
-        self._clear_button = None
-        self._reasoning_button = None
-        self._progress_bar = None
-        self._conversation_view = None
-        self._reasoning_view = None
-        self._reasoning_frame = None
-        self._log_view = None
+        self._widget = self._model_label = self._status_label = None
+        self._stop_button = self._clear_button = self._reasoning_button = self._progress_bar = None
+        self._conversation_view = self._reasoning_view = self._reasoning_frame = self._log_view = None
         self._filter_buttons = {}
         self._active_filters = set(LogCategory)
-        self._log_entries = []
-        self._conversation_segments = []
-        self._stream_text = []
-        self._stream_index = None
-        self._stream_active = False
-        self._stream_header = None
-        self._reasoning_chunks = []
-        self._reasoning_dirty = False
+        self._log_entries.clear()
+        self._conversation_segments.clear()
+        self._stream_text.clear()
+        self._reasoning_chunks.clear()
+        self._stream_index = self._stream_header = None
+        self._stream_active = self._reasoning_dirty = False
         self._ready = False
         self._owner.form_closed()
 
@@ -246,10 +243,10 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             button.setCheckable(True)
             button.setChecked(True)
             button.clicked.connect(self._make_filter_callback(category))  # type: ignore[arg-type]
+            filters_row.addWidget(button)
             # turn off repeat of final message in log by default
             if category is LogCategory.ASSISTANT:
                 button.click()
-            filters_row.addWidget(button)
             self._filter_buttons[category] = button
         self._apply_filter_styles()
         filters_row.addSpacing(12)
@@ -326,7 +323,8 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         if not self._filter_buttons:
             return
         palette = self._widget.palette() if self._widget else QtWidgets.QApplication.palette()
-        button_text = palette.color(QtGui.QPalette.ButtonText)
+        muted_text_color = palette.color(QtGui.QPalette.Shadow)
+        muted_color = palette.color(QtGui.QPalette.ColorRole.Midlight).darker(100)
 
         for category, button in self._filter_buttons.items():
             base_color = QtGui.QColor(self._CATEGORY_COLORS.get(category, ""))
@@ -346,23 +344,28 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
 
             style = (
                 "QToolButton {"
-                "  padding: 2px 8px;"
+                "  padding: 2px 10px;"
                 "  border-radius: 4px;"
+                f"  border: 1px solid {base_color.name()};"
                 "}"
                 "QToolButton:checked {"
                 f"  background-color: {base_color.name()};"
                 f"  color: {text_color.name()};"
                 f"  border: 1px solid {border_color.name()};"
-                "  font-weight: 600;"
+                "  font-weight: bold;"
                 "}"
-                "QToolButton:checked:hover {"
+                "QToolButton:hover {"
                 f"  background-color: {hover_color.name()};"
+                f"  border: 1px solid {border_color.name()};"
                 "}"
                 "QToolButton:!checked {"
-                f"  color: {button_text.name()};"
+                f"  background-color: {muted_color.name()} !important;"
+                f"  color: {muted_text_color.name()};"
+                f"  border: 1px solid {muted_color.name()};"
+                "  font-weight: normal;"
                 "}"
                 "QToolButton:!checked:hover {"
-                f"  border: 1px solid {palette.color(QtGui.QPalette.Highlight).name()};"
+                f"  border: 1px solid {border_color.darker(200).name()};"
                 "}"
             )
             button.setStyleSheet(style)
@@ -370,6 +373,14 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     # ------------------------------------------------------------------
     def _handle_stop_clicked(self) -> None:
         self._owner.request_stop()
+
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _set_text_browser_content(browser: QtWidgets.QTextBrowser, content: str) -> None:
+        try:
+            browser.setMarkdown(content)
+        except Exception:
+            browser.setPlainText(content)
 
     # ------------------------------------------------------------------
     def _set_reasoning_visible(self, visible: bool) -> None:
@@ -396,10 +407,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         if not self._conversation_view:
             return
         content = "\n\n".join(self._conversation_segments)
-        try:
-            self._conversation_view.setMarkdown(content)
-        except Exception:
-            self._conversation_view.setPlainText(content)
+        self._set_text_browser_content(self._conversation_view, content)
         if scroll:
             cursor = self._conversation_view.textCursor()
             cursor.movePosition(QtGui.QTextCursor.End)
@@ -428,10 +436,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
                 line = f"[{timestamp}] {text}"
                 desired = QtGui.QColor(color)
                 effective = self._ensure_contrast_color(
-                    desired,
-                    fallback=default_text_color,
-                    background=base_color,
-                    palette=palette,
+                    desired, fallback=default_text_color, background=base_color, palette=palette
                 )
                 line = f"<span style='color:{effective.name()};'>{line}</span>"
                 line += "<br>"
@@ -460,26 +465,20 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
 
         base = QtGui.QColor(desired)
         lighten = _relative_luminance(desired) <= _relative_luminance(background)
-        factors = (120, 140, 160, 180, 200)
-        for factor in factors:
+        for factor in (120, 140, 160, 180, 200):
             candidate = base.lighter(factor) if lighten else base.darker(factor)
             if _contrast_ratio(candidate, background) >= 4.0:
                 return candidate
 
         best = _best_text_color(background, palette)
-        if _contrast_ratio(best, background) >= 4.0:
-            return best
-        return fallback
+        return best if _contrast_ratio(best, background) >= 4.0 else fallback
 
     # ------------------------------------------------------------------
     def _refresh_reasoning(self, *, scroll: bool) -> None:
         if not self._reasoning_view:
             return
         text = "".join(self._reasoning_chunks)
-        try:
-            self._reasoning_view.setMarkdown(text)
-        except Exception:
-            self._reasoning_view.setPlainText(text)
+        self._set_text_browser_content(self._reasoning_view, text)
         if scroll:
             self._reasoning_view.moveCursor(QtGui.QTextCursor.End)
             self._reasoning_view.ensureCursorVisible()
@@ -537,14 +536,15 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
 
     # ------------------------------------------------------------------
     def clear_log(self) -> None:
-        self._log_entries.clear()
-        self._conversation_segments.clear()
-        self._stream_text.clear()
-        self._stream_index = None
-        self._stream_active = False
-        self._stream_header = None
-        self._reasoning_chunks.clear()
-        self._reasoning_dirty = False
+        for collection in (
+            self._log_entries,
+            self._conversation_segments,
+            self._stream_text,
+            self._reasoning_chunks,
+        ):
+            collection.clear()
+        self._stream_index = self._stream_header = None
+        self._stream_active = self._reasoning_dirty = False
         if self._reasoning_button:
             self._reasoning_button.setChecked(False)
         self._refresh_conversation(scroll=False)
