@@ -1,5 +1,5 @@
 import json
-from typing import Optional
+import re
 
 import ida_name
 import ida_kernwin
@@ -10,6 +10,15 @@ from gepetto.ida.tools.tools import (
     tool_error_payload,
     tool_result_payload,
 )
+
+def _sanitize_identifier(candidate: str) -> str:
+    """Convert arbitrary text into an IDA-safe identifier."""
+    cleaned = re.sub(r"\W+", "_", candidate.strip())
+    if not cleaned:
+        cleaned = "func"
+    if cleaned[0].isdigit():
+        cleaned = f"_{cleaned}"
+    return cleaned[: ida_name.MAXNAMELEN]
 
 
 def handle_rename_function_tc(tc, messages):
@@ -37,9 +46,9 @@ def handle_rename_function_tc(tc, messages):
 
 
 def rename_function(
-    ea: Optional[int] = None,
-    name: Optional[str] = None,
-    new_name: Optional[str] = None,
+    ea: int | None = None,
+    name: str | None = None,
+    new_name: str | None = None,
 ) -> dict:
     """Rename a function by EA or name."""
     if not new_name:
@@ -49,14 +58,21 @@ def rename_function(
     old_name = name or get_func_name(f)
     ea = int(f.start_ea)
 
-    error: dict[str, Optional[str]] = {"message": None}
+    error: dict[str, str | None] = {"message": None}
+    applied_name = new_name
 
     def _do():
         try:
-            if not ida_name.set_name(ea, new_name):
-                error["message"] = f"Failed to rename function {old_name!r}"
-                return 0
-            return 1
+            nonlocal applied_name
+            flags = ida_name.SN_FORCE | getattr(ida_name, "SN_NOWARN", 0)
+            if ida_name.set_name(ea, applied_name, flags):
+                return 1
+            sanitized = _sanitize_identifier(applied_name)
+            if sanitized != applied_name and ida_name.set_name(ea, sanitized, flags):
+                applied_name = sanitized
+                return 1
+            error["message"] = f"Failed to rename function {old_name!r} -> {applied_name!r}"
+            return 0
         except Exception as e:
             error["message"] = str(e)
             return 0
@@ -66,4 +82,7 @@ def rename_function(
     if error["message"]:
         raise RuntimeError(error["message"])
 
-    return {"ea": ea, "old_name": old_name, "new_name": new_name}
+    result = {"ea": ea, "old_name": old_name, "new_name": applied_name}
+    if applied_name != new_name:
+        result["requested_name"] = new_name
+    return result
