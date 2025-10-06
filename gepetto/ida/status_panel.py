@@ -3,25 +3,25 @@
 
 from __future__ import annotations
 
+import ida_kernwin
 import datetime
 import html
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Optional
-
+from collections.abc import Callable
 from PyQt5 import QtCore, QtGui, QtWidgets
-
-import ida_kernwin
+from gepetto.ida.hooks import run_when_desktop_ready
 
 import gepetto.config
 
 _ = gepetto.config._
 
+STATUS_PANEL_CAPTION = _("Gepetto")
 _DEFAULT_DOCK_OPTIONS = (
-    getattr(ida_kernwin.PluginForm, "WOPN_PERSIST", 0)
-    | getattr(ida_kernwin.PluginForm, "WOPN_RESTORE", 0)
+    getattr(ida_kernwin.PluginForm, "WOPN_PERSIST", 0x40)
+    | getattr(ida_kernwin.PluginForm, "WOPN_RESTORE", 0x04)
+    | getattr(ida_kernwin.PluginForm, "WOPN_MENU", 0x10)
 )
-
 
 class LogLevel(Enum):
     INFO = "info"
@@ -131,6 +131,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             level: QtGui.QColor(color) for level, color in self._LEVEL_COLORS.items() if color
         }
         self._widget: QtWidgets.QWidget | None = None
+        self._twidget = None
         self._model_label: QtWidgets.QLabel | None = None
         self._status_label: QtWidgets.QLabel | None = None
         self._stop_button: QtWidgets.QPushButton | None = None
@@ -146,7 +147,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._log_entries: list[LogEntry] = []
         self._conversation_segments: list[str] = []
         self._stream_text: list[str] = []
-        self._stream_index: Optional[int] = None
+        self._stream_index: int | None = None
         self._stream_active = False
         self._stream_header: str | None = None
         self._reasoning_chunks: list[str] = []
@@ -157,6 +158,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     def OnCreate(self, form):  # noqa: N802 - IDA callback signature
         if QtWidgets is None:
             return
+        self._twidget = form
         self._widget = self.FormToPyQtWidget(form)
         self._build_ui()
         self._ready = True
@@ -165,6 +167,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     # ------------------------------------------------------------------
     def OnClose(self, form):  # noqa: N802 - IDA callback signature
         del form
+        self._twidget = None
         self._widget = self._model_label = self._status_label = None
         self._stop_button = self._clear_button = self._reasoning_button = self._progress_bar = None
         self._conversation_view = self._reasoning_view = self._reasoning_frame = self._log_view = None
@@ -186,6 +189,10 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     # ------------------------------------------------------------------
     def widget(self):  # noqa: ANN001 - helper used by the manager
         return self._widget
+
+    # ------------------------------------------------------------------
+    def twidget(self):  # noqa: ANN001 - helper used by the manager
+        return self._twidget
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
@@ -515,7 +522,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._stop_button.setEnabled(self._owner.has_stop_callback())
 
     # ------------------------------------------------------------------
-    def set_stop_callback(self, callback: Optional[Callable[[], None]]) -> None:
+    def set_stop_callback(self, callback: Callable[[], None] | None) -> None:
         if not self._stop_button:
             return
         self._stop_button.setEnabled(callback is not None)
@@ -664,9 +671,8 @@ class _StatusPanelManager:
     """Controller keeping a singleton instance of the status panel."""
 
     def __init__(self) -> None:
-        self._form: Optional[GepettoStatusForm] = None
-        self._stop_callback: Optional[Callable[[], None]] = None
-        self._docked = False
+        self._form: GepettoStatusForm | None = None
+        self._stop_callback: Callable[[], None] | None = None
 
     # ------------------------------------------------------------------
     def ensure_shown(self) -> None:
@@ -674,36 +680,32 @@ class _StatusPanelManager:
             self._form = GepettoStatusForm(self)
             if self._form is not None:
                 try:
-                    self._form.Show(_("Gepetto Status"), options=_DEFAULT_DOCK_OPTIONS)
+                    self._form.Show(STATUS_PANEL_CAPTION, options=_DEFAULT_DOCK_OPTIONS) #ida_kernwin.PluginForm.WOPN_CREATE_ONLY
                 except Exception:
                     print(_("Could not show Gepetto Status panel."))
                     return
-        try:
-            ida_kernwin.activate_widget(_("Gepetto Status"), True)
-            self._dock()
-        except Exception:
-            pass
+        # try:
+        #     ida_kernwin.activate_widget(STATUS_PANEL_CAPTION, True)
+        #     twidget_getter = getattr(self._form, "twidget", None)
+        #     twidget = twidget_getter() if callable(twidget_getter) else None
+        #     dock_status_panel(STATUS_PANEL_CAPTION, twidget)
+        # except Exception:
+        #     pass
 
     # ------------------------------------------------------------------
     def form_closed(self) -> None:
         self._form = None
-        self._docked = False
 
     # ------------------------------------------------------------------
     def on_form_ready(self) -> None:
-        self._dock()
         self.set_model(str(gepetto.config.model))
         if self._stop_callback:
             self._form.set_stop_callback(self._stop_callback)  # type: ignore[union-attr]
             self._form.reset_stop()  # type: ignore[union-attr]
 
-    # ------------------------------------------------------------------
-    def _dock(self) -> None:
-        if self._form is None or not self._form.is_ready() or self._docked:
-            return
-        if self._form._widget and ida_kernwin.find_widget("IDA View-A"):
-            if ida_kernwin.set_dock_pos(_("Gepetto Status"), "IDA View-A", ida_kernwin.DP_RIGHT):
-                self._docked = True
+        def _dock() -> None:
+            ida_kernwin.set_dock_pos(STATUS_PANEL_CAPTION, None, ida_kernwin.DP_RIGHT)
+        run_when_desktop_ready(_dock)
 
     # ------------------------------------------------------------------
     def set_model(self, model_name: str) -> None:
@@ -718,7 +720,7 @@ class _StatusPanelManager:
         self._dispatch(lambda form: form.reset_stop())
 
     # ------------------------------------------------------------------
-    def set_stop_callback(self, callback: Optional[Callable[[], None]]) -> None:
+    def set_stop_callback(self, callback: Callable[[], None] | None) -> None:
         self._stop_callback = callback
 
         def apply(form: GepettoStatusForm) -> None:
@@ -814,7 +816,6 @@ class _StatusPanelManager:
                 pass
         self._form = None
         self._stop_callback = None
-        self._docked = False
 
     # ------------------------------------------------------------------
     def _dispatch(self, action: Callable[[GepettoStatusForm], None]) -> None:
