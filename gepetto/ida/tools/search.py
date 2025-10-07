@@ -197,15 +197,39 @@ def search(text: str | None = None, hex: str | None = None, case_sensitive: bool
             if q in hay:
                 matches.append(int(x["ea"]))
 
-    # Hex search: segment-bounded find_binary to avoid scanning the whole VA space.
+    # Hex search: segment-bounded search to avoid scanning the whole VA space.
     if hex:
-        for (start, end) in segs:
-            ea = ida_search.find_binary(start, end, hex, 16, ida_search.SEARCH_DOWN)
-            while ea != ida_idaapi.BADADDR and ea < end:
-                matches.append(int(ea))
-                # advance at least one byte to avoid infinite loop
-                ea = ida_search.find_binary(ea + 1, end, hex, 16, ida_search.SEARCH_DOWN)
-            ida_kernwin.process_ui_events()
+        if idaapi.IDA_SDK_VERSION < 900:
+            for (start, end) in segs:
+                ea = ida_search.find_binary(start, end, hex, 16, ida_search.SEARCH_DOWN)
+                while ea != ida_idaapi.BADADDR and ea < end:
+                    matches.append(int(ea))
+                    # advance at least one byte to avoid infinite loop
+                    ea = ida_search.find_binary(ea + 1, end, hex, 16, ida_search.SEARCH_DOWN)
+                ida_kernwin.process_ui_events()
+        else:
+            # IDA 9.x port: ida_search.find_binary removed; use ida_bytes.find_bytes
+            # (see 'ida_search' removed functions, and 'ida_bytes' added functions
+            # in the porting guide).
+            flags = ida_bytes.BIN_SEARCH_FORWARD | ida_bytes.BIN_SEARCH_NOSHOW
+            for (start, end) in segs:
+                ea = ida_bytes.find_bytes(
+                    hex,                  # pattern string, same value previously passed to find_binary
+                    start,                # range_start
+                    range_end=end,        # restrict to the current segment
+                    flags=flags,
+                    radix=16              # interpret pattern as hex string
+                )
+                while ea != ida_idaapi.BADADDR and ea < end:
+                    matches.append(int(ea))
+                    # advance at least one byte to avoid infinite loop
+                    ea = ida_bytes.find_bytes(
+                        hex,
+                        ea + 1,
+                        range_end=end,
+                        flags=flags,
+                        radix=16
+                    )
 
     if matches:
         matches = sorted(set(matches))
