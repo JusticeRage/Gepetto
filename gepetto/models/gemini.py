@@ -51,6 +51,24 @@ _FINISH_REASON_MAP = {
 }
 
 
+def _notify_error(cb, message: str) -> None:
+    if cb is None:
+        return
+
+    payload = SimpleNamespace(error=message)
+
+    def runner() -> None:
+        try:
+            cb(payload, "error")
+        except TypeError:
+            cb(payload)
+
+    try:
+        ida_kernwin.execute_sync(runner, ida_kernwin.MFF_FAST)
+    except Exception:
+        runner()
+
+
 def _to_plain(value: Any) -> Any:
     if isinstance(value, dict):
         return {k: _to_plain(v) for k, v in value.items()}
@@ -506,6 +524,7 @@ class Gemini(LanguageModel):
         except Exception as exc:
             error_message = _("General exception encountered while running the query: {error}").format(error=str(exc))
             print(error_message)
+            _notify_error(cb, error_message)
 
     def query_model_async(self, query, cb, stream=False, additional_model_options=None):
         thread = threading.Thread(

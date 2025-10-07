@@ -10,7 +10,7 @@ import idc
 
 import gepetto.config
 from gepetto.models.model_manager import instantiate_model
-from gepetto.ida.status_panel import get_status_panel
+from gepetto.ida.status_panel import LogCategory, LogLevel, get_status_panel
 
 _ = gepetto.config._
 
@@ -186,7 +186,7 @@ def rename_callback(address, view, response, start_time):
         view.refresh_view(True)
     response_finished = _("Done! {count} name(s) renamed.").format(count=len(replaced))
     print(response_finished)
-    STATUS_PANEL.log(response_finished)
+    STATUS_PANEL.log(response_finished, category=LogCategory.TOOL, level=LogLevel.SUCCESS)
 
 
 # -----------------------------------------------------------------------------
@@ -241,7 +241,7 @@ class SwapModelHandler(idaapi.action_handler_t):
         except ValueError as e:  # Raised if an API key is missing. In which case, don't switch.
             error_msg = _("Couldn't change model to {model}: {error}").format(model=self.new_model, error=str(e))
             print(error_msg)
-            STATUS_PANEL.log(error_msg)
+            STATUS_PANEL.log(error_msg, category=LogCategory.SYSTEM, level=LogLevel.ERROR)
             return
         gepetto.config.update_config("Gepetto", "MODEL", self.new_model)
         STATUS_PANEL.set_model(str(gepetto.config.model))
@@ -300,7 +300,7 @@ class GenerateCCodeHandler(idaapi.action_handler_t):
         response_finished = _("{model} generated code saved to {file_name}").format(
             model=str(gepetto.config.model), file_name=file_name)
 
-        STATUS_PANEL.log(response_finished)
+        STATUS_PANEL.log(response_finished, category=LogCategory.TOOL, level=LogLevel.SUCCESS)
         print(response_finished)
 
     def update(self, ctx):
@@ -355,7 +355,7 @@ class GeneratePythonCodeHandler(idaapi.action_handler_t):
         response_finished = _("{model} generated code saved to {file_name}").format(
             model=str(gepetto.config.model), file_name=file_name)
 
-        STATUS_PANEL.log(response_finished)
+        STATUS_PANEL.log(response_finished, category=LogCategory.TOOL, level=LogLevel.SUCCESS)
         print(response_finished)
 
     def update(self, ctx):
