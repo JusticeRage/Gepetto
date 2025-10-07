@@ -106,6 +106,15 @@ def _best_text_color(background: QtGui.QColor, palette: QtGui.QPalette) -> QtGui
     return max(candidates, key=lambda c: _contrast_ratio(c, background))
 
 
+def _rgba(color: QtGui.QColor, alpha: float | None = None) -> str:
+    if not color.isValid():
+        color = QtGui.QColor(0, 0, 0, 0)
+    result = QtGui.QColor(color)
+    if alpha is not None:
+        result.setAlphaF(max(0.0, min(alpha, 1.0)))
+    return f"rgba({result.red()}, {result.green()}, {result.blue()}, {result.alphaF():.3f})"
+
+
 class GepettoStatusForm(ida_kernwin.PluginForm):
     """Dockable widget that displays the streaming answer and structured log."""
 
@@ -164,7 +173,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         if QtWidgets is None:
             return
         self._twidget = self.GetWidget()
-        self._widget = self.FormToPyQtWidget(form)
+        self._widget = self.FormToPyQtWidget(form) # type: ignore - Qt5/PySide6
         self._build_ui()
         self._ready = True
         self._owner.on_form_ready()
@@ -233,32 +242,29 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
 
         actions_layout = QtWidgets.QHBoxLayout()
         actions_layout.setSpacing(6)
-        self._stop_button = QtWidgets.QPushButton(_("Stop"))
-        self._stop_button.setEnabled(False)
-        self._stop_button.clicked.connect(self._handle_stop_clicked)  # type: ignore[arg-type]
-        actions_layout.addWidget(self._stop_button)
         self._clear_button = QtWidgets.QPushButton(_("Clear"))
         self._clear_button.clicked.connect(self._owner.clear_log)  # type: ignore[arg-type]
         actions_layout.addWidget(self._clear_button)
         top_row.addLayout(actions_layout)
         root_layout.addLayout(top_row)
 
-        log_row = QtWidgets.QHBoxLayout()
-        log_row.setSpacing(0)
+        log_container = QtWidgets.QVBoxLayout()
+        log_container.setSpacing(0)
+        log_container.setContentsMargins(0, 0, 0, 0)
         self._log_view = QtWidgets.QTextBrowser()
         self._log_view.setReadOnly(True)
         self._log_view.setMinimumHeight(140)
-        log_row.addWidget(self._log_view)
-        root_layout.addLayout(log_row)
+        log_container.addWidget(self._log_view)
 
         self._progress_bar = QtWidgets.QProgressBar()
         self._progress_bar.setRange(0, 1)
-        self._progress_bar.setValue(1)
-        self._progress_bar.setFixedHeight(14)
+        self._progress_bar.setValue(0)
+        self._progress_bar.setFixedHeight(6)
         self._progress_bar.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self._progress_bar.setTextVisible(False)
-        self._progress_bar.hide()
-        root_layout.addWidget(self._progress_bar)
+        self._apply_progress_bar_style()
+        log_container.addWidget(self._progress_bar)
+        root_layout.addLayout(log_container)
 
         self._conversation_view = QtWidgets.QTextBrowser()
         self._conversation_view.setReadOnly(True)
@@ -275,6 +281,10 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._send_button = QtWidgets.QPushButton(_("Send"))
         self._send_button.clicked.connect(self._handle_chat_submit)  # type: ignore[arg-type]
         chat_row.addWidget(self._send_button)
+        self._stop_button = QtWidgets.QPushButton(_("Stop"))
+        self._stop_button.setEnabled(False)
+        self._stop_button.clicked.connect(self._handle_stop_clicked)  # type: ignore[arg-type]
+        chat_row.addWidget(self._stop_button)
         root_layout.addLayout(chat_row)
 
         footer = QtWidgets.QHBoxLayout()
@@ -304,12 +314,36 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         return toggle
 
     # ------------------------------------------------------------------
+    def _apply_progress_bar_style(self) -> None:
+        if not (self._progress_bar and self._widget):
+            return
+
+        palette = self._widget.palette()
+        chunk_color = palette.color(QtGui.QPalette.WindowText)
+        track_color = QtGui.QColor("#00000000")
+        text_color = _best_text_color(chunk_color, palette)
+        style = (
+            "QProgressBar {"
+            f"  background-color: {_rgba(track_color)};"
+            f"  border: none;"
+            "  padding: 0px;"
+            "}"
+            "QProgressBar::chunk {"
+            f"  background-color: {_rgba(chunk_color, 0.33)};"
+            f"  color: {_rgba(text_color)};"
+            f"  border-color: {_rgba(chunk_color.lighter(110))};"
+            "  border-radius: 1px;"
+            "  margin: 1px;"
+            "}"
+        )
+        self._progress_bar.setStyleSheet(style)
+
+    # ------------------------------------------------------------------
     def _apply_filter_styles(self) -> None:
         if not self._filter_buttons:
             return
         palette = self._widget.palette() if self._widget else QtWidgets.QApplication.palette()
-        muted_text_color = palette.color(QtGui.QPalette.Shadow)
-        muted_color = palette.color(QtGui.QPalette.ColorRole.Midlight).darker(100)
+        muted_text_color = palette.color(QtGui.QPalette.WindowText).lighter(120)
 
         for category, button in self._filter_buttons.items():
             base_color = QtGui.QColor(self._CATEGORY_COLORS.get(category, ""))
@@ -319,38 +353,37 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
                 continue
 
             text_color = _best_text_color(base_color, palette)
-            border_color = QtGui.QColor(base_color)
-            border_color = border_color.darker(140)
-            hover_color = QtGui.QColor(base_color)
-            if _relative_luminance(base_color) > _relative_luminance(palette.color(QtGui.QPalette.Button)):
+            border_color = QtGui.QColor(base_color).darker(180)
+            if _relative_luminance(base_color) > _relative_luminance(palette.color(QtGui.QPalette.Window)):
                 hover_color = base_color.darker(110)
+                muted_color = base_color.darker(120)
             else:
                 hover_color = base_color.lighter(120)
+                muted_color = base_color.lighter(130)
 
             style = (
                 "QToolButton {"
                 "  padding: 2px 10px;"
                 "  border-radius: 4px;"
-                f"  border: 1px solid {base_color.name()};"
+                f"  border: 1px solid {_rgba(base_color)};"
                 "}"
                 "QToolButton:checked {"
-                f"  background-color: {base_color.name()};"
-                f"  color: {text_color.name()};"
-                f"  border: 1px solid {border_color.name()};"
+                f"  color: {_rgba(text_color, 0.75)};"
+                f"  background-color: {_rgba(base_color)};"
+                f"  border-color: {_rgba(border_color)};"
                 "  font-weight: bold;"
                 "}"
                 "QToolButton:hover {"
-                f"  background-color: {hover_color.name()};"
-                f"  border: 1px solid {border_color.name()};"
+                f"  background-color: {_rgba(hover_color, 0.9)};"
+                f"  border-color: {_rgba(border_color, 0.9)};"
                 "}"
                 "QToolButton:!checked {"
-                f"  background-color: {muted_color.name()} !important;"
-                f"  color: {muted_text_color.name()};"
-                f"  border: 1px solid {muted_color.name()};"
-                "  font-weight: normal;"
+                f"  color: {_rgba(muted_text_color, 0.8)};"
+                f"  background-color: {_rgba(muted_color, 0.33)};"
+                f"  border-color: {_rgba(border_color, 0.55)};"
                 "}"
                 "QToolButton:!checked:hover {"
-                f"  border: 1px solid {border_color.darker(200).name()};"
+                f"  border-color: {_rgba(border_color, 0.75)};"
                 "}"
             )
             button.setStyleSheet(style)
@@ -492,11 +525,9 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         if self._progress_bar:
             if busy:
                 self._progress_bar.setRange(0, 0)
-                self._progress_bar.show()
             else:
                 self._progress_bar.setRange(0, 1)
-                self._progress_bar.setValue(1)
-                self._progress_bar.hide()
+                self._progress_bar.setValue(0)
         self._set_chat_controls_enabled(not busy)
 
     # ------------------------------------------------------------------
@@ -515,7 +546,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     # ------------------------------------------------------------------
     def mark_error(self, message: str) -> None:
         self.append_log(message, category=LogCategory.SYSTEM, level=LogLevel.ERROR)
-        self.set_status(message, error=True)
+        self.set_status(_("Error - Check Log"), error=True)
         if self._stop_button:
             self._stop_button.setEnabled(False)
 
@@ -671,7 +702,8 @@ class _StatusPanelManager:
             self._form = GepettoStatusForm(self)
             if self._form is not None:
                 try:
-                    self._form.Show(STATUS_PANEL_CAPTION, options=ida_kernwin.PluginForm.WOPN_CREATE_ONLY)
+                    option = getattr(ida_kernwin.PluginForm, "WOPN_CREATE_ONLY", 0)
+                    self._form.Show(STATUS_PANEL_CAPTION, options=option)
                 except Exception:
                     print(_("Could not show Gepetto Status panel."))
                     return
