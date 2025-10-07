@@ -59,7 +59,7 @@ class LMStudio(GPT):
             ) if proxy else None
         )
 
-    def query_model(self, query, cb, *args, **kwargs):
+    def query_model(self, query, cb, stream=False, *args, **kwargs):
         """
         Compatible with callers that may pass an extra positional 'context' arg:
           - query_model(query, cb, additional_model_options)
@@ -98,6 +98,7 @@ class LMStudio(GPT):
         return super().query_model(
             query,
             cb,
+            stream,
             additional_model_options=additional_model_options,
         )
 

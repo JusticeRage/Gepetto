@@ -155,6 +155,13 @@ class GepettoCLI(ida_kernwin.cli_t):
                             "arguments": tc.function.arguments,
                         },
                     })
+                    STATUS_PANEL.log(
+                        _("→ Model requested tool: {tool_name} ({tool_args}...)").format(
+                            tool_name=tc.function.name,
+                            tool_args=(tc.function.arguments or "")[:120],
+                        ),
+                        category=LogCategory.TOOL,
+                    )
                 MESSAGES.append(
                     {
                         "role": "assistant",
@@ -162,14 +169,7 @@ class GepettoCLI(ida_kernwin.cli_t):
                         "tool_calls": tool_calls,
                     }
                 )
-                for tc in response.tool_calls:
-                    STATUS_PANEL.log(
-                        _("→ Model requested tool: {tool_name} ({tool_args}...)").format(
-                            tool_name=tc.function.name,
-                            tool_args=(tc.function.arguments or "")[:120],
-                        ),
-                        category=LogCategory.MODEL,
-                    )
+
                 first_tool_name = response.tool_calls[0].function.name
                 STATUS_PANEL.set_status(_("Using tool: {tool_name}").format(tool_name=first_tool_name), busy=True)
                 for tc in response.tool_calls:

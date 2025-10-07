@@ -316,11 +316,32 @@ class ContextMenuHooks(idaapi.UI_Hooks):
     def finish_populating_widget_popup(self, form, popup, ctx=None):
         widget = form
         popup_handle = popup
-        if ctx is not None and hasattr(ctx, "widget") and ctx.widget is not None:
-            widget = ctx.widget
-        if idaapi.get_widget_type(widget) == idaapi.BWN_PSEUDOCODE:
+
+        if ctx is not None:
+            try:
+                ctx_widget = getattr(ctx, "widget", None)
+            except Exception:
+                ctx_widget = None
+            if ctx_widget is not None:
+                widget = ctx_widget
+
+            try:
+                ctx_popup = getattr(ctx, "popup", None)
+            except Exception:
+                ctx_popup = None
+            if ctx_popup is not None:
+                popup_handle = ctx_popup
+
+        try:
+            widget_type = idaapi.get_widget_type(widget)
+        except Exception:
+            return 0
+
+        if widget_type == idaapi.BWN_PSEUDOCODE:
             idaapi.attach_action_to_popup(widget, popup_handle, GepettoPlugin.explain_action_name, "Gepetto/")
             idaapi.attach_action_to_popup(widget, popup_handle, GepettoPlugin.comment_action_name, "Gepetto/")
             idaapi.attach_action_to_popup(widget, popup_handle, GepettoPlugin.rename_action_name, "Gepetto/")
             idaapi.attach_action_to_popup(widget, popup_handle, GepettoPlugin.c_code_action_name, "Gepetto/")
             idaapi.attach_action_to_popup(widget, popup_handle, GepettoPlugin.python_code_action_name, "Gepetto/")
+
+        return 0
