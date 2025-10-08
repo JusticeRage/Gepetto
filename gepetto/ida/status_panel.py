@@ -154,6 +154,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._progress_bar: QtWidgets.QProgressBar | None = None
         self._conversation_view: QtWidgets.QTextBrowser | None = None
         self._log_view: QtWidgets.QTextBrowser | None = None
+        self._splitter: QtWidgets.QSplitter | None = None
         self._chat_input: QtWidgets.QLineEdit | None = None
         self._send_button: QtWidgets.QPushButton | None = None
         self._filter_buttons: dict[LogCategory, QtWidgets.QToolButton] = {}
@@ -185,6 +186,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._widget = self._model_label = self._status_label = None
         self._stop_button = self._clear_button = self._progress_bar = None
         self._conversation_view = self._log_view = None
+        self._splitter = None
         self._chat_input = self._send_button = None
         self._filter_buttons = {}
         self._active_filters = set(LogCategory)
@@ -216,11 +218,28 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             return
 
         root_layout = QtWidgets.QVBoxLayout(self._widget)
-        root_layout.setContentsMargins(8, 8, 8, 8)
-        root_layout.setSpacing(10)
+        root_layout.setContentsMargins(6, 6, 6, 6)
+        root_layout.setSpacing(0)
 
-        top_row = QtWidgets.QHBoxLayout()
-        top_row.setSpacing(8)
+        self._splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
+        self._splitter.setChildrenCollapsible(False)
+        self._splitter.setHandleWidth(4)
+
+        self._conversation_view = QtWidgets.QTextBrowser()
+        self._conversation_view.setReadOnly(True)
+        self._conversation_view.setMinimumHeight(60)
+        self._conversation_view.setOpenExternalLinks(False)
+        self._splitter.addWidget(self._conversation_view)
+        self._splitter.setStretchFactor(0, 7)
+
+        log_container = QtWidgets.QWidget()
+        log_container_layout = QtWidgets.QVBoxLayout(log_container)
+        log_container_layout.setContentsMargins(0, 0, 0, 0)
+        log_container_layout.setSpacing(2)
+
+        log_header_layout = QtWidgets.QHBoxLayout()
+        log_header_layout.setSpacing(6)
+        log_header_layout.setContentsMargins(0, 6, 0, 0)
 
         filters_layout = QtWidgets.QHBoxLayout()
         filters_layout.setSpacing(4)
@@ -238,42 +257,28 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             self._filter_buttons[category] = button
         self._apply_filter_styles()
         filters_layout.addStretch(1)
-        top_row.addLayout(filters_layout, stretch=1)
+        log_header_layout.addLayout(filters_layout, stretch=1)
 
         actions_layout = QtWidgets.QHBoxLayout()
         actions_layout.setSpacing(6)
         self._clear_button = QtWidgets.QPushButton(_("Clear"))
         self._clear_button.clicked.connect(self._owner.clear_log)  # type: ignore[arg-type]
         actions_layout.addWidget(self._clear_button)
-        top_row.addLayout(actions_layout)
-        root_layout.addLayout(top_row)
+        log_header_layout.addLayout(actions_layout)
+        log_container_layout.addLayout(log_header_layout)
 
-        log_container = QtWidgets.QVBoxLayout()
-        log_container.setSpacing(0)
-        log_container.setContentsMargins(0, 0, 0, 0)
         self._log_view = QtWidgets.QTextBrowser()
         self._log_view.setReadOnly(True)
-        self._log_view.setMinimumHeight(140)
-        log_container.addWidget(self._log_view)
+        self._log_view.setMinimumHeight(40)
+        log_container_layout.addWidget(self._log_view, stretch=1)
 
-        self._progress_bar = QtWidgets.QProgressBar()
-        self._progress_bar.setRange(0, 1)
-        self._progress_bar.setValue(0)
-        self._progress_bar.setFixedHeight(6)
-        self._progress_bar.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
-        self._progress_bar.setTextVisible(False)
-        self._apply_progress_bar_style()
-        log_container.addWidget(self._progress_bar)
-        root_layout.addLayout(log_container)
+        self._splitter.addWidget(log_container)
+        self._splitter.setStretchFactor(1, 3)
 
-        self._conversation_view = QtWidgets.QTextBrowser()
-        self._conversation_view.setReadOnly(True)
-        self._conversation_view.setMinimumHeight(220)
-        self._conversation_view.setOpenExternalLinks(False)
-        root_layout.addWidget(self._conversation_view, stretch=1)
+        root_layout.addWidget(self._splitter, stretch=1)
 
         chat_row = QtWidgets.QHBoxLayout()
-        chat_row.setSpacing(8)
+        chat_row.setSpacing(4)
         self._chat_input = QtWidgets.QLineEdit()
         self._chat_input.setPlaceholderText(_("Type a prompt and press Enter…"))
         self._chat_input.returnPressed.connect(self._handle_chat_submit)  # type: ignore[arg-type]
@@ -285,10 +290,25 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._stop_button.setEnabled(False)
         self._stop_button.clicked.connect(self._handle_stop_clicked)  # type: ignore[arg-type]
         chat_row.addWidget(self._stop_button)
-        root_layout.addLayout(chat_row)
+
+        self._progress_bar = QtWidgets.QProgressBar()
+        self._progress_bar.setRange(0, 1)
+        self._progress_bar.setValue(0)
+        self._progress_bar.setFixedHeight(6)
+        self._progress_bar.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self._progress_bar.setTextVisible(False)
+        self._apply_progress_bar_style()
+
+        chat_container = QtWidgets.QVBoxLayout()
+        chat_container.setSpacing(4)
+        chat_container.setContentsMargins(0, 0, 0, 0)
+        chat_container.addWidget(self._progress_bar)
+        chat_container.addLayout(chat_row)
+        root_layout.addLayout(chat_container)
 
         footer = QtWidgets.QHBoxLayout()
-        footer.setSpacing(8)
+        footer.setSpacing(0)
+        footer.setContentsMargins(2, 8, 2, 2)
         self._model_label = QtWidgets.QLabel(_("Model: {model}").format(model=str(gepetto.config.model)))
         self._model_label.setObjectName("gepetto_status_model_label")
         footer.addWidget(self._model_label)
