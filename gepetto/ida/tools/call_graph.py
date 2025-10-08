@@ -1,7 +1,8 @@
 # gepetto/ida/tools/callgraph.py
 
 import json
-from typing import Any, Dict, Optional, Iterable, Set
+from collections.abc import Iterable
+from typing import Any
 
 import idaapi
 import ida_funcs
@@ -10,7 +11,7 @@ import ida_name
 import ida_xref
 import ida_bytes
 
-from gepetto.ida.tools.function_utils import parse_ea, resolve_func, get_func_name
+from gepetto.ida.utils.function_utils import parse_ea, resolve_func, get_func_name
 from gepetto.ida.tools.tools import (
     add_result_to_messages,
     tool_error_payload,
@@ -123,7 +124,7 @@ def _func_name(ea: int) -> str:
 
 # -----------------------------------------------------------------------------
 
-def _follow_thunk_once(fn: ida_funcs.func_t) -> Optional[int]:
+def _follow_thunk_once(fn: ida_funcs.func_t) -> int | None:
     """
     Best-effort: if fn is a thunk, try to find its final code target.
     We look at outgoing code xrefs from the first item and pick the first call/jmp target.
@@ -168,15 +169,15 @@ def _normalize_callee_ea(ea: int, include_thunks: bool) -> int:
 
 # -----------------------------------------------------------------------------
 
-def get_callers(ea: Optional[int] = None, name: Optional[str] = None,
-                include_thunks: bool = True) -> Dict[str, Any]:
+def get_callers(ea: int | None = None, name: str | None = None,
+                include_thunks: bool = True) -> dict[str, Any]:
     """
     Return unique caller functions that call the target function (by EA or name).
     Only call xrefs are considered. If include_thunks is True and the target is a thunk,
     results will be keyed to the thunk's final target for normalization.
     """
-    out: Dict[str, Any] = {"target": {}, "callers": []}
-    error: Dict[str, Optional[str]] = {"message": None}
+    out: dict[str, Any] = {"target": {}, "callers": []}
+    error: dict[str, str | None] = {"message": None}
 
     def _do():
         try:
@@ -200,7 +201,7 @@ def get_callers(ea: Optional[int] = None, name: Optional[str] = None,
             # Collect callers: code xrefs TO the (possibly normalized) callee start
             callee_start = norm_target_ea
             blk = ida_xref.xrefblk_t()
-            callers: Set[int] = set()
+            callers: set[int] = set()
             if blk.first_to(callee_start, ida_xref.XREF_ALL):
                 while True:
                     if blk.iscode and _is_call(blk.type):
@@ -228,15 +229,15 @@ def get_callers(ea: Optional[int] = None, name: Optional[str] = None,
 
 # -----------------------------------------------------------------------------
 
-def get_callees(ea: Optional[int] = None, name: Optional[str] = None,
-                only_direct: bool = True, include_thunks: bool = True) -> Dict[str, Any]:
+def get_callees(ea: int | None = None, name: str | None = None,
+                only_direct: bool = True, include_thunks: bool = True) -> dict[str, Any]:
     """
     Return unique callee functions reached from the target function.
     - only_direct=True: only consider direct code call xrefs (ignore data/indirect).
     - include_thunks=True: normalize callees that are thunks to their ultimate targets.
     """
-    out: Dict[str, Any] = {"source": {}, "callees": []}
-    error: Dict[str, Optional[str]] = {"message": None}
+    out: dict[str, Any] = {"source": {}, "callees": []}
+    error: dict[str, str | None] = {"message": None}
 
     def _do():
         try:
@@ -249,7 +250,7 @@ def get_callees(ea: Optional[int] = None, name: Optional[str] = None,
             out["source"] = {"ea": int(src_ea), "name": _func_name(src_ea)}
 
             # Walk each item in the function and gather outgoing call xrefs
-            callees: Set[int] = set()
+            callees: set[int] = set()
             blk = ida_xref.xrefblk_t()
             for item_ea in _iter_func_items(fn):
                 if blk.first_from(item_ea, ida_xref.XREF_ALL):

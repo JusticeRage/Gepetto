@@ -1,5 +1,6 @@
 import json
-from typing import Any, Dict, Optional, Iterable, Tuple
+from collections.abc import Iterable
+from typing import Any
 
 import idaapi
 import ida_bytes
@@ -8,7 +9,7 @@ import ida_kernwin
 import ida_name
 import ida_xref
 
-from gepetto.ida.tools.function_utils import parse_ea, resolve_ea, resolve_func, get_func_name
+from gepetto.ida.utils.function_utils import parse_ea, resolve_ea, resolve_func, get_func_name
 from gepetto.ida.tools.tools import (
     add_result_to_messages,
     tool_error_payload,
@@ -89,7 +90,7 @@ def _iter_func_items(fn: ida_funcs.func_t) -> Iterable[int]:
 
 # -----------------------------------------------------------------------------
 
-def _collect_xrefs_to(ea: int, kinds_mask=ida_xref.XREF_ALL) -> Iterable[Tuple[int, int, bool]]:
+def _collect_xrefs_to(ea: int, kinds_mask=ida_xref.XREF_ALL) -> Iterable[tuple[int, int, bool]]:
     blk = ida_xref.xrefblk_t()
     if blk.first_to(ea, kinds_mask):
         while True:
@@ -99,7 +100,7 @@ def _collect_xrefs_to(ea: int, kinds_mask=ida_xref.XREF_ALL) -> Iterable[Tuple[i
 
 # -----------------------------------------------------------------------------
 
-def _collect_xrefs_from(ea: int, kinds_mask=ida_xref.XREF_ALL) -> Iterable[Tuple[int, int, bool]]:
+def _collect_xrefs_from(ea: int, kinds_mask=ida_xref.XREF_ALL) -> Iterable[tuple[int, int, bool]]:
     blk = ida_xref.xrefblk_t()
     if blk.first_from(ea, kinds_mask):
         while True:
@@ -109,7 +110,7 @@ def _collect_xrefs_from(ea: int, kinds_mask=ida_xref.XREF_ALL) -> Iterable[Tuple
 
 # -----------------------------------------------------------------------------
 
-def _ea_func_name(ea: int) -> Optional[str]:
+def _ea_func_name(ea: int) -> str | None:
     f = ida_funcs.get_func(ea)
     if f:
         return get_func_name(f) or None
@@ -126,9 +127,9 @@ def get_xrefs_unified(
         only_data: bool = False,
         only_calls: bool = False,
         exclude_flow: bool = False,
-        collapse_by: Optional[str] = None,   # "site"|"pair"|"from_func"|"to_func"
+        collapse_by: str | None = None,   # "site"|"pair"|"from_func"|"to_func"
         enrich_names: bool = True,
-) -> Dict:
+) -> dict[str, Any]:
     """
     scope: "ea" | "function" | "name"
     subject: EA (int or hex str) or name (if scope=="name")
@@ -139,7 +140,7 @@ def get_xrefs_unified(
     if scope not in {"ea","function","name"}:
         raise ValueError("scope must be 'ea'|'function'|'name'")
 
-    out: Dict[str, Any] = {
+    out: dict[str, Any] = {
         "scope": scope,
         "subject": {},
         "direction": direction,
@@ -147,7 +148,7 @@ def get_xrefs_unified(
         "xrefs": [],
         "stats": {},
     }
-    error: Dict[str, Optional[str]] = {"message": None}
+    error: dict[str, str | None] = {"message": None}
 
     def _do():
         try:

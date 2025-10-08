@@ -1,7 +1,6 @@
 import json
-from typing import Any, Dict
+from typing import Any
 
-import ida_kernwin
 
 TOOLS = [
     {
@@ -373,17 +372,19 @@ TOOLS = [
     },
 ]
 
+# logger = logging.getLogger(__name__)
 
-def tool_result_payload(data: Any) -> Dict[str, Any]:
+
+def tool_result_payload(data: Any) -> dict[str, Any]:
     """Wrap successful tool results in a standard payload structure."""
 
     return {"type": "result", "data": data}
 
 
-def tool_error_payload(message: str, **context: Any) -> Dict[str, Any]:
+def tool_error_payload(message: str, **context: Any) -> dict[str, Any]:
     """Create an error payload with an optional context dictionary."""
 
-    error: Dict[str, Any] = {"message": message}
+    error: dict[str, Any] = {"message": message}
     if context:
         error["context"] = context
     return {"type": "error", "error": error}
