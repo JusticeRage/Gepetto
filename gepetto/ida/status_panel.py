@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from enum import Enum
 from collections.abc import Callable
 from PyQt5 import QtCore, QtGui, QtWidgets
-from gepetto.ida.hooks import run_when_desktop_ready
+from gepetto.ida.utils.hooks import run_when_desktop_ready
 
 import gepetto.config
 

@@ -3,7 +3,6 @@ import json
 import re
 import time
 import textwrap
-from urllib import response
 
 import idaapi
 import ida_hexrays
@@ -12,6 +11,7 @@ import idc
 
 import gepetto.config
 from gepetto.ida.status_panel import LogCategory, LogLevel, get_status_panel
+from gepetto.ida.utils.thread_helpers import *
 
 _ = gepetto.config._
 
@@ -32,19 +32,39 @@ class CommentHandler(idaapi.action_handler_t):
     def activate(self, ctx):
         start_time = time.time()
         localization_locale = gepetto.config.get_localization_locale()
-        decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
-        
+
+        ea = safe_get_screen_ea()
+        if ea == idaapi.BADADDR:
+            try:
+                ida_kernwin.warning(_("No focused view available; cannot determine current function."))
+            except Exception:
+                print(_("No focused view available; cannot determine current function."))
+            return 1
+
+        try:
+            decompiler_output = decompile_func(ea)
+        except RuntimeError as exc:
+            message = str(exc)
+            try:
+                ida_kernwin.warning(message)
+            except Exception:
+                print(message)
+            return 1
+
         pseudocode_lines = get_commentable_lines(decompiler_output)
         formatted_lines = format_commentable_lines(pseudocode_lines)
         v = ida_hexrays.get_widget_vdui(ctx.widget)
               
         gepetto.config.model.query_model_async(
             f"""
-                RESPOND STRICTLY IN THE FORMAT JSON MAP {{ lineNumber: "comment" }}, NOTHING ELSE!!!
-                Respond in [{localization_locale}] locale.
-                Add comments that explain what is happening in this C function.
-                You can ONLY add comments to lines that start with a '+'!
-                DON'T comment trivial or obvious actions; comment on important or non-obvious blocks; read ENTIRE logical blocks before make a comment.
+                You are a reverse-engineering assistant adding helpful pseudocode comments.
+                - Locale: {localization_locale}
+                - Output format (strict): exactly one JSON object mapping integer lineNumber → string comment.
+                  * No Markdown, no code fences, no explanations outside the JSON object.
+                  * If no comments are warranted, return {{}}.
+                - Scope: Only annotate lines that start with '+' in the listing below.
+                - Guidance: Explain intent, side-effects, or non-obvious control flow. Skip trivial operations.
+                - Style: Keep comments concise (one sentence when possible) and use imperative or descriptive voice.
                 \n
                 ```C
                 {formatted_lines}
@@ -73,45 +93,63 @@ def comment_callback(decompiler_output, pseudocode_lines, view, response, start_
         elapsed_time = time.time() - start_time
 
         response_text = response.content if hasattr(response, "content") else response
-
+        if not isinstance(response_text, str):
+            response_text = str(response_text)
         print(f"Response: {response_text}")
 
-        items = json.loads(response_text)
+        try:
+            items = json.loads(response_text)
+        except Exception as exc:
+            error_message = _("[ERROR] comment callback JSON failure: {error}").format(error=str(exc))
+            print(error_message)
+            STATUS_PANEL.mark_error(error_message)
+            STATUS_PANEL.log_request_finished(elapsed_time)
+            return
 
-        applied = 0
+        def _apply_comments():
+            applied_local = 0
+            for line_key, raw_comment in items.items():
+                try:
+                    line_index = int(line_key)
+                except (TypeError, ValueError):
+                    continue
 
-        for line_key, raw_comment in items.items():
-            try:
-                line_index = int(line_key)
-            except (TypeError, ValueError):
-                continue
+                if line_index < 0 or line_index >= len(pseudocode_lines):
+                    continue
 
-            if line_index < 0 or line_index >= len(pseudocode_lines):
-                continue
+                comment_address = pseudocode_lines[line_index][2]
+                comment_placement = pseudocode_lines[line_index][3]
+                if comment_placement is None:
+                    comment_placement = idaapi.ITP_SEMI
 
-            comment_address = pseudocode_lines[line_index][2]
-            comment_placement = pseudocode_lines[line_index][3]
-            if comment_placement is None:
-                comment_placement = idaapi.ITP_SEMI
+                if comment_address is None or comment_address == idaapi.BADADDR:
+                    continue
 
-            if comment_address is None or comment_address == idaapi.BADADDR:
-                continue
+                comment_text = str(raw_comment).strip()
+                if not comment_text:
+                    continue
 
-            comment_text = str(raw_comment).strip()
-            if not comment_text:
-                continue
+                target = idaapi.treeloc_t()
+                target.ea = int(comment_address)
+                target.itp = comment_placement
+                decompiler_output.set_user_cmt(target, comment_text)
+                applied_local += 1
 
-            target = idaapi.treeloc_t()
-            target.ea = int(comment_address)
-            target.itp = comment_placement
-            decompiler_output.set_user_cmt(target, comment_text)
-            applied += 1
+            decompiler_output.save_user_cmts()
+            decompiler_output.del_orphan_cmts()
 
-        decompiler_output.save_user_cmts()
-        decompiler_output.del_orphan_cmts()
+            if view:
+                view.refresh_view(True)
+            return applied_local
 
-        if view:
-            view.refresh_view(True)
+        try:
+            applied = run_on_main_thread(_apply_comments, write=True) or 0
+        except Exception as exc:
+            error_message = _("[ERROR] comment application failed: {error}").format(error=str(exc))
+            print(error_message)
+            STATUS_PANEL.mark_error(error_message)
+            STATUS_PANEL.log_request_finished(elapsed_time)
+            return
 
         if applied:
             STATUS_PANEL.log(
@@ -235,4 +273,3 @@ def format_commentable_lines(commentable_lines):
     return "\n".join(output)
 
 # -----------------------------------------------------------------------------
-

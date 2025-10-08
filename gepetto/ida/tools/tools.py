@@ -91,22 +91,26 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "get_function_code",
-            "description": "Return Hex-Rays pseudocode for a function, resolved by EA or by name.",
+            "name": "decompile_function",
+            "description": "Decompile a function by EA or name and return annotated pseudocode (with per-line metadata). Provide either `address`/`ea` or `name`.",
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "address": {
+                        "type": "string",
+                        "description": "Address inside the target function (e.g., '0x401000' or '401000h').",
+                    },
                     "ea": {
                         "type": "integer",
-                        "description": "Effective address (EA) inside the target function, in either decimal or hex."
+                        "description": "Alternative: decimal EA inside the target function.",
                     },
                     "name": {
                         "type": "string",
-                        "description": "Name of the function to resolve."
-                    }
-                }
-            }
-        }
+                        "description": "Function name to resolve if no address/EA is supplied.",
+                    },
+                },
+            },
+        },
     },
     {
         "type": "function",

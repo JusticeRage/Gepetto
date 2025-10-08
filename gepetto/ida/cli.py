@@ -10,8 +10,8 @@ import gepetto.ida.handlers
 from gepetto.ida.status_panel import LogCategory, LogLevel, get_status_panel
 from gepetto.ida.tools.tools import TOOLS
 import gepetto.ida.tools.call_graph
+import gepetto.ida.tools.decompile_function
 import gepetto.ida.tools.get_ea
-import gepetto.ida.tools.get_function_code
 import gepetto.ida.tools.get_screen_ea
 import gepetto.ida.tools.get_xrefs
 import gepetto.ida.tools.list_symbols
@@ -31,7 +31,8 @@ MESSAGES: List[dict] = [
         "content":
             f"You are a helpful assistant embedded in IDA Pro. Your role is to facilitate "
             f"reverse-engineering and answer programming questions.\n"
-            f"Your response should always be in the following locale: {gepetto.config.get_localization_locale()}\n"
+            f"Your response MUST ALWAYS be in the following locale: {gepetto.config.get_localization_locale()}\n"
+            f"If you want to format your response, you MUST ALWAYS be Markdown-compliant; but formatting is not required.\n"
             f"Never repeat pseudocode back as the user can see it already.\n"
             f"In the context of a reverse-engineering session, the user will switch from function to function a lot. "
             f"Between messages, don't assume that the function is still the same and always confirm it by checking the "
@@ -177,8 +178,8 @@ class GepettoCLI(ida_kernwin.cli_t):
                         gepetto.ida.tools.get_screen_ea.handle_get_screen_ea_tc(tc, MESSAGES)
                     elif tc.function.name == "get_ea":
                         gepetto.ida.tools.get_ea.handle_get_ea_tc(tc, MESSAGES)
-                    elif tc.function.name == "get_function_code":
-                        gepetto.ida.tools.get_function_code.handle_get_function_code_tc(tc, MESSAGES)
+                    elif tc.function.name == "decompile_function":
+                        gepetto.ida.tools.decompile_function.handle_decompile_function_tc(tc, MESSAGES)
                     elif tc.function.name == "rename_lvar":
                         gepetto.ida.tools.rename_lvar.handle_rename_lvar_tc(tc, MESSAGES)
                     elif tc.function.name == "rename_function":
