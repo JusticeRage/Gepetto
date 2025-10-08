@@ -10,25 +10,13 @@ environments, which is important when unit tests import modules outside IDA.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
-import importlib
+from collections.abc import Callable
+from typing import Any
 
-
-def _safe_import(module_name: str) -> Optional[Any]:
-    """Gracefully import a module, returning None if it's not found."""
-    try:
-        return importlib.import_module(module_name)
-    except ImportError:  # pragma: no cover - executed outside IDA.
-        return None
-
-# Gracefully import IDA modules, setting them to None if unavailable
-# (e.g., when running unit tests outside of an IDA environment).
-idaapi = _safe_import("idaapi")
-ida_kernwin = _safe_import("ida_kernwin")
-ida_hexrays = _safe_import("ida_hexrays")
-ida_funcs = _safe_import("ida_funcs")
-idc = _safe_import("idc")
-
+import idaapi  # type: ignore
+import ida_kernwin  # type: ignore
+import ida_hexrays  # type: ignore
+import idc  # type: ignore
 
 # Sentinel BADADDR for environments without idaapi.
 BADADDR = getattr(idaapi, "BADADDR", -1)
@@ -132,40 +120,23 @@ def safe_get_screen_ea() -> int:
 
 def hexrays_available() -> bool:
     """Return True if Hex-Rays is available and initialised."""
+    if ida_hexrays is None:
+        return False
+
+    def _init() -> bool:
+        try:
+            return bool(ida_hexrays.init_hexrays_plugin())
+        except Exception:
+            return False
+
     try:
-        return bool(ida_hexrays and ida_hexrays.init_hexrays_plugin())
+        return bool(run_on_main_thread(_init, write=False))
     except Exception:
         return False
 
 
-def decompile_func(func_ea: int):
-    """
-    Safely decompile the function containing ``func_ea``.
-
-    Raises:
-        RuntimeError if Hex-Rays is unavailable or decompilation fails.
-    """
-    if not isinstance(func_ea, int) or func_ea == BADADDR:
-        raise RuntimeError("Invalid function address for decompilation")
-    if not hexrays_available():
-        raise RuntimeError("Hex-Rays not available: install or enable the decompiler.")
-
-    def _do():
-        func = ida_funcs.get_func(func_ea) if ida_funcs is not None else None
-        if func is not None:
-            return ida_hexrays.decompile(func)
-        # Fallback: try direct decompile for raw EA.
-        return ida_hexrays.decompile(func_ea)
-
-    cfunc = run_on_main_thread(_do, write=False)
-    if cfunc is None:
-        raise RuntimeError(f"Hex-Rays failed to decompile function at {func_ea:#x}")
-    return cfunc
-
-
 __all__ = [
     "BADADDR",
-    "decompile_func",
     "hexrays_available",
     "run_on_main_thread",
     "safe_get_screen_ea",

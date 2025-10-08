@@ -11,7 +11,8 @@ import idc
 
 import gepetto.config
 from gepetto.ida.status_panel import LogCategory, LogLevel, get_status_panel
-from gepetto.ida.utils.thread_helpers import *
+from gepetto.ida.tools.decompile_function import decompile_function
+from gepetto.ida.utils.thread_helpers import run_on_main_thread, safe_get_screen_ea
 
 _ = gepetto.config._
 
@@ -42,7 +43,7 @@ class CommentHandler(idaapi.action_handler_t):
             return 1
 
         try:
-            decompiler_output = decompile_func(ea)
+            _tool_payload, decompiler_output = decompile_function(ea=ea)
         except RuntimeError as exc:
             message = str(exc)
             try:

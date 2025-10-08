@@ -1,12 +1,13 @@
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
+import ida_funcs
 import ida_hexrays
 import ida_lines
 import idaapi
 
 import gepetto.config
-from gepetto.ida.utils.thread_helpers import *
+from gepetto.ida.utils.thread_helpers import hexrays_available, run_on_main_thread
 from gepetto.ida.tools.function_utils import (
     get_func_name,
     parse_ea,
@@ -34,7 +35,7 @@ def handle_decompile_function_tc(tc, messages):
     name = args.get("name")
 
     try:
-        data = decompile_function(address=address, ea=ea_arg, name=name)
+        data, _ = decompile_function(address=address, ea=ea_arg, name=name)
         payload = tool_result_payload(data)
     except Exception as ex:
         payload = tool_error_payload(
@@ -48,15 +49,15 @@ def handle_decompile_function_tc(tc, messages):
 
 
 def decompile_function(
-    address: Optional[Any] = None,
-    ea: Optional[Any] = None,
-    name: Optional[str] = None,
-) -> Dict[str, Any]:
+    address: Any | None = None,
+    ea: Any | None = None,
+    name: str | None = None,
+) -> tuple[dict[str, Any], idaapi.cfuncptr_t]:
     """
     Decompile the function identified by ``address``/``ea``/``name`` and return annotated pseudocode.
     """
 
-    target_ea: Optional[int] = None
+    target_ea: int | None = None
     if address is not None:
         target_ea = parse_ea(address)
     elif ea is not None:
@@ -67,13 +68,26 @@ def decompile_function(
     if target_ea is None:
         target_ea = resolve_ea(func_name)
 
-    def _produce() -> Dict[str, Any]:
-        cfunc = decompile_func(target_ea)
+    if not isinstance(target_ea, int) or target_ea == idaapi.BADADDR:
+        raise RuntimeError("Invalid function address for decompilation")
+    if not hexrays_available():
+        raise RuntimeError("Hex-Rays not available: install or enable the decompiler.")
+
+    def _produce() -> tuple[idaapi.cfuncptr_t, dict[str, Any]]:
+        func = ida_funcs.get_func(target_ea) if ida_funcs is not None else None
+        if func is not None:
+            cfunc = ida_hexrays.decompile(func)
+        else:
+            cfunc = ida_hexrays.decompile(target_ea)
+
+        if cfunc is None:
+            raise RuntimeError(f"Hex-Rays failed to decompile function at {target_ea:#x}")
+
         entry_ea = getattr(cfunc, "entry_ea", int(function.start_ea))
         pseudocode_lines = cfunc.get_pseudocode()
 
-        lines: List[Dict[str, Any]] = []
-        text_lines: List[str] = []
+        lines: list[dict[str, Any]] = []
+        text_lines: list[str] = []
 
         for idx, line in enumerate(pseudocode_lines):
             try:
@@ -81,7 +95,7 @@ def decompile_function(
             except Exception:
                 stripped = str(line.line)
 
-            line_ea: Optional[int] = None
+            line_ea: int | None = None
             item = ida_hexrays.ctree_item_t()
             try:
                 if cfunc.get_line_item(line.line, 0, False, None, item, None):
@@ -107,18 +121,19 @@ def decompile_function(
             )
             text_lines.append(stripped)
 
-        return {
+        return cfunc, {
             "pseudocode": "\n".join(text_lines),
             "lines": lines,
         }
 
-    payload = run_on_main_thread(_produce, write=False)
+    cfunc, payload = run_on_main_thread(_produce, write=False)
     if not isinstance(payload, dict):
         raise RuntimeError("Failed to gather pseudocode.")
 
-    return {
+    result: dict[str, Any] = {
         "ea": int(function.start_ea),
         "end_ea": int(function.end_ea),
         "func_name": func_name,
         **payload,
     }
+    return result, cfunc
