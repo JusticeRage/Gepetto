@@ -128,12 +128,21 @@ def _convert_messages(query: Any) -> tuple[str | None, list[types.Content]]:
 
     system_lines: list[str] = []
     contents: list[types.Content] = []
+    pending_tool_parts: list[types.Part] = []
+
+    def flush_tool_parts() -> None:
+        nonlocal pending_tool_parts
+        if not pending_tool_parts:
+            return
+        contents.append(types.Content(role="tool", parts=pending_tool_parts))
+        pending_tool_parts = []
 
     for raw in query or []:
         message = _to_plain(raw)
         role = (message.get("role") or "").lower()
 
         if role == "system":
+            flush_tool_parts()
             content = message.get("content")
             if content:
                 system_lines.append(str(content))
@@ -144,20 +153,25 @@ def _convert_messages(query: Any) -> tuple[str | None, list[types.Content]]:
             payload = _safe_json(message.get("content"))
             if not isinstance(payload, (dict, list)):
                 payload = {"result": payload}
-            contents.append(
-                types.Content(
-                    role="tool",
-                    parts=[
-                        types.Part.from_function_response(
-                            name=name,
-                            response=_to_plain(payload),
-                        )
-                    ],
-                )
+            part = types.Part.from_function_response(
+                name=name,
+                response=_to_plain(payload),
             )
+            call_id = (
+                message.get("tool_call_id")
+                or message.get("call_id")
+                or message.get("id")
+            )
+            if call_id and hasattr(part, "function_response"):
+                try:
+                    part.function_response.call_id = str(call_id)
+                except Exception:
+                    pass
+            pending_tool_parts.append(part)
             continue
 
         if role == "assistant":
+            flush_tool_parts()
             parts: list[types.Part] = []
             for part in message.get("parts") or message.get("gemini_parts") or []:
                 part = _to_plain(part)
@@ -193,6 +207,7 @@ def _convert_messages(query: Any) -> tuple[str | None, list[types.Content]]:
                 contents.append(types.Content(role="model", parts=parts))
             continue
 
+        flush_tool_parts()
         parts: list[types.Part] = []
         for part in message.get("parts") or []:
             part = _to_plain(part)
@@ -207,8 +222,10 @@ def _convert_messages(query: Any) -> tuple[str | None, list[types.Content]]:
                     parts.append(_as_text_part(str(item)))
             elif content is not None:
                 parts.append(_as_text_part(str(content)))
-        if parts:
-            contents.append(types.Content(role="user", parts=parts))
+            if parts:
+                contents.append(types.Content(role="user", parts=parts))
+
+    flush_tool_parts()
 
     system_instruction = "\n".join(system_lines) if system_lines else None
     return system_instruction, contents

@@ -1,10 +1,9 @@
 import json
-from typing import Dict
 
 import ida_bytes
 import ida_kernwin
 
-from gepetto.ida.tools.function_utils import parse_ea
+from gepetto.ida.utils.function_utils import parse_ea
 from gepetto.ida.tools.tools import (
     add_result_to_messages,
     tool_error_payload,
@@ -54,7 +53,7 @@ def _format_bytes(bs: bytes) -> str:
     return " ".join(f"0x{b:02X}" for b in bs)
 
 
-def get_bytes(ea: int, size: int = 0x20) -> Dict:
+def get_bytes(ea: int, size: int = 0x20) -> dict[str, int | str]:
     """Return raw bytes starting at a given EA."""
 
     if size <= 0:

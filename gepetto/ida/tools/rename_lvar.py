@@ -1,10 +1,9 @@
 import json
-from typing import Optional
 
 import ida_hexrays
 import ida_kernwin
 
-from gepetto.ida.tools.function_utils import parse_ea, resolve_ea, resolve_func, get_func_name
+from gepetto.ida.utils.function_utils import parse_ea, resolve_ea, resolve_func, get_func_name
 from gepetto.ida.tools.tools import (
     add_result_to_messages,
     tool_error_payload,
@@ -45,10 +44,10 @@ def handle_rename_lvar_tc(tc, messages):
 # -----------------------------------------------------------------------------
 
 def rename_lvar(
-    ea: Optional[int] = None,
-    func_name: Optional[str] = None,
-    old_name: Optional[str] = None,
-    new_name: Optional[str] = None,
+    ea: int | None = None,
+    func_name: str | None = None,
+    old_name: str | None = None,
+    new_name: str | None = None,
 ) -> dict:
     """Rename a local variable in a function."""
     if not old_name or not new_name:

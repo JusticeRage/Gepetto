@@ -1,10 +1,9 @@
 import json
-from typing import Dict
 
 import ida_lines
 import ida_kernwin
 
-from gepetto.ida.tools.function_utils import parse_ea
+from gepetto.ida.utils.function_utils import parse_ea
 from gepetto.ida.tools.tools import (
     add_result_to_messages,
     tool_error_payload,
@@ -46,7 +45,7 @@ def _get_disasm_line(ea: int) -> str:
 
 # -----------------------------------------------------------------------------
 
-def get_disasm(ea: int) -> Dict:
+def get_disasm(ea: int) -> dict[str, int | str]:
     """Return the disassembly line at a given EA."""
 
     line = _get_disasm_line(ea)
