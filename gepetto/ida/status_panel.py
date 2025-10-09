@@ -123,7 +123,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         LogCategory.USER: "#89b4fa",
         LogCategory.TOOL: "#f9e2af",
         LogCategory.MODEL: "#f5c2e7",
-        LogCategory.ASSISTANT: "#a6e3a1",
+        LogCategory.ASSISTANT: "#94e2d5",
         # LogCategory.REASONING: "#94e2d5", # /TODO
     }
     _LEVEL_COLORS = {

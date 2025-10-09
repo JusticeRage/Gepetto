@@ -223,6 +223,21 @@ def _notify_stream_error(callback, message: str) -> None:
         callback(payload)
 
 
+def _notify_non_stream_error(callback, message: str) -> None:
+    if callback is None:
+        return
+
+    payload = SimpleNamespace(error=message)
+
+    def _invoke_callback():
+        try:
+            callback(payload)
+        except TypeError:
+            callback(payload, "error")
+
+    ida_kernwin.execute_sync(_invoke_callback, ida_kernwin.MFF_WRITE)
+
+
 class GPT(LanguageModel):
     @staticmethod
     def get_menu_name() -> str:
@@ -402,6 +417,8 @@ class GPT(LanguageModel):
             print(error_message)
             if stream:
                 _notify_stream_error(cb, error_message)
+            else:
+                _notify_non_stream_error(cb, error_message)
         except openai.OpenAIError as e:
             error_message = _("{model} could not complete the request: {error}").format(
                 model=self.model, error=str(e)
@@ -409,11 +426,15 @@ class GPT(LanguageModel):
             print(error_message)
             if stream:
                 _notify_stream_error(cb, error_message)
+            else:
+                _notify_non_stream_error(cb, error_message)
         except Exception as e:
             error_message = _("General exception encountered while running the query: {error}").format(error=str(e))
             print(error_message)
             if stream:
                 _notify_stream_error(cb, error_message)
+            else:
+                _notify_non_stream_error(cb, error_message)
 
     # -----------------------------------------------------------------------------
 
