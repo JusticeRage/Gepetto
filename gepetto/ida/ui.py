@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import functools
 import os
 import random
@@ -22,6 +24,23 @@ from gepetto.ida.status_panel import get_status_panel
 import gepetto.models.model_manager
 
 _ = gepetto.config._
+
+
+PLUGIN_INSTANCE: "GepettoPlugin | None" = None
+
+
+def get_plugin_instance() -> "GepettoPlugin | None":
+    return PLUGIN_INSTANCE
+
+
+def trigger_model_select_menu_regeneration() -> None:
+    plugin = get_plugin_instance()
+    if not plugin:
+        return
+    try:
+        plugin.generate_model_select_menu()
+    except Exception:
+        pass
 
 
 def _safe_execute_sync(callback):
@@ -58,6 +77,7 @@ class GepettoPlugin(idaapi.plugin_t):
     # -----------------------------------------------------------------------------
 
     def init(self):
+        global PLUGIN_INSTANCE
         # Check whether the decompiler is available
         if not ida_hexrays.init_hexrays_plugin():
             return idaapi.PLUGIN_SKIP
@@ -130,6 +150,12 @@ class GepettoPlugin(idaapi.plugin_t):
         idaapi.attach_action_to_menu(self.c_code_menu_path, self.c_code_action_name, idaapi.SETMENU_APP)
         idaapi.attach_action_to_menu(self.python_code_menu_path, self.python_code_action_name, idaapi.SETMENU_APP)
 
+        PLUGIN_INSTANCE = self
+
+        self._menu_refresh_lock = threading.Lock()
+        self._menu_refresh_thread: threading.Thread | None = None
+        self._menu_refresh_pending = False
+
         self.generate_model_select_menu()
 
         # Register context menu actions
@@ -188,20 +214,38 @@ class GepettoPlugin(idaapi.plugin_t):
 
     def generate_model_select_menu(self):
         def do_generate_model_select_menu():
-            # Delete any possible previous entries
-            self.detach_actions()
+            while True:
+                with self._menu_refresh_lock:
+                    # Delete any possible previous entries
+                    self.detach_actions()
+                    self.model_action_map.clear()
 
-            for provider in gepetto.models.model_manager.list_models():
-                for model in provider.supported_models():
-                    # For some reason, IDA seems to have a bug when replacing actions by new ones with identical names.
-                    # The old action object appears to be reused, at least partially, leading to unwanted behavior?
-                    # The best workaround I have found is to generate random names each time.
-                    self.model_action_map[model] = f"gepetto:{model}_{''.join(random.choices(string.ascii_lowercase, k=7))}"
-                    self.bind_model_switch_action("Edit/Gepetto/" + _("Select model") + f"/{provider.get_menu_name()}/{model}",
-                                                  self.model_action_map[model],
-                                                  model)
-        # Building the list of available models can take a few seconds with Ollama, don't hang the UI.
-        threading.Thread(target=do_generate_model_select_menu).start()
+                    for provider in gepetto.models.model_manager.list_models():
+                        for model in provider.supported_models():
+                            action_name = f"gepetto:{model}_{''.join(random.choices(string.ascii_lowercase, k=7))}"
+                            self.model_action_map[model] = action_name
+                            self.bind_model_switch_action(
+                                "Edit/Gepetto/" + _("Select model") + f"/{provider.get_menu_name()}/{model}",
+                                action_name,
+                                model,
+                            )
+                with self._menu_refresh_lock:
+                    if not self._menu_refresh_pending:
+                        self._menu_refresh_thread = None
+                        break
+                    self._menu_refresh_pending = False
+
+        with getattr(self, "_menu_refresh_lock", threading.Lock()):
+            if self._menu_refresh_thread and self._menu_refresh_thread.is_alive():
+                self._menu_refresh_pending = True
+                return
+            self._menu_refresh_pending = False
+            self._menu_refresh_thread = threading.Thread(
+                target=do_generate_model_select_menu,
+                name="GepettoModelMenuRefresh",
+                daemon=True,
+            )
+            self._menu_refresh_thread.start()
 
     # -----------------------------------------------------------------------------
 
@@ -278,11 +322,13 @@ class GepettoPlugin(idaapi.plugin_t):
     # -----------------------------------------------------------------------------
 
     def term(self):
+        global PLUGIN_INSTANCE
         self.detach_actions()
         if self.menu:
             self.menu.unhook()
         self._unregister_auto_show_action()
         get_status_panel().close()
+        PLUGIN_INSTANCE = None
         return
 
 

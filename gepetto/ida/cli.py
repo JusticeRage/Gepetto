@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 import functools
 from types import SimpleNamespace
-from typing import List, Optional
 
 import ida_kernwin
 import ida_idaapi
@@ -25,7 +26,7 @@ import gepetto.ida.tools.get_bytes
 
 _ = gepetto.config._
 CLI: ida_kernwin.cli_t = None
-MESSAGES: List[dict] = [
+MESSAGES: list[dict] = [
     {
         "role": "system",
         "content":
@@ -117,7 +118,7 @@ def _append_reasoning_from_delta(delta) -> None:
             if item_type in _REASONING_TYPES:
                 containers.append(item_text)
 
-    texts: List[str] = []
+    texts: list[str] = []
     for container in containers:
         _collect_reasoning_text(container, texts)
 
@@ -142,6 +143,8 @@ class GepettoCLI(ida_kernwin.cli_t):
         STATUS_PANEL.log_user(line)
         STATUS_PANEL.start_stream()
         STATUS_PANEL.log_request_started()
+
+        stream_retry_attempted = False
 
         def handle_response(response):
             if hasattr(response, "tool_calls") and response.tool_calls:
@@ -206,7 +209,7 @@ class GepettoCLI(ida_kernwin.cli_t):
                     elif tc.function.name == "refresh_view":
                         gepetto.ida.tools.refresh_view.handle_refresh_view_tc(tc, MESSAGES)
                 STATUS_PANEL.start_stream()
-                stream_and_handle()
+                start_model_interaction()
             else:
                 content = response.content or ""
                 MESSAGES.append({"role": "assistant", "content": content})
@@ -218,18 +221,47 @@ class GepettoCLI(ida_kernwin.cli_t):
                     level=LogLevel.SUCCESS,
                 )
 
-        def stream_and_handle():
+        def handle_non_streaming_response(response):
+            """Handle non-streaming response from the model."""
+            if hasattr(response, "error"):
+                error_text = str(response.error) if response.error else _("Model request failed.")
+                STATUS_PANEL.mark_error(error_text)
+                return
+            
+            # Print the response content to console
+            if response.content:
+                print(response.content, end="\n\n")
+            
+            handle_response(response)
+
+        def handle_streaming():
             message = SimpleNamespace(content="", tool_calls=[])
             last_error_message = ""
 
-            def handle_model_error(text: Optional[str]) -> None:
-                nonlocal last_error_message
+            def handle_model_error(text: str | None) -> None:
+                nonlocal last_error_message, stream_retry_attempted
                 error_text = (text or "").strip()
                 if not error_text:
                     error_text = _("Model request failed.")
                 last_error_message = error_text
                 STATUS_PANEL.finish_stream(message.content)
                 STATUS_PANEL.finish_reasoning()
+                supports_streaming_method = getattr(gepetto.config.model, "supports_streaming", None)
+                should_retry_without_stream = (
+                    not stream_retry_attempted
+                    and callable(supports_streaming_method)
+                    and not supports_streaming_method()
+                )
+                if should_retry_without_stream:
+                    stream_retry_attempted = True
+                    STATUS_PANEL.log(
+                        _("Streaming unavailable for this model; retrying without streaming."),
+                        category=LogCategory.SYSTEM,
+                    )
+                    STATUS_PANEL.set_status(_("Retrying without streaming"), busy=True)
+                    STATUS_PANEL.start_stream()
+                    start_model_interaction()
+                    return
                 STATUS_PANEL.mark_error(error_text)
 
             def on_chunk(delta, finish_reason):
@@ -291,8 +323,26 @@ class GepettoCLI(ida_kernwin.cli_t):
                 additional_model_options={"tools": TOOLS},
             )
 
+        def start_model_interaction():
+            supports_streaming = True
+            supports_streaming_method = getattr(gepetto.config.model, "supports_streaming", None)
+            if callable(supports_streaming_method):
+                try:
+                    supports_streaming = bool(supports_streaming_method())
+                except Exception:
+                    supports_streaming = True
+            if supports_streaming:
+                handle_streaming()
+            else:
+                gepetto.config.model.query_model_async(
+                    MESSAGES,
+                    handle_non_streaming_response,
+                    stream=False,
+                    additional_model_options={"tools": TOOLS},
+                )
+
         print()  # Add a line break before the model's response to improve readability
-        stream_and_handle()
+        start_model_interaction()
         return True
 
     def OnKeydown(self, line, x, sellen, vkey, shift):

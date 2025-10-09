@@ -30,8 +30,17 @@ def instantiate_model(model):
     :return:
     """
     for m in MODEL_LIST:
-        if model in m.supported_models():
+        available = m.supported_models()
+        if model in available:
             return m(model)
+        refresher = getattr(m, "refresh_models_sync", None)
+        if callable(refresher):
+            try:
+                refreshed = refresher()
+            except Exception:
+                continue
+            if model in (refreshed or []):
+                return m(model)
     raise RuntimeError(f"{model} does not exist!")
 
 
