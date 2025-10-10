@@ -37,7 +37,7 @@ def _get_disasm_line(ea: int) -> str:
     out = {"text": ""}
 
     def _do():
-        out["text"] = ida_lines.generate_disasm_line(ea, 0) or ""
+        out["text"] = ida_lines.tag_remove(ida_lines.generate_disasm_line(ea, 0)) or ""
         return 1
 
     ida_kernwin.execute_sync(_do, ida_kernwin.MFF_READ)

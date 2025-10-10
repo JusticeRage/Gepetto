@@ -3,7 +3,6 @@ import ida_funcs
 import ida_kernwin
 import ida_name
 
-
 def parse_ea(ea_val):
     """Accept ints or hex-like strings ('0x22A38', '22A38', '22A38h').
     Return int EA or raise ValueError."""
@@ -18,6 +17,7 @@ def parse_ea(ea_val):
         return int(s, 0)
     raise ValueError(f"Unsupported EA type: {type(ea_val).__name__}")
 
+# ---------------------------------------------------------------------------
 
 def resolve_ea(name) -> int:
     """Resolve a function name to its effective address."""
@@ -40,6 +40,7 @@ def resolve_ea(name) -> int:
         raise ValueError(out["err"] or "Failed to resolve EA")
     return out["ea"]
 
+# ---------------------------------------------------------------------------
 
 def resolve_func(ea=None, name=None):
     """Resolve a function by EA or name on the UI thread."""
@@ -47,7 +48,6 @@ def resolve_func(ea=None, name=None):
 
     def _do():
         try:
-            import idaapi, ida_funcs, ida_name
             if name:
                 name_ea = ida_name.get_name_ea(idaapi.BADADDR, name)
                 if name_ea == idaapi.BADADDR:
@@ -73,6 +73,7 @@ def resolve_func(ea=None, name=None):
         raise ValueError(out["err"] or "Failed to resolve function")
     return out["func"]
 
+# ---------------------------------------------------------------------------
 
 def get_func_name(f) -> str:
     """Fetch a function's name on the main thread with a read lock."""
