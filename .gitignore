@@ -1,7 +1,9 @@
+.vscode
 .idea
 .env
 .?venv
 .venv*
+uv.lock
 __pycache__/
 *.py[cod]
 *.idb

@@ -27,16 +27,6 @@ def handle_get_xrefs_tc(tc, messages):
     scope = args.get("scope", "ea")
     subject = args.get("subject")
 
-    # Backward-compat inputs (prefer explicit 'subject')
-    if subject is None:
-        if "ea" in args and args["ea"] is not None:
-            subject = str(args["ea"])
-            if scope not in ("ea", "function"):
-                scope = "ea"
-        elif "name" in args and args["name"]:
-            subject = args["name"]
-            scope = "name"
-
     direction     = args.get("direction", "both")
     only_code     = bool(args.get("only_code", False))
     only_data     = bool(args.get("only_data", False))
