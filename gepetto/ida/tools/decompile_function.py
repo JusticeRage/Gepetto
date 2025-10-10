@@ -35,8 +35,8 @@ def handle_decompile_function_tc(tc, messages):
     name = args.get("name")
 
     try:
-        data, _ = decompile_function(address=address, ea=ea_arg, name=name)
-        payload = tool_result_payload(data)
+        decompiled = decompile_function(address=address, ea=ea_arg, name=name)
+        payload = tool_result_payload({"pseudocode": str(decompiled)})
     except Exception as ex:
         payload = tool_error_payload(
             str(ex),
@@ -73,67 +73,11 @@ def decompile_function(
     if not hexrays_available():
         raise RuntimeError("Hex-Rays not available: install or enable the decompiler.")
 
-    def _produce() -> tuple[idaapi.cfuncptr_t, dict[str, Any]]:
+    def _do() -> idaapi.cfuncptr_t:
         func = ida_funcs.get_func(target_ea) if ida_funcs is not None else None
-        if func is not None:
-            cfunc = ida_hexrays.decompile(func)
-        else:
-            cfunc = ida_hexrays.decompile(target_ea)
-
-        if cfunc is None:
+        decompiled = ida_hexrays.decompile(func) if func is not None else ida_hexrays.decompile(target_ea)
+        if decompiled is None:
             raise RuntimeError(f"Hex-Rays failed to decompile function at {target_ea:#x}")
+        return decompiled
 
-        entry_ea = getattr(cfunc, "entry_ea", int(function.start_ea))
-        pseudocode_lines = cfunc.get_pseudocode()
-
-        lines: list[dict[str, Any]] = []
-        text_lines: list[str] = []
-
-        for idx, line in enumerate(pseudocode_lines):
-            try:
-                stripped = ida_lines.tag_remove(line.line)
-            except Exception:
-                stripped = str(line.line)
-
-            line_ea: int | None = None
-            item = ida_hexrays.ctree_item_t()
-            try:
-                if cfunc.get_line_item(line.line, 0, False, None, item, None):
-                    candidate = getattr(item, "ea", idaapi.BADADDR)
-                    if isinstance(candidate, int) and candidate != idaapi.BADADDR:
-                        line_ea = int(candidate)
-                    else:
-                        parts = item.dstr().split(": ")
-                        if len(parts) >= 2:
-                            line_ea = int(parts[0], 16)
-            except Exception:
-                line_ea = None
-
-            if line_ea is None and idx == 0 and isinstance(entry_ea, int):
-                line_ea = int(entry_ea)
-
-            lines.append(
-                {
-                    "index": idx,
-                    "text": stripped,
-                    "ea": line_ea,
-                }
-            )
-            text_lines.append(stripped)
-
-        return cfunc, {
-            "pseudocode": "\n".join(text_lines),
-            "lines": lines,
-        }
-
-    cfunc, payload = run_on_main_thread(_produce, write=False)
-    if not isinstance(payload, dict):
-        raise RuntimeError("Failed to gather pseudocode.")
-
-    result: dict[str, Any] = {
-        "ea": int(function.start_ea),
-        "end_ea": int(function.end_ea),
-        "func_name": func_name,
-        **payload,
-    }
-    return result, cfunc
+    return run_on_main_thread(_do)

@@ -230,16 +230,6 @@ TOOLS = [
                         "description": "Add best-effort names for endpoints (functions/data).",
                         "default": True
                     },
-
-                    # Back-compat shims (optional): callers may still pass these
-                    "ea": {
-                        "type": "string",
-                        "description": "Deprecated: EA as decimal/hex string if not using 'subject'."
-                    },
-                    "name": {
-                        "type": "string",
-                        "description": "Deprecated: symbol name if not using 'subject'."
-                    }
                 },
                 "required": []
             }

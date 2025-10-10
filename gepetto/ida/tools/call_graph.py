@@ -114,14 +114,6 @@ def _iter_func_items(fn: ida_funcs.func_t) -> Iterable[int]:
 
 # -----------------------------------------------------------------------------
 
-def _func_name(ea: int) -> str:
-    f = ida_funcs.get_func(ea)
-    if f:
-        return get_func_name(f) or ""
-    return ida_name.get_ea_name(ea) or ""
-
-# -----------------------------------------------------------------------------
-
 def _follow_thunk_once(fn: ida_funcs.func_t) -> int | None:
     """
     Best-effort: if fn is a thunk, try to find its final code target.
@@ -189,7 +181,7 @@ def get_callers(ea: int | None = None, name: str | None = None,
 
             # Normalize to thunk target if requested (purely for reporting)
             norm_target_ea = _normalize_callee_ea(target_ea, include_thunks)
-            norm_target_name = _func_name(norm_target_ea)
+            norm_target_name = get_func_name(norm_target_ea)
 
             out["target"] = {
                 "ea": int(norm_target_ea),
@@ -210,7 +202,7 @@ def get_callers(ea: int | None = None, name: str | None = None,
                         break
 
             out["callers"] = [
-                {"ea": int(c_ea), "name": _func_name(c_ea)}
+                {"ea": int(c_ea), "name": get_func_name(c_ea)}
                 for c_ea in sorted(callers)
             ]
             return 1
@@ -245,7 +237,7 @@ def get_callees(ea: int | None = None, name: str | None = None,
             fn = resolve_func(ea=ea if ea is not None else None,
                               name=name if name else None)
             src_ea = fn.start_ea
-            out["source"] = {"ea": int(src_ea), "name": _func_name(src_ea)}
+            out["source"] = {"ea": int(src_ea), "name": get_func_name(src_ea)}
 
             # Walk each item in the function and gather outgoing call xrefs
             callees: set[int] = set()
@@ -266,7 +258,7 @@ def get_callees(ea: int | None = None, name: str | None = None,
                             break
 
             out["callees"] = [
-                {"ea": int(t_ea), "name": _func_name(t_ea)}
+                {"ea": int(t_ea), "name": get_func_name(t_ea)}
                 for t_ea in sorted(callees)
             ]
             return 1

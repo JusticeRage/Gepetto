@@ -43,7 +43,7 @@ class CommentHandler(idaapi.action_handler_t):
             return 1
 
         try:
-            _tool_payload, decompiler_output = decompile_function(ea=ea)
+            decompiler_output = decompile_function(ea=ea)
         except RuntimeError as exc:
             message = str(exc)
             try:
