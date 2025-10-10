@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import functools
 import json
+import re
 import threading
+import time
 from collections.abc import Iterable
 from types import SimpleNamespace
 from typing import Any
 
+import httpx as _httpx
 import ida_kernwin
 from google import genai
 from google.genai import types
@@ -17,11 +21,28 @@ import gepetto.config
 
 _ = gepetto.config._
 
-GEMINI_2_0_FLASH_MODEL_NAME = "gemini-2.0-flash"
-GEMINI_2_5_PRO_MODEL_NAME = "gemini-2.5-pro"
-GEMINI_2_5_FLASH_MODEL_NAME = "gemini-2.5-flash"
+GEMINI_PRO_LATEST_MODEL_NAME = "gemini-pro-latest"
 GEMINI_FLASH_LATEST_MODEL_NAME = "gemini-flash-latest"
 GEMINI_FLASH_LITE_LATEST_MODEL_NAME = "gemini-flash-lite-latest"
+GEMINI_2_5_PRO_MODEL_NAME = "gemini-2.5-pro"
+GEMINI_2_5_FLASH_MODEL_NAME = "gemini-2.5-flash"
+GEMINI_2_5_FLASH_LITE_MODEL_NAME = "gemini-2.5-flash-lite"
+GEMINI_2_0_FLASH_MODEL_NAME = "gemini-2.0-flash"
+
+_DEFAULT_GEMINI_MODELS = [
+    GEMINI_PRO_LATEST_MODEL_NAME,
+    GEMINI_FLASH_LATEST_MODEL_NAME,
+    GEMINI_FLASH_LITE_LATEST_MODEL_NAME,
+    GEMINI_2_5_PRO_MODEL_NAME,
+    GEMINI_2_5_FLASH_MODEL_NAME,
+    GEMINI_2_5_FLASH_LITE_MODEL_NAME,
+    GEMINI_2_0_FLASH_MODEL_NAME,
+]
+
+_GEMINI_MODELS: list[str] | None = None
+_GEMINI_MODELS_LOCK = threading.Lock()
+_GEMINI_REFRESH_THREAD: threading.Thread | None = None
+_GEMINI_LAST_REFRESH: float = 0.0
 
 _DEFAULT_SAFETY_SETTINGS: tuple[types.SafetySetting, ...] = (
     types.SafetySetting(
@@ -49,6 +70,137 @@ _FINISH_REASON_MAP = {
     "FINISH_REASON_RECITATION": "content_filter",
     "FINISH_REASON_TOOL_CALL": "tool_calls",
 }
+
+
+def _sort_gemini_models(models: list[str]) -> list[str]:
+    deduped = list(dict.fromkeys(models))
+    default_models_set = set(_DEFAULT_GEMINI_MODELS)
+    default_models = [m for m in deduped if m in default_models_set]
+    other_models = [m for m in deduped if m not in default_models_set]
+    default_models.sort(key=str, reverse=True)
+    other_models.sort(key=str, reverse=True)
+    return default_models + other_models
+
+
+def _trigger_menu_refresh() -> None:
+    try:
+        from gepetto.ida import ui as ida_ui
+        ida_ui.trigger_model_select_menu_regeneration()
+    except Exception:
+        pass
+
+
+def _update_gemini_models(models: list[str], *, notify: bool = True) -> None:
+    global _GEMINI_MODELS
+    normalized = _sort_gemini_models(models)
+    with _GEMINI_MODELS_LOCK:
+        current = list(_GEMINI_MODELS) if _GEMINI_MODELS is not None else []
+        if normalized == current:
+            return
+        _GEMINI_MODELS = normalized
+    if notify:
+        _trigger_menu_refresh()
+
+
+def _execute_gemini_fetch(api_key: str, proxy: str | None, timeout: _httpx.Timeout) -> list[str]:
+    loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(_fetch_gemini_models_async(api_key, proxy, timeout))
+    except Exception as exc:
+        print(_("Failed to fetch Gemini models: {error}").format(error=exc))
+        return []
+    finally:
+        asyncio.set_event_loop(None)
+        loop.close()
+
+
+def _schedule_gemini_refresh(api_key: str, proxy: str | None, timeout: _httpx.Timeout) -> None:
+    global _GEMINI_REFRESH_THREAD, _GEMINI_LAST_REFRESH
+    with _GEMINI_MODELS_LOCK:
+        if _GEMINI_REFRESH_THREAD and _GEMINI_REFRESH_THREAD.is_alive():
+            return
+        now = time.monotonic()
+        if now - _GEMINI_LAST_REFRESH < 5.0:
+            return
+        _GEMINI_LAST_REFRESH = now
+        _GEMINI_REFRESH_THREAD = threading.Thread(
+            target=_refresh_gemini_models_background,
+            args=(api_key, proxy, timeout),
+            name="GepettoGeminiModelRefresh",
+            daemon=True,
+        )
+        _GEMINI_REFRESH_THREAD.start()
+
+
+def _refresh_gemini_models_background(api_key: str, proxy: str | None, timeout: _httpx.Timeout) -> None:
+    global _GEMINI_REFRESH_THREAD
+    try:
+        models = _execute_gemini_fetch(api_key, proxy, timeout)
+        if models:
+            _update_gemini_models(models)
+    finally:
+        with _GEMINI_MODELS_LOCK:
+            _GEMINI_REFRESH_THREAD = None
+
+
+async def _fetch_gemini_models_async(
+    api_key: str,
+    proxy: str | None,
+    timeout: _httpx.Timeout,
+) -> list[str]:
+    params = {"key": api_key}
+    transport = None
+    if proxy:
+        try:
+            transport = _httpx.AsyncHTTPTransport(proxy=proxy)
+        except Exception as transport_exc:
+            print(
+                _("Failed to configure proxy for Gemini models: {error}").format(
+                    error=transport_exc
+                )
+            )
+    try:
+        async with _httpx.AsyncClient(timeout=timeout, transport=transport) as client:
+            response = await client.get(
+                "https://generativelanguage.googleapis.com/v1beta/models",
+                params=params,
+            )
+    except (
+        _httpx.ConnectError,
+        _httpx.ConnectTimeout,
+        _httpx.ReadTimeout,
+        _httpx.TimeoutException,
+    ):
+        return []
+
+    if response.status_code != 200:
+        print(
+            _("Failed to fetch models from {base_url}: {status_code}").format(
+                base_url="https://generativelanguage.googleapis.com/v1beta/models",
+                status_code=response.status_code,
+            )
+        )
+        return []
+
+    payload = response.json() or {}
+    models: list[str] = []
+    for model in payload.get("models", []):
+        supported_methods = model.get("supportedGenerationMethods") or []
+        if supported_methods and "generateContent" not in supported_methods:
+            continue
+        identifier = model.get("name") or ""
+        if identifier.startswith("models/"):
+            identifier = identifier.split("/", 1)[1]
+        lowered = identifier.lower()
+        if re.search(
+            r"tts|robot|computer|image|learnlm",
+            lowered,
+        ):
+            continue
+        if identifier:
+            models.append(identifier)
+    return _sort_gemini_models(models or list(_DEFAULT_GEMINI_MODELS))
 
 
 def _notify_error(cb, message: str) -> None:
@@ -340,13 +492,36 @@ class Gemini(LanguageModel):
 
     @staticmethod
     def supported_models():
-        return [
-            GEMINI_FLASH_LATEST_MODEL_NAME,
-            GEMINI_FLASH_LITE_LATEST_MODEL_NAME,
-            GEMINI_2_0_FLASH_MODEL_NAME,
-            GEMINI_2_5_PRO_MODEL_NAME,
-            GEMINI_2_5_FLASH_MODEL_NAME,
-        ]
+        global _GEMINI_MODELS
+        fallback = _sort_gemini_models(list(_DEFAULT_GEMINI_MODELS))
+        with _GEMINI_MODELS_LOCK:
+            if _GEMINI_MODELS is None:
+                _GEMINI_MODELS = list(fallback)
+            current = list(_GEMINI_MODELS)
+
+        api_key = gepetto.config.get_config("Gemini", "API_KEY", "GEMINI_API_KEY")
+        if not api_key:
+            return current
+
+        proxy = gepetto.config.get_config("Gepetto", "PROXY")
+        timeout = _httpx.Timeout(2.0, connect=2.0)
+        _schedule_gemini_refresh(api_key, proxy, timeout)
+        return current
+
+    @staticmethod
+    def refresh_models_sync() -> list[str]:
+        api_key = gepetto.config.get_config("Gemini", "API_KEY", "GEMINI_API_KEY")
+        if not api_key:
+            return Gemini.supported_models()
+
+        proxy = gepetto.config.get_config("Gepetto", "PROXY")
+        timeout = _httpx.Timeout(2.0, connect=2.0)
+        models = _execute_gemini_fetch(api_key, proxy, timeout)
+        if models:
+            _update_gemini_models(models)
+        with _GEMINI_MODELS_LOCK:
+            current = list(_GEMINI_MODELS) if _GEMINI_MODELS is not None else list(_DEFAULT_GEMINI_MODELS)
+        return current
 
     @staticmethod
     def is_configured_properly() -> bool:

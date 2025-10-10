@@ -1,6 +1,6 @@
 import json
 
-from gepetto.ida.utils.function_utils import resolve_ea
+from gepetto.ida.utils.function_helpers import resolve_ea
 from gepetto.ida.tools.tools import (
     add_result_to_messages,
     tool_error_payload,

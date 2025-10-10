@@ -8,7 +8,7 @@ import idaapi
 
 import gepetto.config
 from gepetto.ida.utils.thread_helpers import hexrays_available, run_on_main_thread
-from gepetto.ida.utils.function_utils import (
+from gepetto.ida.utils.function_helpers import (
     get_func_name,
     parse_ea,
     resolve_ea,

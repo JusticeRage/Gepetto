@@ -11,6 +11,7 @@ from enum import Enum
 from collections.abc import Callable
 from PyQt5 import QtCore, QtGui, QtWidgets
 from gepetto.ida.utils.hooks import run_when_desktop_ready
+import gepetto.models.model_manager
 
 import gepetto.config
 
@@ -123,7 +124,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         LogCategory.USER: "#89b4fa",
         LogCategory.TOOL: "#f9e2af",
         LogCategory.MODEL: "#f5c2e7",
-        LogCategory.ASSISTANT: "#a6e3a1",
+        LogCategory.ASSISTANT: "#94e2d5",
         # LogCategory.REASONING: "#94e2d5", # /TODO
     }
     _LEVEL_COLORS = {
@@ -147,7 +148,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         }
         self._widget: QtWidgets.QWidget | None = None
         self._twidget = None
-        self._model_label: QtWidgets.QLabel | None = None
+        self._model_button: QtWidgets.QPushButton | None = None
         self._status_label: QtWidgets.QLabel | None = None
         self._stop_button: QtWidgets.QPushButton | None = None
         self._clear_button: QtWidgets.QPushButton | None = None
@@ -167,6 +168,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._stream_header: str | None = None
         self._reasoning_buffer: list[str] = []
         self._reasoning_log_index: int | None = None
+        self._model_checked_icon: QtGui.QIcon | None = None
         self._ready = False
 
     # ------------------------------------------------------------------
@@ -183,7 +185,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     def OnClose(self, form):  # noqa: N802 - IDA callback signature
         del form
         self._twidget = None
-        self._widget = self._model_label = self._status_label = None
+        self._widget = self._model_button = self._status_label = None
         self._stop_button = self._clear_button = self._progress_bar = None
         self._conversation_view = self._log_view = None
         self._splitter = None
@@ -309,9 +311,12 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         footer = QtWidgets.QHBoxLayout()
         footer.setSpacing(0)
         footer.setContentsMargins(2, 8, 2, 2)
-        self._model_label = QtWidgets.QLabel(_("Model: {model}").format(model=str(gepetto.config.model)))
-        self._model_label.setObjectName("gepetto_status_model_label")
-        footer.addWidget(self._model_label)
+        self._apply_model_button_style()
+        self._model_button = QtWidgets.QPushButton(_("Model: {model} ▼").format(model=str(gepetto.config.model)))
+        self._model_button.setObjectName("gepetto_status_model_button")
+        self._model_button.setCursor(QtCore.Qt.PointingHandCursor)
+        self._model_button.clicked.connect(self._handle_model_button_clicked)  # type: ignore[arg-type]
+        footer.addWidget(self._model_button)
         footer.addStretch(1)
         self._status_label = QtWidgets.QLabel(_("Status: {status}").format(status=_("Idle")))
         self._status_label.setObjectName("gepetto_status_label")
@@ -357,6 +362,53 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             "}"
         )
         self._progress_bar.setStyleSheet(style)
+
+    # ------------------------------------------------------------------
+    def _apply_model_button_style(self) -> None:
+        if not (self._model_button and self._widget):
+            return
+        
+        palette = self._widget.palette()
+        text_color = palette.color(QtGui.QPalette.WindowText).lighter(120)
+        border_color = text_color.darker(130)
+        hover_color = text_color.lighter(150)
+        
+        # Create dropdown-style appearance
+        style = (
+            "QPushButton#gepetto_status_model_button {"
+            "  padding: 2px 6px;"
+            "  border: 1px solid transparent;"
+            "  border-radius: 3px;"
+            "  text-align: left;"
+            f"  color: {text_color.name()};"
+            "  background: transparent;"
+            "}"
+            "QPushButton#gepetto_status_model_button:hover {"
+            f"  border-color: {border_color.name()};"
+            f"  background-color: {_rgba(hover_color, 0.1)};"
+            "}"
+            "QPushButton#gepetto_status_model_button:pressed {"
+            f"  background-color: {_rgba(hover_color, 0.2)};"
+            "}"
+        )
+        self._model_button.setStyleSheet(style)
+
+    # ------------------------------------------------------------------
+    def _ensure_model_checked_icon(self) -> QtGui.QIcon | None:
+        if self._model_checked_icon is not None:
+            return self._model_checked_icon
+
+        if QtWidgets is None:
+            return None
+
+        app = QtWidgets.QApplication.instance()
+        if not app:
+            return None
+
+        icon = app.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_DialogApplyButton)
+        if icon and not icon.isNull():
+            self._model_checked_icon = icon
+        return self._model_checked_icon
 
     # ------------------------------------------------------------------
     def _apply_filter_styles(self) -> None:
@@ -529,8 +581,89 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         return best if _contrast_ratio(best, background) >= 4.0 else fallback
 
     def set_model(self, model_name: str) -> None:
-        if self._model_label:
-            self._model_label.setText(_("Model: {model}").format(model=model_name))
+        if self._model_button:
+            self._model_button.setText(_("Model: {model} ▼").format(model=model_name))
+
+    # ------------------------------------------------------------------
+    def _handle_model_button_clicked(self) -> None:
+        if not self._model_button:
+            return
+        
+        menu = QtWidgets.QMenu(self._model_button)
+        
+        try:
+            current_model_name = str(gepetto.config.model)
+            check_icon = self._ensure_model_checked_icon()
+            
+            for provider in gepetto.models.model_manager.list_models():
+                if provider.supported_models():
+                    provider_menu = menu.addMenu(provider.get_menu_name())
+                    
+                    for model in provider.supported_models():
+                        action = provider_menu.addAction(model)
+
+                        selected = model == current_model_name
+                        if check_icon:
+                            if selected:
+                                action.setIcon(check_icon)
+                            else:
+                                action.setIcon(QtGui.QIcon())
+                        else:
+                            action.setCheckable(True)
+                            action.setChecked(selected)
+                        
+                        # Apply model switching action
+                        action.triggered.connect(self._make_model_switch_handler(model))
+            
+        except Exception as exc:
+            # Fallback - add a simple error or default option
+            error_action = menu.addAction(_("Error loading models"))
+            error_action.setEnabled(False)
+        
+        # Show the menu at the button position
+        menu.exec_(self._model_button.mapToGlobal(QtCore.QPoint(0, 0)))
+
+    # ------------------------------------------------------------------
+    def _switch_model(self, model_name: str) -> None:
+        try:
+            instantiate_model = gepetto.models.model_manager.instantiate_model
+            
+            # Try to instantiate the new model
+            gepetto.config.model = instantiate_model(model_name)
+            gepetto.config.update_config("Gepetto", "MODEL", model_name)
+            
+            # Update UI
+            self.set_model(str(gepetto.config.model))
+            
+            # Log the change
+            self.append_log(
+                _("Model switched to {model}").format(model=model_name),
+                category=LogCategory.MODEL,
+                level=LogLevel.INFO
+            )
+            
+            # Trigger menu refresh in the main plugin
+            try:
+                from gepetto.ida.ui import trigger_model_select_menu_regeneration
+                trigger_model_select_menu_regeneration()
+            except Exception:
+                pass
+                
+        except ValueError as e:
+            # Model switching failed (likely missing API key)
+            error_msg = _("Couldn't change model to {model}: {error}").format(model=model_name, error=str(e))
+            self.append_log(error_msg, category=LogCategory.SYSTEM, level=LogLevel.ERROR)
+        except Exception as exc:
+            # Unexpected error
+            error_msg = _("Failed to switch model: {error}").format(error=str(exc))
+            self.append_log(error_msg, category=LogCategory.SYSTEM, level=LogLevel.ERROR)
+
+    # ------------------------------------------------------------------
+    def _make_model_switch_handler(self, model_name: str) -> Callable[[bool], None]:
+        def _handler(_checked: bool = False, _model: str = model_name) -> None:
+            self._switch_model(_model)
+
+        return _handler
 
     # ------------------------------------------------------------------
     def set_status(self, text: str, *, busy: bool = False, error: bool = False) -> None:

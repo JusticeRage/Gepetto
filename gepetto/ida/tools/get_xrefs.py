@@ -9,7 +9,7 @@ import ida_kernwin
 import ida_name
 import ida_xref
 
-from gepetto.ida.utils.function_utils import parse_ea, resolve_ea, resolve_func, get_func_name
+from gepetto.ida.utils.function_helpers import parse_ea, resolve_ea, resolve_func, get_func_name
 from gepetto.ida.tools.tools import (
     add_result_to_messages,
     tool_error_payload,

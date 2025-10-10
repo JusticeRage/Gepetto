@@ -3,7 +3,7 @@ import json
 import ida_bytes
 import ida_kernwin
 
-from gepetto.ida.utils.function_utils import parse_ea
+from gepetto.ida.utils.function_helpers import parse_ea
 from gepetto.ida.tools.tools import (
     add_result_to_messages,
     tool_error_payload,

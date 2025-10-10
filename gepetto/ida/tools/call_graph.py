@@ -1,5 +1,3 @@
-# gepetto/ida/tools/callgraph.py
-
 import json
 from collections.abc import Iterable
 from typing import Any
@@ -11,7 +9,7 @@ import ida_name
 import ida_xref
 import ida_bytes
 
-from gepetto.ida.utils.function_utils import parse_ea, resolve_func, get_func_name
+from gepetto.ida.utils.function_helpers import parse_ea, resolve_func, get_func_name
 from gepetto.ida.tools.tools import (
     add_result_to_messages,
     tool_error_payload,
