@@ -626,8 +626,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     # ------------------------------------------------------------------
     def _switch_model(self, model_name: str) -> None:
         try:
-            from gepetto.ida.handlers import instantiate_model
-            from gepetto.ida.status_panel import LogCategory, LogLevel
+            instantiate_model = gepetto.models.model_manager.instantiate_model
             
             # Try to instantiate the new model
             gepetto.config.model = instantiate_model(model_name)
