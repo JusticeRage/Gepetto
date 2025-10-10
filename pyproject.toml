@@ -1,0 +1,18 @@
+[project]
+name = "gepetto"
+version = "1.5.0"
+requires-python = ">=3.10"
+dependencies = [
+    "azure-identity>=1.21.0",
+    "google-genai>=1.36.0",
+    "groq>=0.8.0",
+    "ollama>=0.4.5",
+    "openai>=1.101.0",
+    "pytest>=8.4.2",
+    "together>=1.2.0",
+]
+
+[dependency-groups]
+dev = [
+    "idapro>=0.0.6",
+]

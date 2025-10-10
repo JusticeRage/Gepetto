@@ -315,8 +315,14 @@ def _convert_messages(query: Any) -> tuple[str | None, list[types.Content]]:
                 or message.get("id")
             )
             if call_id and hasattr(part, "function_response"):
+                fr = part.function_response
+                call_id_str = str(call_id)
                 try:
-                    part.function_response.call_id = str(call_id)
+                    fr.id = call_id_str
+                except Exception:
+                    pass
+                try:
+                    object.__setattr__(fr, "call_id", call_id_str)
                 except Exception:
                     pass
             pending_tool_parts.append(part)
