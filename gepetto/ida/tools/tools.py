@@ -17,6 +17,17 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_current_function",
+            "description": "Return the current function under the cursor.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_ea",
             "description": "Return EA for a symbol name.",
             "parameters": {
@@ -35,7 +46,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "to_hex",
-            "description": "Convert a decimal integer to a hexadecimal string.",
+            "description": "Convert a decimal integer to a hexadecimal string (returns {\"hex\": \"0x...\"}).",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -57,8 +68,8 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "ea": {
-                        "type": "integer",
-                        "description": "Effective address to disassemble.",
+                        "type": "string",
+                        "description": "EA (int or hex string) to disassemble.",
                     },
                 },
                 "required": ["ea"],
@@ -74,8 +85,8 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "ea": {
-                        "type": "integer",
-                        "description": "Effective address to read from.",
+                        "type": "string",
+                        "description": "EA (int or hex string) to read from.",
                     },
                     "size": {
                         "type": "integer",
@@ -91,21 +102,17 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "decompile_function",
-            "description": "Decompile a function by EA or name and return annotated pseudocode (with per-line metadata). Provide either `address`/`ea` or `name`.",
+            "description": "Decompile a function by EA or name and return annotated pseudocode (with per-line metadata). Provide either `ea` or `name`.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "address": {
-                        "type": "string",
-                        "description": "Address inside the target function (e.g., '0x401000' or '401000h').",
-                    },
                     "ea": {
-                        "type": "integer",
-                        "description": "Alternative: decimal EA inside the target function.",
+                        "type": "string",
+                        "description": "EA (int or hex string) inside the target function.",
                     },
                     "name": {
                         "type": "string",
-                        "description": "Function name to resolve if no address/EA is supplied.",
+                        "description": "Function name to resolve if no EA is supplied.",
                     },
                 },
             },
@@ -120,8 +127,8 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "ea": {
-                        "type": "integer",
-                        "description": "Effective address (EA) inside the target function, in either decimal or hex.",
+                        "type": "string",
+                        "description": "EA (int or hex string) inside the target function.",
                     },
                     "func_name": {
                         "type": "string",
@@ -136,6 +143,7 @@ TOOLS = [
                         "description": "Desired new name for the local variable.",
                     },
                 },
+                "required": ["new_name", "old_name"],
             },
         },
     },
@@ -148,8 +156,8 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "ea": {
-                        "type": "integer",
-                        "description": "Effective address (EA) inside the target function, in either decimal or hex.",
+                        "type": "string",
+                        "description": "EA (int or hex string) inside the target function.",
                     },
                     "name": {
                         "type": "string",
@@ -160,6 +168,28 @@ TOOLS = [
                         "description": "Desired new name for the function.",
                     },
                 },
+                "required": ["new_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_comment",
+            "description": "Set a non-repeatable comment at a given EA. Supports multiline input.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ea": {
+                        "type": "string",
+                        "description": "EA (int or hex string) where the comment should be applied.",
+                    },
+                    "comment": {
+                        "type": "string",
+                        "description": "Comment text to store at the address.",
+                    },
+                },
+                "required": ["ea", "comment"],
             },
         },
     },
@@ -167,10 +197,10 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_xrefs",
-            "description": (
-                "Return cross-references (code/data) for an address, a whole function, "
-                "or a named symbol. Supports incoming, outgoing, or both directions, "
-                "with practical filters (only_code/only_calls/exclude_flow) and "
+                "description": (
+                    "Return cross-references (code/data) for an address, a whole function, "
+                    "or a named symbol. Supports incoming, outgoing, or both directions, "
+                    "with practical filters (kind/only_calls/exclude_flow) and "
                 "deduping (collapse_by)."
             ),
             "parameters": {
@@ -196,15 +226,11 @@ TOOLS = [
                         "enum": ["to", "from", "both"],
                         "default": "both"
                     },
-                    "only_code": {
-                        "type": "boolean",
-                        "description": "Limit to code xrefs only.",
-                        "default": False
-                    },
-                    "only_data": {
-                        "type": "boolean",
-                        "description": "Limit to data xrefs only.",
-                        "default": False
+                    "kind": {
+                        "type": "string",
+                        "description": "Limit results to code, data, or both kinds of xrefs.",
+                        "enum": ["code", "data", "both"],
+                        "default": "both"
                     },
                     "only_calls": {
                         "type": "boolean",
@@ -234,6 +260,41 @@ TOOLS = [
                 "required": []
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_imports",
+            "description": "Enumerate imported functions; supports pagination and module filtering.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "default": 256, "minimum": 1},
+                    "offset": {"type": "integer", "default": 0, "minimum": 0},
+                    "module_filter": {
+                        "type": "string",
+                        "description": "Substring to match import module name (case-insensitive).",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_functions",
+            "description": "Paginated function enumeration with optional thunk filtering.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "default": 256, "minimum": 1},
+                    "offset": {"type": "integer", "default": 0, "minimum": 0},
+                    "include_thunks": {"type": "boolean", "default": True},
+                },
+                "required": [],
+            },
+        },
     },
     {
         "type": "function",
@@ -303,6 +364,7 @@ TOOLS = [
                     },
                     "segments": {
                         "type": "array",
+                        "description": "Optional segment names to restrict enumeration (e.g., ['.text', '.rdata']).",
                         "items": { "type": "string" }
                     },
                     "include_xrefs": { "type": "boolean", "default": False },
@@ -327,11 +389,14 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "ea": {"type": "integer", "description": "EA inside the target function."},
+                    "ea": {
+                        "type": "string",
+                        "description": "EA (int or hex string) inside the target function.",
+                    },
                     "name": {"type": "string", "description": "Function name to resolve."},
                     "include_thunks": {"type": "boolean", "default": True, "description": "Treat thunks as their targets."}
-                }
-            }
+                },
+                            }
         }
     },
     {
@@ -342,18 +407,54 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "ea": {"type": "integer"},
+                    "ea": {
+                        "type": "string",
+                    },
                     "name": {"type": "string"},
                     "only_direct": {"type": "boolean", "default": True, "description": "Direct calls only (not xrefs through data)."}
-                }
-            }
+                },
+                            }
         }
     },
     {
         "type": "function",
         "function": {
+            "name": "declare_c_type",
+            "description": "Parse and declare C types into the local type library.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "c_declaration": {
+                        "type": "string",
+                        "description": "C declaration(s) to add to the Local Types view.",
+                    },
+                },
+                "required": ["c_declaration"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_struct",
+            "description": "Return structure fields and metadata by name.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Structure name to query from the Local Types view.",
+                    },
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "refresh_view",
-            "description": "Refresh the current IDA disassembly view to show recent changes.",
+            "description": "Force IDA to repaint views after renames or patches.",
             "parameters": {
                 "type": "object",
                 "properties": {},
@@ -361,9 +462,6 @@ TOOLS = [
         },
     },
 ]
-
-# logger = logging.getLogger(__name__)
-
 
 def tool_result_payload(data: Any) -> dict[str, Any]:
     """Wrap successful tool results in a standard payload structure."""

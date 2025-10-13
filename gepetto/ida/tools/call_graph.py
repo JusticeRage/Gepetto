@@ -4,7 +4,6 @@ from typing import Any
 
 import idaapi
 import ida_funcs
-import ida_kernwin
 import ida_name
 import ida_xref
 import ida_bytes
@@ -15,6 +14,7 @@ from gepetto.ida.tools.tools import (
     tool_error_payload,
     tool_result_payload,
 )
+from gepetto.ida.utils.thread_helpers import ida_read
 
 # Compatibility with older IDA versions where is_thunk_func is available
 try:
@@ -159,116 +159,91 @@ def _normalize_callee_ea(ea: int, include_thunks: bool) -> int:
 
 # -----------------------------------------------------------------------------
 
-def get_callers(ea: int | None = None, name: str | None = None,
-                include_thunks: bool = True) -> dict[str, Any]:
-    """
-    Return unique caller functions that call the target function (by EA or name).
-    Only call xrefs are considered. If include_thunks is True and the target is a thunk,
-    results will be keyed to the thunk's final target for normalization.
-    """
-    out: dict[str, Any] = {"target": {}, "callers": []}
-    error: dict[str, str | None] = {"message": None}
-
-    def _do():
+def _ea_func_name(ea: int) -> str:
+    f = ida_funcs.get_func(ea)
+    if f:
         try:
-            idaapi.auto_wait()
-
-            # Resolve target function
-            fn = resolve_func(ea=ea if ea is not None else None,
-                              name=name if name else None)
-            target_fn = fn
-            target_ea = fn.start_ea
-
-            # Normalize to thunk target if requested (purely for reporting)
-            norm_target_ea = _normalize_callee_ea(target_ea, include_thunks)
-            norm_target_name = get_func_name(norm_target_ea)
-
-            out["target"] = {
-                "ea": int(norm_target_ea),
-                "name": norm_target_name,
-            }
-
-            # Collect callers: code xrefs TO the (possibly normalized) callee start
-            callee_start = norm_target_ea
-            blk = ida_xref.xrefblk_t()
-            callers: set[int] = set()
-            if blk.first_to(callee_start, ida_xref.XREF_ALL):
-                while True:
-                    if blk.iscode and _is_call(blk.type):
-                        cf = ida_funcs.get_func(blk.frm)
-                        if cf:
-                            callers.add(cf.start_ea)
-                    if not blk.next_to():
-                        break
-
-            out["callers"] = [
-                {"ea": int(c_ea), "name": get_func_name(c_ea)}
-                for c_ea in sorted(callers)
-            ]
-            return 1
-        except Exception as e:
-            error["message"] = str(e)
-            return 0
-
-    ida_kernwin.execute_sync(_do, ida_kernwin.MFF_READ)
-
-    if error["message"]:
-        raise RuntimeError(error["message"])
-
-    return out
+            return get_func_name(f) or ""
+        except Exception:
+            pass
+    name = ida_name.get_ea_name(ea)
+    return name or ""
 
 # -----------------------------------------------------------------------------
 
+@ida_read
+def _collect_callers(ea: int | None, name: str | None, include_thunks: bool) -> dict[str, Any]:
+    idaapi.auto_wait()
+
+    fn = resolve_func(ea=ea, name=name)
+    target_ea = fn.start_ea
+
+    norm_target_ea = _normalize_callee_ea(target_ea, include_thunks)
+    norm_target_name = _ea_func_name(norm_target_ea)
+
+    blk = ida_xref.xrefblk_t()
+    callers: set[int] = set()
+    if blk.first_to(norm_target_ea, ida_xref.XREF_ALL):
+        while True:
+            if blk.iscode and _is_call(blk.type):
+                cf = ida_funcs.get_func(blk.frm)
+                if cf:
+                    callers.add(cf.start_ea)
+            if not blk.next_to():
+                break
+
+    return {
+        "target": {"ea": int(norm_target_ea), "name": norm_target_name},
+        "callers": [
+            {"ea": int(c_ea), "name": _ea_func_name(c_ea)}
+            for c_ea in sorted(callers)
+        ],
+    }
+
+
+def get_callers(ea: int | None = None, name: str | None = None,
+                include_thunks: bool = True) -> dict[str, Any]:
+    """Return unique caller functions for the target function."""
+    return _collect_callers(ea=ea, name=name, include_thunks=include_thunks)
+
+# -----------------------------------------------------------------------------
+
+@ida_read
+def _collect_callees(ea: int | None, name: str | None,
+                     only_direct: bool, include_thunks: bool) -> dict[str, Any]:
+    idaapi.auto_wait()
+
+    fn = resolve_func(ea=ea, name=name)
+    src_ea = fn.start_ea
+
+    callees: set[int] = set()
+    blk = ida_xref.xrefblk_t()
+    for item_ea in _iter_func_items(fn):
+        if blk.first_from(item_ea, ida_xref.XREF_ALL):
+            while True:
+                if blk.iscode and _is_call(blk.type):
+                    tgt = _normalize_callee_ea(int(blk.to), include_thunks)
+                    callees.add(tgt)
+                elif not only_direct:
+                    pass
+                if not blk.next_from():
+                    break
+
+    return {
+        "source": {"ea": int(src_ea), "name": _ea_func_name(src_ea)},
+        "callees": [
+            {"ea": int(t_ea), "name": _ea_func_name(t_ea)}
+            for t_ea in sorted(callees)
+        ],
+    }
+
+
 def get_callees(ea: int | None = None, name: str | None = None,
                 only_direct: bool = True, include_thunks: bool = True) -> dict[str, Any]:
-    """
-    Return unique callee functions reached from the target function.
-    - only_direct=True: only consider direct code call xrefs (ignore data/indirect).
-    - include_thunks=True: normalize callees that are thunks to their ultimate targets.
-    """
-    out: dict[str, Any] = {"source": {}, "callees": []}
-    error: dict[str, str | None] = {"message": None}
-
-    def _do():
-        try:
-            idaapi.auto_wait()
-
-            # Resolve source function (where we look for calls FROM)
-            fn = resolve_func(ea=ea if ea is not None else None,
-                              name=name if name else None)
-            src_ea = fn.start_ea
-            out["source"] = {"ea": int(src_ea), "name": get_func_name(src_ea)}
-
-            # Walk each item in the function and gather outgoing call xrefs
-            callees: set[int] = set()
-            blk = ida_xref.xrefblk_t()
-            for item_ea in _iter_func_items(fn):
-                if blk.first_from(item_ea, ida_xref.XREF_ALL):
-                    while True:
-                        if blk.iscode:
-                            if _is_call(blk.type):
-                                tgt = _normalize_callee_ea(int(blk.to), include_thunks)
-                                # When only_direct=True, we already have direct call sites
-                                # (indirect through data wouldn't appear as code call xref).
-                                callees.add(tgt)
-                        elif not only_direct:
-                            # Non-code xrefs FROM a site in a function are uncommon but keep the gate.
-                            pass
-                        if not blk.next_from():
-                            break
-
-            out["callees"] = [
-                {"ea": int(t_ea), "name": get_func_name(t_ea)}
-                for t_ea in sorted(callees)
-            ]
-            return 1
-        except Exception as e:
-            error["message"] = str(e)
-            return 0
-
-    ida_kernwin.execute_sync(_do, ida_kernwin.MFF_READ)
-
-    if error["message"]:
-        raise RuntimeError(error["message"])
-
-    return out
+    """Return unique callee functions reached from the target function."""
+    return _collect_callees(
+        ea=ea,
+        name=name,
+        only_direct=only_direct,
+        include_thunks=include_thunks,
+    )

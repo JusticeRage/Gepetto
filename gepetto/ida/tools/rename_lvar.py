@@ -1,9 +1,9 @@
 import json
 
-import ida_hexrays
-import ida_kernwin
+import ida_hexrays  # type: ignore
 
 from gepetto.ida.utils.function_helpers import parse_ea, resolve_ea, resolve_func, get_func_name
+from gepetto.ida.utils.thread_helpers import ida_write
 from gepetto.ida.tools.tools import (
     add_result_to_messages,
     tool_error_payload,
@@ -59,20 +59,11 @@ def rename_lvar(
         ea = resolve_ea(func_name)
 
     result = {"ea": int(f.start_ea), "func_name": func_name, "old_name": old_name, "new_name": new_name}
-    error: dict[str, str | None] = {"message": None}
-
-    def _do():
-        try:
-            if not ida_hexrays.rename_lvar(ea, old_name, new_name):
-                error["message"] = f"Failed to rename lvar {old_name!r}"
-                return 0
-            return 1
-        except Exception as e:
-            error["message"] = str(e)
-            return 0
-
-    ida_kernwin.execute_sync(_do, ida_kernwin.MFF_WRITE)
-
-    if error["message"]:
-        raise RuntimeError(error["message"])
+    _apply_lvar_rename(ea, old_name, new_name)
     return result
+
+
+@ida_write
+def _apply_lvar_rename(ea: int, old_name: str, new_name: str) -> None:
+    if not ida_hexrays.rename_lvar(ea, old_name, new_name):
+        raise RuntimeError(f"Failed to rename lvar {old_name!r}")

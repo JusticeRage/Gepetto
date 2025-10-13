@@ -1,10 +1,9 @@
 import json
 from typing import Any
 
-import ida_funcs
-import ida_hexrays
-import ida_lines
-import idaapi
+import idaapi  # type: ignore
+import ida_funcs  # type: ignore
+import ida_hexrays  # type: ignore
 
 import gepetto.config
 from gepetto.ida.utils.thread_helpers import hexrays_available, run_on_main_thread
@@ -30,17 +29,15 @@ def handle_decompile_function_tc(tc, messages):
     except Exception:
         args = {}
 
-    address = args.get("address")
     ea_arg = args.get("ea")
     name = args.get("name")
 
     try:
-        decompiled = decompile_function(address=address, ea=ea_arg, name=name)
+        decompiled = decompile_function(ea=ea_arg, name=name)
         payload = tool_result_payload({"pseudocode": str(decompiled)})
     except Exception as ex:
         payload = tool_error_payload(
             str(ex),
-            address=address,
             ea=ea_arg,
             name=name,
         )
@@ -49,18 +46,13 @@ def handle_decompile_function_tc(tc, messages):
 
 
 def decompile_function(
-    address: Any | None = None,
     ea: Any | None = None,
     name: str | None = None,
 ) -> tuple[dict[str, Any], idaapi.cfuncptr_t]:
-    """
-    Decompile the function identified by ``address``/``ea``/``name`` and return annotated pseudocode.
-    """
+    """Decompile the function identified by ``ea`` or ``name``."""
 
     target_ea: int | None = None
-    if address is not None:
-        target_ea = parse_ea(address)
-    elif ea is not None:
+    if ea is not None:
         target_ea = parse_ea(ea)
 
     function = resolve_func(ea=target_ea, name=name)

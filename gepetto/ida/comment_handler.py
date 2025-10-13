@@ -4,10 +4,9 @@ import re
 import time
 import textwrap
 
-import idaapi
-import ida_hexrays
-import ida_kernwin
-import idc
+import idaapi  # type: ignore
+import ida_hexrays  # type: ignore
+import ida_kernwin  # type: ignore
 
 import gepetto.config
 from gepetto.ida.status_panel import LogCategory, LogLevel, get_status_panel

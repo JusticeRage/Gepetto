@@ -10,6 +10,7 @@ environments, which is important when unit tests import modules outside IDA.
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Callable
 from typing import Any
 
@@ -92,6 +93,31 @@ def run_on_main_thread(func: Callable[[], Any], write: bool = False) -> Any:
     return _execute_sync(func, write=write)
 
 
+def sync_on_main_thread(write: bool = False):
+    """Decorator factory that executes the wrapped callable on IDA's main thread."""
+
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            return run_on_main_thread(lambda: func(*args, **kwargs), write=write)
+
+        return wrapper
+
+    return decorator
+
+
+def ida_read(func: Callable[..., Any]) -> Callable[..., Any]:
+    """Decorator enforcing main-thread execution with a read lock."""
+
+    return sync_on_main_thread(write=False)(func)
+
+
+def ida_write(func: Callable[..., Any]) -> Callable[..., Any]:
+    """Decorator enforcing main-thread execution with a write lock."""
+
+    return sync_on_main_thread(write=True)(func)
+
+
 def safe_get_screen_ea() -> int:
     """
     Fetch the current screen EA while tolerating headless execution.
@@ -138,6 +164,9 @@ def hexrays_available() -> bool:
 __all__ = [
     "BADADDR",
     "hexrays_available",
+    "ida_read",
+    "ida_write",
     "run_on_main_thread",
     "safe_get_screen_ea",
+    "sync_on_main_thread",
 ]

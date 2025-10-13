@@ -1,8 +1,8 @@
 import json
 import hashlib
 import ida_bytes
-import ida_kernwin
 import ida_idaapi
+import ida_kernwin
 import ida_nalt
 import ida_segment
 import ida_search
@@ -18,7 +18,7 @@ from gepetto.ida.tools.tools import (
     tool_error_payload,
     tool_result_payload,
 )
-from gepetto.ida.utils.thread_helpers import *
+from gepetto.ida.utils.thread_helpers import ida_read, ida_write, run_on_main_thread
 
 
 # -----------------------------------------------------------------------------
@@ -82,12 +82,13 @@ def handle_list_strings_tc(tc, messages):
 # Shared snapshot utilities
 # -----------------------------------------------------------------------------
 
+@ida_write
 def _snapshot_strings_and_segments():
     """Runs on UI thread: safely snapshot strings and segments for background use.
 
     Notes:
-      - Assumes caller wrapped this in ida_kernwin.execute_sync(..., MFF_WRITE)
-        because build_strlist() mutates IDA state.
+      - Executed via run_on_main_thread(..., write=True) because build_strlist()
+        mutates IDA state.
       - Always returns a 2-tuple: (strings: list[dict], segs: list[tuple[int,int]]).
     """
     try:
@@ -133,15 +134,11 @@ def _snapshot_strings_and_segments():
 
 def _ui_snapshot_wrapper():
     """Executes snapshot on the UI thread and returns a dict with 'strings' and 'segs'."""
-    snap = {}
-    def _ui_snapshot():
-        res = _snapshot_strings_and_segments()
-        if not isinstance(res, tuple) or len(res) != 2:
-            res = ([], [])
-        snap["strings"], snap["segs"] = res
-        return 1
-    ida_kernwin.execute_sync(_ui_snapshot, ida_kernwin.MFF_WRITE)
-    return snap
+    res = _snapshot_strings_and_segments()
+    if not isinstance(res, tuple) or len(res) != 2:
+        res = ([], [])
+    strings, segs = res
+    return {"strings": strings, "segs": segs}
 
 # -----------------------------------------------------------------------------
 
@@ -161,6 +158,7 @@ def _strtype_to_label(stype: int) -> str:
 
 # -----------------------------------------------------------------------------
 
+@ida_read
 def _iter_xrefs_to(ea: int, max_items: int = 64):
     """Best-effort, bounded xref collection."""
     out = []
@@ -183,6 +181,8 @@ def search(text: str | None = None, hex: str | None = None, case_sensitive: bool
 
     if not text and not hex:
         raise ValueError("Either text or hex must be provided")
+    if text and hex:
+        raise ValueError("Provide either text or hex, not both")
 
     snap = _ui_snapshot_wrapper()
     strings = snap.get("strings", [])

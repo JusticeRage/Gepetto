@@ -2,9 +2,9 @@ import json
 import re
 
 import ida_name
-import ida_kernwin
 
 from gepetto.ida.utils.function_helpers import parse_ea, resolve_ea, resolve_func, get_func_name
+from gepetto.ida.utils.thread_helpers import ida_write
 from gepetto.ida.tools.tools import (
     add_result_to_messages,
     tool_error_payload,
@@ -58,31 +58,26 @@ def rename_function(
     old_name = name or get_func_name(f)
     ea = int(f.start_ea)
 
-    error: dict[str, str | None] = {"message": None}
-    applied_name = new_name
-
-    def _do():
-        try:
-            nonlocal applied_name
-            flags = ida_name.SN_FORCE | getattr(ida_name, "SN_NOWARN", 0)
-            if ida_name.set_name(ea, applied_name, flags):
-                return 1
-            sanitized = _sanitize_identifier(applied_name)
-            if sanitized != applied_name and ida_name.set_name(ea, sanitized, flags):
-                applied_name = sanitized
-                return 1
-            error["message"] = f"Failed to rename function {old_name!r} -> {applied_name!r}"
-            return 0
-        except Exception as e:
-            error["message"] = str(e)
-            return 0
-
-    ida_kernwin.execute_sync(_do, ida_kernwin.MFF_WRITE)
-
-    if error["message"]:
-        raise RuntimeError(error["message"])
+    applied_name = _apply_function_rename(ea, old_name, new_name)
 
     result = {"ea": ea, "old_name": old_name, "new_name": applied_name}
     if applied_name != new_name:
         result["requested_name"] = new_name
     return result
+
+
+@ida_write
+def _apply_function_rename(ea: int, old_name: str, desired_name: str) -> str:
+    flags = ida_name.SN_FORCE | getattr(ida_name, "SN_NOWARN", 0)
+    if ida_name.set_name(ea, desired_name, flags):
+        return desired_name
+
+    sanitized = _sanitize_identifier(desired_name)
+    if sanitized != desired_name and ida_name.set_name(ea, sanitized, flags):
+        return sanitized
+
+    if sanitized != desired_name:
+        raise RuntimeError(
+            f"Failed to rename function {old_name!r} -> {desired_name!r} (sanitized {sanitized!r})"
+        )
+    raise RuntimeError(f"Failed to rename function {old_name!r} -> {desired_name!r}")
