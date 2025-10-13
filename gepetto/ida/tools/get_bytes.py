@@ -1,7 +1,6 @@
 import json
 
 import ida_bytes
-import ida_kernwin
 
 from gepetto.ida.utils.function_helpers import parse_ea
 from gepetto.ida.tools.tools import (
@@ -9,6 +8,7 @@ from gepetto.ida.tools.tools import (
     tool_error_payload,
     tool_result_payload,
 )
+from gepetto.ida.utils.thread_helpers import ida_read
 
 
 def handle_get_bytes_tc(tc, messages):
@@ -38,15 +38,9 @@ def handle_get_bytes_tc(tc, messages):
 # -----------------------------------------------------------------------------
 
 
+@ida_read
 def _read_bytes(ea: int, size: int) -> bytes:
-    out = {"data": b""}
-
-    def _do():
-        out["data"] = ida_bytes.get_bytes(ea, size) or b""
-        return 1
-
-    ida_kernwin.execute_sync(_do, ida_kernwin.MFF_READ)
-    return out["data"]
+    return ida_bytes.get_bytes(ea, size) or b""
 
 
 def _format_bytes(bs: bytes) -> str:

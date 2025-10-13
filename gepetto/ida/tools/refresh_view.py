@@ -7,6 +7,7 @@ from gepetto.ida.tools.tools import (
     tool_error_payload,
     tool_result_payload,
 )
+from gepetto.ida.utils.thread_helpers import ida_read
 
 
 def handle_refresh_view_tc(tc, messages):
@@ -24,20 +25,16 @@ def handle_refresh_view_tc(tc, messages):
 
 # -----------------------------------------------------------------------------
 
+@ida_read
 def refresh_view() -> dict:
     """Refresh the current IDA disassembly view."""
 
     error: dict[str, str | None] = {"message": None}
 
-    def _do():
-        try:
-            ida_kernwin.refresh_idaview_anyway()
-            return 1
-        except Exception as e:
-            error["message"] = str(e)
-            return 0
-
-    ida_kernwin.execute_sync(_do, ida_kernwin.MFF_FAST)
+    try:
+        ida_kernwin.refresh_idaview_anyway()
+    except Exception as e:
+        error["message"] = str(e)
 
     if error["message"]:
         raise RuntimeError(error["message"])

@@ -4,9 +4,9 @@ import re
 import time
 import textwrap
 
-import idaapi
-import ida_hexrays
-import idc
+import idaapi  # type: ignore
+import ida_hexrays  # type: ignore
+import idc  # type: ignore
 
 import gepetto.config
 from gepetto.ida.utils.thread_helpers import *

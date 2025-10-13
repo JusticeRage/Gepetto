@@ -17,7 +17,9 @@ def handle_get_ea_tc(tc, messages):
     name = args.get("name")
 
     try:
-        ea = get_ea(name)
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("name must be a non-empty string")
+        ea = get_ea(name.strip())
         payload = tool_result_payload({"ea": ea})
     except Exception as ex:
         payload = tool_error_payload(str(ex), name=name)

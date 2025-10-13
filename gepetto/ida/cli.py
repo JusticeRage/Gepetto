@@ -10,19 +10,7 @@ import gepetto.config
 import gepetto.ida.handlers
 from gepetto.ida.status_panel import LogCategory, LogLevel, get_status_panel
 from gepetto.ida.tools.tools import TOOLS
-import gepetto.ida.tools.call_graph
-import gepetto.ida.tools.decompile_function
-import gepetto.ida.tools.get_ea
-import gepetto.ida.tools.get_screen_ea
-import gepetto.ida.tools.get_xrefs
-import gepetto.ida.tools.list_symbols
-import gepetto.ida.tools.refresh_view
-import gepetto.ida.tools.rename_lvar
-import gepetto.ida.tools.rename_function
-import gepetto.ida.tools.search
-import gepetto.ida.tools.to_hex
-import gepetto.ida.tools.get_disasm
-import gepetto.ida.tools.get_bytes
+import gepetto.ida.tools as ida_tools
 
 _ = gepetto.config._
 CLI: ida_kernwin.cli_t = None
@@ -179,35 +167,47 @@ class GepettoCLI(ida_kernwin.cli_t):
                 STATUS_PANEL.set_status(_("Using tool: {tool_name}").format(tool_name=first_tool_name), busy=True)
                 for tc in response.tool_calls:
                     if tc.function.name == "get_screen_ea":
-                        gepetto.ida.tools.get_screen_ea.handle_get_screen_ea_tc(tc, MESSAGES)
+                        ida_tools.get_screen_ea.handle_get_screen_ea_tc(tc, MESSAGES)
+                    elif tc.function.name == "get_current_function":
+                        ida_tools.get_current_function.handle_get_current_function_tc(tc, MESSAGES)
                     elif tc.function.name == "get_ea":
-                        gepetto.ida.tools.get_ea.handle_get_ea_tc(tc, MESSAGES)
+                        ida_tools.get_ea.handle_get_ea_tc(tc, MESSAGES)
                     elif tc.function.name == "decompile_function":
-                        gepetto.ida.tools.decompile_function.handle_decompile_function_tc(tc, MESSAGES)
+                        ida_tools.decompile_function.handle_decompile_function_tc(tc, MESSAGES)
                     elif tc.function.name == "rename_lvar":
-                        gepetto.ida.tools.rename_lvar.handle_rename_lvar_tc(tc, MESSAGES)
+                        ida_tools.rename_lvar.handle_rename_lvar_tc(tc, MESSAGES)
                     elif tc.function.name == "rename_function":
-                        gepetto.ida.tools.rename_function.handle_rename_function_tc(tc, MESSAGES)
+                        ida_tools.rename_function.handle_rename_function_tc(tc, MESSAGES)
+                    elif tc.function.name == "set_comment":
+                        ida_tools.set_comment.handle_set_comment_tc(tc, MESSAGES)
                     elif tc.function.name == "get_xrefs":
-                        gepetto.ida.tools.get_xrefs.handle_get_xrefs_tc(tc, MESSAGES)
+                        ida_tools.get_xrefs.handle_get_xrefs_tc(tc, MESSAGES)
+                    elif tc.function.name == "list_imports":
+                        ida_tools.list_imports.handle_list_imports_tc(tc, MESSAGES)
+                    elif tc.function.name == "list_functions":
+                        ida_tools.list_functions.handle_list_functions_tc(tc, MESSAGES)
                     elif tc.function.name == "list_symbols":
-                        gepetto.ida.tools.list_symbols.handle_list_symbols_tc(tc, MESSAGES)
+                        ida_tools.list_symbols.handle_list_symbols_tc(tc, MESSAGES)
                     elif tc.function.name == "list_strings":
-                        gepetto.ida.tools.search.handle_list_strings_tc(tc, MESSAGES)
+                        ida_tools.search.handle_list_strings_tc(tc, MESSAGES)
                     elif tc.function.name == "search":
-                        gepetto.ida.tools.search.handle_search_tc(tc, MESSAGES)
+                        ida_tools.search.handle_search_tc(tc, MESSAGES)
                     elif tc.function.name == "to_hex":
-                        gepetto.ida.tools.to_hex.handle_to_hex_tc(tc, MESSAGES)
+                        ida_tools.to_hex.handle_to_hex_tc(tc, MESSAGES)
                     elif tc.function.name == "get_disasm":
-                        gepetto.ida.tools.get_disasm.handle_get_disasm_tc(tc, MESSAGES)
+                        ida_tools.get_disasm.handle_get_disasm_tc(tc, MESSAGES)
                     elif tc.function.name == "get_bytes":
-                        gepetto.ida.tools.get_bytes.handle_get_bytes_tc(tc, MESSAGES)
+                        ida_tools.get_bytes.handle_get_bytes_tc(tc, MESSAGES)
                     elif tc.function.name == "get_callers":
-                        gepetto.ida.tools.call_graph.handle_get_callers_tc(tc, MESSAGES)
+                        ida_tools.call_graph.handle_get_callers_tc(tc, MESSAGES)
                     elif tc.function.name == "get_callees":
-                        gepetto.ida.tools.call_graph.handle_get_callees_tc(tc, MESSAGES)
+                        ida_tools.call_graph.handle_get_callees_tc(tc, MESSAGES)
+                    elif tc.function.name == "declare_c_type":
+                        ida_tools.declare_c_type.handle_declare_c_type_tc(tc, MESSAGES)
+                    elif tc.function.name == "get_struct":
+                        ida_tools.get_struct.handle_get_struct_tc(tc, MESSAGES)
                     elif tc.function.name == "refresh_view":
-                        gepetto.ida.tools.refresh_view.handle_refresh_view_tc(tc, MESSAGES)
+                        ida_tools.refresh_view.handle_refresh_view_tc(tc, MESSAGES)
                 STATUS_PANEL.start_stream()
                 start_model_interaction()
             else:

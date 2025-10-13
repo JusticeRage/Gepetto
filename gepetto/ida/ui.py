@@ -6,9 +6,9 @@ import random
 import string
 import threading
 
-import idaapi
-import ida_hexrays
-import ida_kernwin
+import idaapi  # type: ignore
+import ida_kernwin  # type: ignore
+import ida_hexrays  # type: ignore
 
 import gepetto.config
 from gepetto.ida.handlers import (
