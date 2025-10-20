@@ -20,7 +20,7 @@ def parse_ea(ea_val):
 # ---------------------------------------------------------------------------
 
 def resolve_ea(name) -> int:
-    """Resolve a function name to its effective address."""
+    """Resolve a name to its effective address."""
     out = {"ea": None, "err": None}
 
     def _do():

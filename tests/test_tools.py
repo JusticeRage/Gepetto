@@ -1,7 +1,8 @@
-import uuid
 from typing import Any
 
 import pytest
+import uuid
+
 import ida_bytes
 
 from gepetto.ida.utils import function_helpers
@@ -70,6 +71,19 @@ def test_resolve_function_by_name(create_idb, target_name, start_ea, end_ea):
     f = function_helpers.resolve_func(name=target_name)
     assert f.start_ea == start_ea
     assert f.end_ea == end_ea
+
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    ("target_name", "expected_ea"),
+    [
+        pytest.param("sub_1400D38F0", 0x1400D38F0, id="function"),
+        pytest.param("??_7_Facet_base@std@@6B@", 0x1400D57D0, id="const"),
+    ],
+)
+def test_resolve_ea(create_idb, target_name, expected_ea):
+    ea = function_helpers.resolve_ea(target_name)
+    assert ea == expected_ea
 
 # ---------------------------------------------------------------------------
 
@@ -288,6 +302,7 @@ def test_rename_function_round_trip(create_idb, function_rename_guard, target_na
     assert original_name == expected_old_name
 
 # ---------------------------------------------------------------------------
+
 @pytest.mark.parametrize(
     ("scope", "subject", "direction", "expected", "kwargs"),
     [
@@ -338,6 +353,19 @@ def test_get_xrefs_unified(create_idb, scope: str, subject: str, direction: str,
 
 # ---------------------------------------------------------------------------
 
+def test_get_xrefs_consistency(create_idb):
+    name_res = get_xrefs.get_xrefs_unified(scope="name", subject="main", direction="to", only_calls=True)
+    func_res = get_xrefs.get_xrefs_unified(scope="function", subject="0x140017F70", direction="to", only_calls=True)
+    ea_res = get_xrefs.get_xrefs_unified(scope="ea", subject="0x140017F60", direction="to", only_calls=True)
+    del name_res["scope"]
+    del func_res["scope"]
+    del ea_res["scope"]
+
+    assert name_res == func_res
+    assert name_res == ea_res
+
+# ---------------------------------------------------------------------------
+
 @pytest.mark.parametrize(
     ("kwargs", "expected_eas"),
     [
@@ -349,6 +377,7 @@ def test_search_results(create_idb, kwargs, expected_eas):
     result = search.search(**kwargs)
     assert sorted(result["eas"]) == sorted(expected_eas)
 
+# ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize(
     ("kwargs", "expected"),

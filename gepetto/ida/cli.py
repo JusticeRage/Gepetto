@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-import functools
 from types import SimpleNamespace
 
 import ida_kernwin

@@ -402,23 +402,6 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "get_callees",
-            "description": "Return the unique callee functions reached from the target function.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "ea": {
-                        "type": "string",
-                    },
-                    "name": {"type": "string"},
-                    "only_direct": {"type": "boolean", "default": True, "description": "Direct calls only (not xrefs through data)."}
-                },
-                            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "declare_c_type",
             "description": "Parse and declare C types into the local type library.",
             "parameters": {

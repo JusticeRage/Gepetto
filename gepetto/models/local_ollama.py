@@ -198,7 +198,7 @@ class Ollama(LanguageModel):
                                          ida_kernwin.MFF_WRITE)
             else:
                 for chunk in response:
-                    cb(chunk['message']['content'], finished=chunk['done'])
+                    cb(chunk['message'], chunk.done_reason)
         except Exception as e:
             print(e)
 
