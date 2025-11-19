@@ -69,5 +69,5 @@ def load_available_models():
         module = importlib.util.module_from_spec(spec)
         try:
             spec.loader.exec_module(module)
-        except ModuleNotFoundError as e:
+        except (ImportError, ModuleNotFoundError) as e:
             print("Module", module_name, "loading failed:", repr(e), "Skipping..")
