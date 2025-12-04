@@ -6,7 +6,6 @@ import datetime
 import html
 from dataclasses import dataclass
 from collections.abc import Callable
-from typing import Optional
 
 import ida_kernwin
 from gepetto.ida.status_panel.qt_compat import QtCore, QtGui, QtWidgets, exec_menu
@@ -792,8 +791,27 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
 
     # ------------------------------------------------------------------
     def append_reasoning(self, chunk: str) -> None:
-        # Still disabled in UI, but the method exists to satisfy interface and future use
-        return  # /TODO
+        return  # TODO
+        """
+        if not chunk:
+            return
+        self._reasoning_buffer.append(chunk)
+        current_text = "".join(self._reasoning_buffer)
+        if self._reasoning_log_index is None:
+            entry = LogEntry(
+                timestamp=datetime.datetime.now(),
+                level=LogLevel.INFO,
+                category=LogCategory.REASONING,
+                message=current_text,
+            )
+            self._log_entries.append(entry)
+            self._reasoning_log_index = len(self._log_entries) - 1
+        else:
+            entry = self._log_entries[self._reasoning_log_index]
+            entry.message = current_text
+            entry.timestamp = datetime.datetime.now()
+        self._refresh_log_widget(scroll=True)
+        """
 
     # ------------------------------------------------------------------
     def finish_reasoning(self) -> None:
@@ -809,8 +827,8 @@ class _StatusPanelManager(StatusPanel):
     """
 
     def __init__(self) -> None:
-        self._form: Optional[GepettoStatusForm] = None
-        self._stop_callback: Optional[Callable[[], None]] = None
+        self._form: GepettoStatusForm | None = None
+        self._stop_callback: Callable[[], None] | None = None
 
     # ------------------------------------------------------------------
     def ensure_shown(self) -> None:
@@ -860,7 +878,7 @@ class _StatusPanelManager(StatusPanel):
         self._dispatch(lambda form: form.reset_stop())
 
     # ------------------------------------------------------------------
-    def set_stop_callback(self, callback: Optional[Callable[[], None]]) -> None:
+    def set_stop_callback(self, callback: Callable[[], None] | None) -> None:
         self._stop_callback = callback
 
         def apply(form: GepettoStatusForm) -> None:

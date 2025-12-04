@@ -6,7 +6,7 @@ import ida_idaapi
 import gepetto.config
 import gepetto.ida.handlers
 from gepetto.ida.status_panel.panel_interface import LogCategory, LogLevel
-from gepetto.ida.status_panel.status_panel import get_status_panel
+from gepetto.ida.status_panel.status_panel_factory import get_status_panel
 from gepetto.ida.tools.tools import TOOLS
 import gepetto.ida.tools as ida_tools
 

@@ -11,7 +11,7 @@ import gepetto.config
 from gepetto.ida.utils.thread_helpers import *
 from gepetto.models.model_manager import instantiate_model
 from gepetto.ida.status_panel.panel_interface import LogCategory, LogLevel
-from gepetto.ida.status_panel.status_panel import get_status_panel
+from gepetto.ida.status_panel.status_panel_factory import get_status_panel
 
 _ = gepetto.config._
 
