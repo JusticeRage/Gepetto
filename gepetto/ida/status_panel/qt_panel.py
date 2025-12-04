@@ -1,5 +1,5 @@
 """
-    Qt5 status panel for Gepetto streaming UX.
+    Qt status panel for Gepetto streaming UX.
 """
 
 import datetime
@@ -9,7 +9,7 @@ from collections.abc import Callable
 from typing import Optional
 
 import ida_kernwin
-from PyQt5 import QtCore, QtGui, QtWidgets  # type: ignore
+from gepetto.ida.status_panel.qt_compat import QtCore, QtGui, QtWidgets, exec_menu
 
 from gepetto.ida.utils.hooks import run_when_desktop_ready
 from gepetto.ida.status_panel.panel_interface import StatusPanel, LogCategory, LogLevel
@@ -593,7 +593,8 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             error_action = menu.addAction(_("Error loading models"))
             error_action.setEnabled(False)
 
-        menu.exec_(self._model_button.mapToGlobal(QtCore.QPoint(0, 0)))
+        pos = self._model_button.mapToGlobal(QtCore.QPoint(0, 0))
+        exec_menu(menu, pos)
 
     # ------------------------------------------------------------------
     def _switch_model(self, model_name: str) -> None:
