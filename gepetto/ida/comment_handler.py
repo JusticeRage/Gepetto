@@ -1,15 +1,14 @@
 import functools
 import json
-import re
 import time
-import textwrap
 
 import idaapi  # type: ignore
 import ida_hexrays  # type: ignore
 import ida_kernwin  # type: ignore
 
 import gepetto.config
-from gepetto.ida.status_panel import LogCategory, LogLevel, get_status_panel
+from gepetto.ida.status_panel.panel_interface import LogCategory, LogLevel
+from gepetto.ida.status_panel.status_panel import get_status_panel
 from gepetto.ida.tools.decompile_function import decompile_function
 from gepetto.ida.utils.thread_helpers import run_on_main_thread, safe_get_screen_ea
 

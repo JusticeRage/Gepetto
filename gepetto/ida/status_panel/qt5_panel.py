@@ -1,58 +1,31 @@
+"""
+    Qt5 status panel for Gepetto streaming UX.
+"""
 
-"""Enhanced Qt5 status panel for Gepetto streaming UX."""
-
-from __future__ import annotations
-
-import ida_kernwin
 import datetime
 import html
 from dataclasses import dataclass
-from enum import Enum
 from collections.abc import Callable
-from PyQt5 import QtCore, QtGui, QtWidgets
-from gepetto.ida.utils.hooks import run_when_desktop_ready
-import gepetto.models.model_manager
+from typing import Optional
 
+import ida_kernwin
+from PyQt5 import QtCore, QtGui, QtWidgets  # type: ignore
+
+from gepetto.ida.utils.hooks import run_when_desktop_ready
+from gepetto.ida.status_panel.panel_interface import StatusPanel, LogCategory, LogLevel
+import gepetto.models.model_manager
 import gepetto.config
 
 _ = gepetto.config._
 
 STATUS_PANEL_CAPTION = _("Gepetto")
 _DEFAULT_DOCK_OPTIONS = (
-    getattr(ida_kernwin.PluginForm, "WOPN_RESTORE", 0x04)
-    | getattr(ida_kernwin.PluginForm, "WOPN_MENU", 0x10)
-    | getattr(ida_kernwin.PluginForm, "WOPN_PERSIST", 0x40)
-    | getattr(ida_kernwin.PluginForm, "WOPN_NOT_CLOSED_BY_ESC", 0x100)
-    | getattr(ida_kernwin.PluginForm, "WOPN_DP_SZHINT", 0x200)
+        getattr(ida_kernwin.PluginForm, "WOPN_RESTORE", 0x04)
+        | getattr(ida_kernwin.PluginForm, "WOPN_MENU", 0x10)
+        | getattr(ida_kernwin.PluginForm, "WOPN_PERSIST", 0x40)
+        | getattr(ida_kernwin.PluginForm, "WOPN_NOT_CLOSED_BY_ESC", 0x100)
+        | getattr(ida_kernwin.PluginForm, "WOPN_DP_SZHINT", 0x200)
 )
-
-class LogLevel(Enum):
-    INFO = "info"
-    SUCCESS = "success"
-    WARNING = "warning"
-    ERROR = "error"
-    DEBUG = "debug"
-
-
-class LogCategory(Enum):
-    SYSTEM = "system"
-    USER = "user"
-    TOOL = "tool"
-    MODEL = "model"
-    ASSISTANT = "assistant"
-    # TODO: wire up reasoning. UI placeholder is ready though
-    # REASONING = "reasoning"
-
-    def display_name(self) -> str:
-        labels = {
-            LogCategory.SYSTEM: _("System"),
-            LogCategory.USER: _("User"),
-            LogCategory.TOOL: _("Tool"),
-            LogCategory.MODEL: _("Model"),
-            LogCategory.ASSISTANT: _("Assistant"),
-            # LogCategory.REASONING: _("Reasoning"), # /TODO
-        }
-        return labels[self]
 
 
 @dataclass
@@ -125,7 +98,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         LogCategory.TOOL: "#f9e2af",
         LogCategory.MODEL: "#f5c2e7",
         LogCategory.ASSISTANT: "#94e2d5",
-        # LogCategory.REASONING: "#94e2d5", # /TODO
+        # LogCategory.REASONING: "#94e2d5",  # /TODO
     }
     _LEVEL_COLORS = {
         LogLevel.INFO: "",
@@ -135,16 +108,18 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         LogLevel.DEBUG: "#94e2d5",
     }
 
-    def __init__(self, owner: "_StatusPanelManager") -> None:
-        if QtWidgets is None:
-            return
+    def __init__(self, owner: StatusPanel) -> None:  # type: ignore[name-defined]
         super().__init__()
         self._owner = owner
         self._category_color_map = {
-            category: QtGui.QColor(color) for category, color in self._CATEGORY_COLORS.items() if color
+            category: QtGui.QColor(color)
+            for category, color in self._CATEGORY_COLORS.items()
+            if color
         }
         self._level_color_map = {
-            level: QtGui.QColor(color) for level, color in self._LEVEL_COLORS.items() if color
+            level: QtGui.QColor(color)
+            for level, color in self._LEVEL_COLORS.items()
+            if color
         }
         self._widget: QtWidgets.QWidget | None = None
         self._twidget = None
@@ -173,10 +148,8 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
 
     # ------------------------------------------------------------------
     def OnCreate(self, form):  # noqa: N802 - IDA callback signature
-        if QtWidgets is None:
-            return
         self._twidget = self.GetWidget()
-        self._widget = self.FormToPyQtWidget(form) # type: ignore - Qt5/PySide6
+        self._widget = self.FormToPyQtWidget(form)  # type: ignore[attr-defined]
         self._build_ui()
         self._ready = True
         self._owner.on_form_ready()
@@ -207,16 +180,16 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         return bool(self._widget and self._ready)
 
     # ------------------------------------------------------------------
-    def widget(self):  # noqa: ANN001 - helper used by the manager
+    def widget(self):
         return self._widget
 
     # ------------------------------------------------------------------
-    def twidget(self):  # noqa: ANN001 - helper used by the manager
+    def twidget(self):
         return self._twidget
 
     # ------------------------------------------------------------------
     def _build_ui(self) -> None:
-        if QtWidgets is None or self._widget is None:
+        if self._widget is None:
             return
 
         root_layout = QtWidgets.QVBoxLayout(self._widget)
@@ -297,7 +270,10 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._progress_bar.setRange(0, 1)
         self._progress_bar.setValue(0)
         self._progress_bar.setFixedHeight(6)
-        self._progress_bar.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self._progress_bar.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Fixed,
+        )
         self._progress_bar.setTextVisible(False)
         self._apply_progress_bar_style()
 
@@ -312,7 +288,9 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         footer.setSpacing(0)
         footer.setContentsMargins(2, 8, 2, 2)
         self._apply_model_button_style()
-        self._model_button = QtWidgets.QPushButton(_("Model: {model} ▼").format(model=str(gepetto.config.model)))
+        self._model_button = QtWidgets.QPushButton(
+            _("Model: {model} ▼").format(model=str(gepetto.config.model))
+        )
         self._model_button.setObjectName("gepetto_status_model_button")
         self._model_button.setCursor(QtCore.Qt.PointingHandCursor)
         self._model_button.clicked.connect(self._handle_model_button_clicked)  # type: ignore[arg-type]
@@ -350,7 +328,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         style = (
             "QProgressBar {"
             f"  background-color: {_rgba(track_color)};"
-            f"  border: none;"
+            "  border: none;"
             "  padding: 0px;"
             "}"
             "QProgressBar::chunk {"
@@ -365,15 +343,14 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
 
     # ------------------------------------------------------------------
     def _apply_model_button_style(self) -> None:
-        if not (self._model_button and self._widget):
+        if not self._widget:
             return
-        
+
         palette = self._widget.palette()
         text_color = palette.color(QtGui.QPalette.WindowText).lighter(120)
         border_color = text_color.darker(130)
         hover_color = text_color.lighter(150)
-        
-        # Create dropdown-style appearance
+
         style = (
             "QPushButton#gepetto_status_model_button {"
             "  padding: 2px 6px;"
@@ -391,15 +368,13 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             f"  background-color: {_rgba(hover_color, 0.2)};"
             "}"
         )
-        self._model_button.setStyleSheet(style)
+        if self._model_button:
+            self._model_button.setStyleSheet(style)
 
     # ------------------------------------------------------------------
     def _ensure_model_checked_icon(self) -> QtGui.QIcon | None:
         if self._model_checked_icon is not None:
             return self._model_checked_icon
-
-        if QtWidgets is None:
-            return None
 
         app = QtWidgets.QApplication.instance()
         if not app:
@@ -426,7 +401,9 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
 
             text_color = _best_text_color(base_color, palette)
             border_color = QtGui.QColor(base_color).darker(180)
-            if _relative_luminance(base_color) > _relative_luminance(palette.color(QtGui.QPalette.Window)):
+            if _relative_luminance(base_color) > _relative_luminance(
+                    palette.color(QtGui.QPalette.Window)
+            ):
                 hover_color = base_color.darker(110)
                 muted_color = base_color.darker(120)
             else:
@@ -494,7 +471,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._set_chat_controls_enabled(False)
         try:
             self._owner.submit_chat(text)
-        except Exception as exc:  # pragma: no cover - defensive, shouldn't happen in normal flow
+        except Exception as exc:  # pragma: no cover
             self.append_log(
                 _("Failed to send prompt: {err}").format(err=str(exc)),
                 category=LogCategory.SYSTEM,
@@ -518,7 +495,9 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     def _refresh_log_widget(self, *, scroll: bool) -> None:
         if not self._log_view:
             return
-        visible_entries = [entry for entry in self._log_entries if entry.category in self._active_filters]
+        visible_entries = [
+            entry for entry in self._log_entries if entry.category in self._active_filters
+        ]
         palette = self._log_view.palette()
         base_color = palette.color(QtGui.QPalette.Base)
         default_text_color = palette.color(QtGui.QPalette.Text)
@@ -536,17 +515,13 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
                 line = f"[{timestamp}] {text}"
                 desired = QtGui.QColor(color)
                 effective = self._ensure_contrast_color(
-                    desired, fallback=default_text_color, background=base_color, palette=palette
+                    desired,
+                    fallback=default_text_color,
+                    background=base_color,
+                    palette=palette,
                 )
                 container_style = f"color: {effective.name()}; margin-bottom: 4px;"
-                if False: # entry.category is LogCategory.REASONING: # /TODO
-                    container_style += (
-                        " background-color: rgba(148, 226, 213, 0.12);"
-                        " border-left: 3px solid #94e2d5;"
-                        " border-radius: 4px;"
-                        " padding: 4px 6px;"
-                        " font-style: italic;"
-                    )
+                # Reasoning styling placeholder
                 html_parts.append(f"<div style=\"{container_style}\">{line}</div>")
                 if entry.trailing_breaks:
                     html_parts.append("<br>" * entry.trailing_breaks)
@@ -557,12 +532,12 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
 
     # ------------------------------------------------------------------
     def _ensure_contrast_color(
-        self,
-        desired: QtGui.QColor,
-        *,
-        fallback: QtGui.QColor,
-        background: QtGui.QColor,
-        palette: QtGui.QPalette,
+            self,
+            desired: QtGui.QColor,
+            *,
+            fallback: QtGui.QColor,
+            background: QtGui.QColor,
+            palette: QtGui.QPalette,
     ) -> QtGui.QColor:
         if not desired.isValid():
             return fallback
@@ -580,6 +555,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         best = _best_text_color(background, palette)
         return best if _contrast_ratio(best, background) >= 4.0 else fallback
 
+    # ------------------------------------------------------------------
     def set_model(self, model_name: str) -> None:
         if self._model_button:
             self._model_button.setText(_("Model: {model} ▼").format(model=model_name))
@@ -588,17 +564,17 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     def _handle_model_button_clicked(self) -> None:
         if not self._model_button:
             return
-        
+
         menu = QtWidgets.QMenu(self._model_button)
-        
+
         try:
             current_model_name = str(gepetto.config.model)
             check_icon = self._ensure_model_checked_icon()
-            
+
             for provider in gepetto.models.model_manager.list_models():
                 if provider.supported_models():
                     provider_menu = menu.addMenu(provider.get_menu_name())
-                    
+
                     for model in provider.supported_models():
                         action = provider_menu.addAction(model)
 
@@ -611,50 +587,44 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
                         else:
                             action.setCheckable(True)
                             action.setChecked(selected)
-                        
-                        # Apply model switching action
-                        action.triggered.connect(self._make_model_switch_handler(model))
-            
-        except Exception as exc:
-            # Fallback - add a simple error or default option
+
+                        action.triggered.connect(self._make_model_switch_handler(model))  # type: ignore[arg-type]
+        except Exception:
             error_action = menu.addAction(_("Error loading models"))
             error_action.setEnabled(False)
-        
-        # Show the menu at the button position
+
         menu.exec_(self._model_button.mapToGlobal(QtCore.QPoint(0, 0)))
 
     # ------------------------------------------------------------------
     def _switch_model(self, model_name: str) -> None:
         try:
             instantiate_model = gepetto.models.model_manager.instantiate_model
-            
-            # Try to instantiate the new model
+
             gepetto.config.model = instantiate_model(model_name)
             gepetto.config.update_config("Gepetto", "MODEL", model_name)
-            
-            # Update UI
+
             self.set_model(str(gepetto.config.model))
-            
-            # Log the change
+
             self.append_log(
                 _("Model switched to {model}").format(model=model_name),
                 category=LogCategory.MODEL,
-                level=LogLevel.INFO
+                level=LogLevel.INFO,
             )
-            
-            # Trigger menu refresh in the main plugin
+
             try:
                 from gepetto.ida.ui import trigger_model_select_menu_regeneration
+
                 trigger_model_select_menu_regeneration()
             except Exception:
                 pass
-                
+
         except ValueError as e:
-            # Model switching failed (likely missing API key)
-            error_msg = _("Couldn't change model to {model}: {error}").format(model=model_name, error=str(e))
+            error_msg = _("Couldn't change model to {model}: {error}").format(
+                model=model_name,
+                error=str(e),
+            )
             self.append_log(error_msg, category=LogCategory.SYSTEM, level=LogLevel.ERROR)
         except Exception as exc:
-            # Unexpected error
             error_msg = _("Failed to switch model: {error}").format(error=str(exc))
             self.append_log(error_msg, category=LogCategory.SYSTEM, level=LogLevel.ERROR)
 
@@ -694,6 +664,8 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     def set_stop_callback(self, callback: Callable[[], None] | None) -> None:
         if not self._stop_button:
             return
+        # Button enabled state is driven by manager.reset_stop()
+        # Manager will call reset_stop() after setting callback.
         self._stop_button.setEnabled(callback is not None)
 
     # ------------------------------------------------------------------
@@ -713,10 +685,10 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     # ------------------------------------------------------------------
     def clear_log(self) -> None:
         for collection in (
-            self._log_entries,
-            self._conversation_segments,
-            self._stream_text,
-            self._reasoning_buffer,
+                self._log_entries,
+                self._conversation_segments,
+                self._stream_text,
+                self._reasoning_buffer,
         ):
             collection.clear()
         self._stream_index = self._stream_header = None
@@ -727,12 +699,12 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
 
     # ------------------------------------------------------------------
     def append_log(
-        self,
-        message: str,
-        newline: bool = False,
-        *,
-        category: LogCategory = LogCategory.SYSTEM,
-        level: LogLevel = LogLevel.INFO,
+            self,
+            message: str,
+            newline: bool = False,
+            *,
+            category: LogCategory = LogCategory.SYSTEM,
+            level: LogLevel = LogLevel.INFO,
     ) -> None:
         entry = LogEntry(
             timestamp=datetime.datetime.now(),
@@ -756,7 +728,10 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
     # ------------------------------------------------------------------
     def _log_assistant_event(self, text: str) -> None:
         if text:
-            self.append_log(_("Assistant: {text}").format(text=text), category=LogCategory.ASSISTANT)
+            self.append_log(
+                _("Assistant: {text}").format(text=text),
+                category=LogCategory.ASSISTANT,
+            )
 
     # ------------------------------------------------------------------
     def log_assistant(self, text: str) -> None:
@@ -789,7 +764,9 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         if not self._stream_active or not chunk:
             return
         self._stream_text.append(chunk)
-        if self._stream_index is not None and self._stream_index < len(self._conversation_segments):
+        if self._stream_index is not None and self._stream_index < len(
+                self._conversation_segments
+        ):
             self._conversation_segments[self._stream_index] += chunk
             self._refresh_conversation(scroll=True)
 
@@ -814,52 +791,36 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
 
     # ------------------------------------------------------------------
     def append_reasoning(self, chunk: str) -> None:
-        return # /TODO
-        if not chunk:
-            return
-        self._reasoning_buffer.append(chunk)
-        current_text = "".join(self._reasoning_buffer)
-        if self._reasoning_log_index is None:
-            entry = LogEntry(
-                timestamp=datetime.datetime.now(),
-                level=LogLevel.INFO,
-                category=LogCategory.REASONING,
-                message=current_text,
-            )
-            self._log_entries.append(entry)
-            self._reasoning_log_index = len(self._log_entries) - 1
-        else:
-            entry = self._log_entries[self._reasoning_log_index]
-            entry.message = current_text
-            entry.timestamp = datetime.datetime.now()
-        self._refresh_log_widget(scroll=True)
+        # Still disabled in UI, but the method exists to satisfy interface and future use
+        return  # /TODO
 
     # ------------------------------------------------------------------
     def finish_reasoning(self) -> None:
-        if self._reasoning_log_index is not None:
-            self._refresh_log_widget(scroll=True)
         self._reasoning_log_index = None
         self._reasoning_buffer.clear()
 
 
-class _StatusPanelManager:
-    """Controller keeping a singleton instance of the status panel."""
+class _StatusPanelManager(StatusPanel):
+    """Controller keeping a singleton instance of the status panel.
+
+    This is the StatusPanel implementation that the rest of Gepetto should
+    depend on; it wraps a GepettoStatusForm and handles threading and IDA UI.
+    """
 
     def __init__(self) -> None:
-        self._form: GepettoStatusForm | None = None
-        self._stop_callback: Callable[[], None] | None = None
+        self._form: Optional[GepettoStatusForm] = None
+        self._stop_callback: Optional[Callable[[], None]] = None
 
     # ------------------------------------------------------------------
     def ensure_shown(self) -> None:
         if self._form is None:
             self._form = GepettoStatusForm(self)
-            if self._form is not None:
-                try:
-                    option = getattr(ida_kernwin.PluginForm, "WOPN_CREATE_ONLY", 0)
-                    self._form.Show(STATUS_PANEL_CAPTION, options=option)
-                except Exception:
-                    print(_("Could not show Gepetto Status panel."))
-                    return
+            try:
+                option = getattr(ida_kernwin.PluginForm, "WOPN_CREATE_ONLY", 0)
+                self._form.Show(STATUS_PANEL_CAPTION, options=option)
+            except Exception:
+                print(_("Could not show Gepetto Status panel."))
+                self._form = None
 
     # ------------------------------------------------------------------
     def form_closed(self) -> None:
@@ -868,13 +829,17 @@ class _StatusPanelManager:
     # ------------------------------------------------------------------
     def on_form_ready(self) -> None:
         self.set_model(str(gepetto.config.model))
-        if self._stop_callback:
-            self._form.set_stop_callback(self._stop_callback)  # type: ignore[union-attr]
-            self._form.reset_stop()  # type: ignore[union-attr]
+        if self._stop_callback and self._form is not None:
+            self._form.set_stop_callback(self._stop_callback)
+            self._form.reset_stop()
 
         def _show_and_dock() -> None:
             if self._form is not None:
-                ida_kernwin.display_widget(self._form.twidget(), _DEFAULT_DOCK_OPTIONS, None)
+                ida_kernwin.display_widget(
+                    self._form.twidget(),
+                    _DEFAULT_DOCK_OPTIONS,
+                    None,
+                )
             orient = getattr(ida_kernwin, "DP_RIGHT", 0)
             szhint = getattr(ida_kernwin, "DP_SZHINT", 0)
             ida_kernwin.set_dock_pos(STATUS_PANEL_CAPTION, "IDA", orient | szhint)
@@ -894,7 +859,7 @@ class _StatusPanelManager:
         self._dispatch(lambda form: form.reset_stop())
 
     # ------------------------------------------------------------------
-    def set_stop_callback(self, callback: Callable[[], None] | None) -> None:
+    def set_stop_callback(self, callback: Optional[Callable[[], None]]) -> None:
         self._stop_callback = callback
 
         def apply(form: GepettoStatusForm) -> None:
@@ -921,15 +886,16 @@ class _StatusPanelManager:
 
     # ------------------------------------------------------------------
     def submit_chat(self, text: str) -> None:
+        """Submit chat text through the CLI (used by the embedded chat input)."""
         try:
             from gepetto.ida import cli as gepetto_cli
-        except Exception as exc:  # pragma: no cover - defensive
+        except Exception as exc:  # pragma: no cover
             raise RuntimeError("Gepetto CLI is not available") from exc
 
         if getattr(gepetto_cli, "CLI", None) is None:
             try:
-                gepetto_cli.register_cli()
-            except Exception as exc:  # pragma: no cover - defensive
+                gepetto_cli.register_cli(self)  # inject this StatusPanel if you want
+            except Exception as exc:  # pragma: no cover
                 raise RuntimeError("Failed to initialize Gepetto CLI") from exc
 
         cli_instance = getattr(gepetto_cli, "CLI", None)
@@ -968,13 +934,20 @@ class _StatusPanelManager:
 
     # ------------------------------------------------------------------
     def log(
-        self,
-        message: str,
-        *,
-        category: LogCategory = LogCategory.SYSTEM,
-        level: LogLevel = LogLevel.INFO,
+            self,
+            message: str,
+            *,
+            category: LogCategory = LogCategory.SYSTEM,
+            level: LogLevel = LogLevel.INFO,
     ) -> None:
-        self._dispatch(lambda form: form.append_log(message, False, category=category, level=level))
+        self._dispatch(
+            lambda form: form.append_log(
+                message,
+                False,
+                category=category,
+                level=level,
+            )
+        )
 
     # ------------------------------------------------------------------
     def log_request_started(self) -> str:
@@ -1026,10 +999,6 @@ class _StatusPanelManager:
             except Exception:
                 pass
 
-        if QtCore is None:
-            runner()
-            return
-
         widget = self._form.widget()
         if widget:
             current_thread = QtCore.QThread.currentThread()
@@ -1042,10 +1011,3 @@ class _StatusPanelManager:
             ida_kernwin.execute_sync(runner, ida_kernwin.MFF_FAST)
         except Exception:
             runner()
-
-
-panel = _StatusPanelManager()
-
-
-def get_status_panel() -> _StatusPanelManager:
-    return panel

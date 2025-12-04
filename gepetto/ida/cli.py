@@ -5,11 +5,13 @@ import ida_idaapi
 
 import gepetto.config
 import gepetto.ida.handlers
-from gepetto.ida.status_panel import LogCategory, LogLevel, get_status_panel
+from gepetto.ida.status_panel.panel_interface import LogCategory, LogLevel
+from gepetto.ida.status_panel.status_panel import get_status_panel
 from gepetto.ida.tools.tools import TOOLS
 import gepetto.ida.tools as ida_tools
 
 _ = gepetto.config._
+STATUS_PANEL = get_status_panel()
 CLI: ida_kernwin.cli_t = None
 MESSAGES: list[dict] = [
     {
@@ -32,9 +34,6 @@ MESSAGES: list[dict] = [
             f"If you ever encounter a tool error, don't try again, print the exception and stop.",
     }
 ]  # Keep a history of the conversation to simulate LLM memory.
-
-STATUS_PANEL = get_status_panel()
-
 
 _REASONING_KEYS = ("reasoning", "thinking", "thought", "internal_monologue")
 _REASONING_TYPES = {"reasoning", "thinking", "thought"}
