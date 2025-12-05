@@ -1,5 +1,4 @@
 import functools
-import json
 import re
 import time
 import textwrap
@@ -11,7 +10,8 @@ import idc  # type: ignore
 import gepetto.config
 from gepetto.ida.utils.thread_helpers import *
 from gepetto.models.model_manager import instantiate_model
-from gepetto.ida.status_panel import LogCategory, LogLevel, get_status_panel
+from gepetto.ida.status_panel.panel_interface import LogCategory, LogLevel
+from gepetto.ida.status_panel.status_panel_factory import get_status_panel
 
 _ = gepetto.config._
 

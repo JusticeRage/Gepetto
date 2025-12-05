@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 import functools
-import os
 import random
 import string
 import threading
@@ -20,7 +17,7 @@ from gepetto.ida.handlers import (
 )
 from gepetto.ida.comment_handler import CommentHandler
 from gepetto.ida.cli import register_cli
-from gepetto.ida.status_panel import get_status_panel
+from gepetto.ida.status_panel.status_panel_factory import get_status_panel
 import gepetto.models.model_manager
 
 _ = gepetto.config._
