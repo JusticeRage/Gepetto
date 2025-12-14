@@ -444,6 +444,28 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_python",
+            "description": (
+                "Execute arbitrary Python code and return its stdout and stderr. "
+                "The code is executed in a fresh environment with no persistence "
+                "between calls. Use this tool to decode and decrypt as needed, assume "
+                "pycryptodome is present in the environment."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "Python source code to execute.",
+                    },
+                },
+                "required": ["code"],
+            },
+        },
+    },
 ]
 
 def tool_result_payload(data: Any) -> dict[str, Any]:

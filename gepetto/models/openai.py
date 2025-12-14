@@ -15,6 +15,7 @@ import gepetto.config
 
 _ = gepetto.config._
 
+GPT_52_MODEL_NAME = "gpt-5.2"
 GPT_51_MODEL_NAME = "gpt-5.1"
 GPT_5_MODEL_NAME = "gpt-5"
 GPT_5_MINI_MODEL_NAME = "gpt-5-mini"
@@ -27,6 +28,7 @@ GPTo3_MODEL_NAME = "o3"
 GPTo3_PRO_MODEL_NAME = "o3-pro"
 
 _DEFAULT_OPENAI_MODELS = [
+    GPT_52_MODEL_NAME,
     GPT_51_MODEL_NAME,
     GPT_5_MODEL_NAME,
     GPT_5_MINI_MODEL_NAME,
@@ -45,6 +47,7 @@ _OPENAI_REFRESH_THREAD: threading.Thread | None = None
 _OPENAI_LAST_REFRESH: float = 0.0
 
 OPENAI_RESTRICTED_MODELS = {
+    GPT_52_MODEL_NAME,
     GPT_51_MODEL_NAME,
     GPT_5_MODEL_NAME,
     GPT_5_MINI_MODEL_NAME,

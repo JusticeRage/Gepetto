@@ -5,3 +5,4 @@ ollama >= 0.4.5
 azure-identity >= 1.21.0
 google-genai >= 1.36.0
 pytest >= 9.0.1
+pycryptodome >= 3.23.0

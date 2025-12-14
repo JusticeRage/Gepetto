@@ -1,7 +1,5 @@
 """Expose IDA tool modules for convenient attribute access."""
 
-from __future__ import annotations
-
 # Import tool handler modules so ``gepetto.ida.tools.<module>`` works even if
 # only the package is imported. This mirrors the legacy behaviour relied upon
 # by the CLI and external integrations.
@@ -25,6 +23,7 @@ from . import rename_lvar  # noqa: F401
 from . import search  # noqa: F401
 from . import set_comment  # noqa: F401
 from . import to_hex  # noqa: F401
+from . import run_python  # noqa: F401
 
 __all__ = [
     "call_graph",
@@ -46,4 +45,5 @@ __all__ = [
     "search",
     "set_comment",
     "to_hex",
+    "run_python",
 ]

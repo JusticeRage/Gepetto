@@ -196,14 +196,14 @@ class GepettoCLI(ida_kernwin.cli_t):
                         ida_tools.get_bytes.handle_get_bytes_tc(tc, MESSAGES)
                     elif tc.function.name == "get_callers":
                         ida_tools.call_graph.handle_get_callers_tc(tc, MESSAGES)
-                    elif tc.function.name == "get_callees":
-                        ida_tools.call_graph.handle_get_callees_tc(tc, MESSAGES)
                     elif tc.function.name == "declare_c_type":
                         ida_tools.declare_c_type.handle_declare_c_type_tc(tc, MESSAGES)
                     elif tc.function.name == "get_struct":
                         ida_tools.get_struct.handle_get_struct_tc(tc, MESSAGES)
                     elif tc.function.name == "refresh_view":
                         ida_tools.refresh_view.handle_refresh_view_tc(tc, MESSAGES)
+                    elif tc.function.name == "run_python":
+                        ida_tools.run_python.handle_run_python_tc(tc, MESSAGES)
                 STATUS_PANEL.start_stream()
                 start_model_interaction()
             else:
