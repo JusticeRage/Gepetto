@@ -196,8 +196,6 @@ class GepettoCLI(ida_kernwin.cli_t):
                         ida_tools.get_disasm.handle_get_disasm_tc(tc, MESSAGES)
                     elif tc.function.name == "get_bytes":
                         ida_tools.get_bytes.handle_get_bytes_tc(tc, MESSAGES)
-                    elif tc.function.name == "get_callers":
-                        ida_tools.call_graph.handle_get_callers_tc(tc, MESSAGES)
                     elif tc.function.name == "declare_c_type":
                         ida_tools.declare_c_type.handle_declare_c_type_tc(tc, MESSAGES)
                     elif tc.function.name == "get_struct":

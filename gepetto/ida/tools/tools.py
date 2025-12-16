@@ -390,24 +390,6 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "get_callers",
-            "description": "Return the unique caller functions of a target function (by EA or name).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "ea": {
-                        "type": "string",
-                        "description": "EA (int or hex string) inside the target function.",
-                    },
-                    "name": {"type": "string", "description": "Function name to resolve."},
-                    "include_thunks": {"type": "boolean", "default": True, "description": "Treat thunks as their targets."}
-                },
-                            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "declare_c_type",
             "description": "Parse and declare C types into the local type library.",
             "parameters": {

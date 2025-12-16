@@ -4,7 +4,6 @@
 # only the package is imported. This mirrors the legacy behaviour relied upon
 # by the CLI and external integrations.
 
-from . import call_graph  # noqa: F401
 from . import declare_c_type  # noqa: F401
 from . import decompile_function  # noqa: F401
 from . import get_bytes  # noqa: F401
@@ -26,7 +25,6 @@ from . import to_hex  # noqa: F401
 from . import run_python  # noqa: F401
 
 __all__ = [
-    "call_graph",
     "declare_c_type",
     "decompile_function",
     "get_bytes",
