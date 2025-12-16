@@ -1,7 +1,12 @@
+from typing import Literal
+
 import idaapi
 import ida_funcs
 import ida_kernwin
 import ida_name
+
+from gepetto.ida.utils.thread_helpers import ida_read
+
 
 def parse_ea(ea_val):
     """Accept ints or hex-like strings ('0x22A38', '22A38', '22A38h').
@@ -89,3 +94,34 @@ def get_func_name(f) -> str:
 
     ida_kernwin.execute_sync(_do, ida_kernwin.MFF_READ)
     return out["name"]
+
+# ---------------------------------------------------------------------------
+
+@ida_read
+def get_ptr_size() -> int:
+    try:
+        inf = idaapi.get_inf_structure()
+        if inf.is_64bit():
+            return 8
+        if inf.is_32bit():
+            return 4
+        return 2
+    except AttributeError:  # IDA 9.x API
+        import ida_ida
+        if ida_ida.inf_is_64bit():
+            return 8
+        if ida_ida.inf_is_32bit_exactly():
+            return 4
+        if ida_ida.inf_is_16bit():
+            return 2
+        raise NotImplementedError("Unable to determine pointer size!")
+
+# ---------------------------------------------------------------------------
+
+@ida_read
+def get_endianness() -> Literal['little', 'big']:
+    try:
+        return "big" if idaapi.get_inf_structure().is_be() else "little"
+    except AttributeError:  # IDA 9.x API
+        import ida_ida
+        return "big" if ida_ida.inf_is_be() else "little"

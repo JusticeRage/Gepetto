@@ -80,23 +80,29 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_bytes",
-            "description": "Return raw bytes for an effective address.",
+            "description": "Return raw bytes for an effective address. If the address is an offset/pointer, the tool may automatically dereference it and return the pointed data instead.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "ea": {
                         "type": "string",
-                        "description": "EA (int or hex string) to read from.",
+                        "description": "EA (integer or hex string) to read from."
                     },
                     "size": {
                         "type": "integer",
-                        "description": "Number of bytes to retrieve starting at the address.",
+                        "description": "Maximum number of bytes to retrieve starting at the address (also caps string decoding).",
                         "default": 32,
+                        "minimum": 1
                     },
+                    "auto_dereference": {
+                        "type": "boolean",
+                        "description": "If true (default), automatically dereference the address when it is marked as an offset by IDA or clearly looks like a pointer.",
+                        "default": True
+                    }
                 },
-                "required": ["ea"],
-            },
-        },
+                "required": ["ea"]
+            }
+        }
     },
     {
         "type": "function",
