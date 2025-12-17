@@ -302,6 +302,9 @@ class GPT(LanguageModel):
 
     def __init__(self, model):
         self.model = model
+        self.input_tokens = 0
+        self.output_tokens = 0
+
         # Get API key
         api_key = gepetto.config.get_config("OpenAI", "API_KEY", "OPENAI_API_KEY")
         if not api_key:
@@ -388,6 +391,9 @@ class GPT(LanguageModel):
                 stream=stream,
                 **additional_model_options
             )
+            self.input_tokens += response.usage.prompt_tokens
+            self.output_tokens += response.usage.completion_tokens
+
             if not stream:
                 # Return the full message object so that callers can access
                 # additional data such as tool calls when using the OpenAI

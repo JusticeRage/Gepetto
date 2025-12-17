@@ -1,6 +1,6 @@
 import json
 
-import ida_bytes
+import idc
 
 
 from gepetto.ida.utils.function_helpers import parse_ea
@@ -36,7 +36,7 @@ def handle_set_comment_tc(tc, messages):
 
 @ida_write
 def _apply_comment(ea: int, comment: str) -> None:
-    if not ida_bytes.set_cmt(ea, comment, False):
+    if not idc.set_func_cmt(ea, comment, False):
         raise RuntimeError("Failed to set comment")
 
 

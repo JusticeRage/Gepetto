@@ -182,17 +182,17 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "set_comment",
-            "description": "Set a non-repeatable comment at a given EA. Supports multiline input.",
+            "description": "Set a comment for the function containing the given EA. Supports multiline input.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "ea": {
                         "type": "string",
-                        "description": "EA (int or hex string) where the comment should be applied.",
+                        "description": "EA (int or hex string) of a function to which the comment should be applied.",
                     },
                     "comment": {
                         "type": "string",
-                        "description": "Comment text to store at the address.",
+                        "description": "Comment text to store for the function.",
                     },
                 },
                 "required": ["ea", "comment"],
