@@ -204,6 +204,8 @@ class GepettoCLI(ida_kernwin.cli_t):
                         ida_tools.refresh_view.handle_refresh_view_tc(tc, MESSAGES)
                     elif tc.function.name == "run_python":
                         ida_tools.run_python.handle_run_python_tc(tc, MESSAGES)
+                    elif tc.function.name == "rename_global":
+                        ida_tools.rename_global.handle_rename_global_tc(tc, MESSAGES)
                 STATUS_PANEL.start_stream()
                 start_model_interaction()
             else:

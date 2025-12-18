@@ -454,6 +454,40 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "rename_global",
+            "description": (
+                "Rename a global (data) symbol such as unk_401234, dword_40ABCD, qword_*, off_* "
+                "at a given address. Refuses to rename anything inside a function (use the dedicated "
+                "function renaming tool for that). Provide either `ea` or `old_name`."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ea": {
+                        "type": "string",
+                        "description": "EA (int or hex string) of the global/data item to rename.",
+                    },
+                    "old_name": {
+                        "type": "string",
+                        "description": "Existing global symbol name to resolve if EA is not provided.",
+                    },
+                    "new_name": {
+                        "type": "string",
+                        "description": "Desired new name for the global/data symbol.",
+                    },
+                    "force": {
+                        "type": "boolean",
+                        "description": "If true, overwrite existing name on collision (use sparingly). Default false.",
+                    },
+                },
+                "required": ["new_name"],
+            },
+        },
+    },
+
 ]
 
 def tool_result_payload(data: Any) -> dict[str, Any]:

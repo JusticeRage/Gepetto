@@ -108,13 +108,11 @@ def sync_on_main_thread(write: bool = False):
 
 def ida_read(func: Callable[..., Any]) -> Callable[..., Any]:
     """Decorator enforcing main-thread execution with a read lock."""
-
     return sync_on_main_thread(write=False)(func)
 
 
 def ida_write(func: Callable[..., Any]) -> Callable[..., Any]:
     """Decorator enforcing main-thread execution with a write lock."""
-
     return sync_on_main_thread(write=True)(func)
 
 

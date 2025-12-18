@@ -391,8 +391,6 @@ class GPT(LanguageModel):
                 stream=stream,
                 **additional_model_options
             )
-            self.input_tokens += response.usage.prompt_tokens
-            self.output_tokens += response.usage.completion_tokens
 
             if not stream:
                 # Return the full message object so that callers can access
@@ -403,10 +401,15 @@ class GPT(LanguageModel):
                     functools.partial(cb, response=message),
                     ida_kernwin.MFF_WRITE,
                 )
+                self.input_tokens += response.usage.prompt_tokens
+                self.output_tokens += response.usage.completion_tokens
             else:
                 for chunk in response:
                     delta = chunk.choices[0].delta
                     finished = chunk.choices[0].finish_reason
+                    if hasattr(chunk, "usage") and chunk.usage:  # If this is a last chunk, record token count.
+                        self.input_tokens += chunk.usage.prompt_tokens
+                        self.output_tokens += chunk.usage.completion_tokens
                     cb(delta, finished)
         except openai.BadRequestError as e:
             error_message = str(e)

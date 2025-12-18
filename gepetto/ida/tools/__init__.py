@@ -23,6 +23,7 @@ from . import search  # noqa: F401
 from . import set_comment  # noqa: F401
 from . import to_hex  # noqa: F401
 from . import run_python  # noqa: F401
+from . import rename_global  # noqa: F401
 
 __all__ = [
     "declare_c_type",
@@ -44,4 +45,5 @@ __all__ = [
     "set_comment",
     "to_hex",
     "run_python",
+    "rename_global.py",
 ]
