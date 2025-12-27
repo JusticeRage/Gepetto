@@ -304,6 +304,8 @@ class GPT(LanguageModel):
         self.model = model
         self.input_tokens = 0
         self.output_tokens = 0
+        self._streaming_restriction_active = False
+        self._fallback_notice_sent = False
 
         # Get API key
         api_key = gepetto.config.get_config("OpenAI", "API_KEY", "OPENAI_API_KEY")
@@ -321,8 +323,7 @@ class GPT(LanguageModel):
                 proxy=proxy,
             ) if proxy else None
         )
-        self._streaming_restriction_active = False
-        self._fallback_notice_sent = False
+
 
     def __str__(self):
         return self.model
