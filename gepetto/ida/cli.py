@@ -194,6 +194,8 @@ class GepettoCLI(ida_kernwin.cli_t):
                         ida_tools.to_hex.handle_to_hex_tc(tc, MESSAGES)
                     elif tc.function.name == "get_disasm":
                         ida_tools.get_disasm.handle_get_disasm_tc(tc, MESSAGES)
+                    elif tc.function.name == "disasm_function":
+                        ida_tools.disasm_function.handle_disasm_function_tc(tc, MESSAGES)
                     elif tc.function.name == "get_bytes":
                         ida_tools.get_bytes.handle_get_bytes_tc(tc, MESSAGES)
                     elif tc.function.name == "declare_c_type":

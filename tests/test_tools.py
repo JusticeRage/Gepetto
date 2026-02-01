@@ -4,6 +4,7 @@ import pytest
 import uuid
 
 import ida_bytes
+import idc
 
 from gepetto.ida.utils import function_helpers
 from gepetto.ida.tools import (
@@ -18,6 +19,7 @@ from gepetto.ida.tools import (
     rename_function,
     search,
     set_comment,
+    disasm_function,
 )
 
 
@@ -28,9 +30,9 @@ def main_ea(create_idb):
 
 @pytest.fixture
 def comment_context(main_ea):
-    original = ida_bytes.get_cmt(main_ea, False) or ""
+    original = idc.get_func_cmt(main_ea, 0) or ""
     yield main_ea, original
-    ida_bytes.set_cmt(main_ea, original, False)
+    idc.set_func_cmt(main_ea, original, 0)
 
 
 @pytest.fixture
@@ -240,7 +242,7 @@ def test_set_comment_round_trip(comment_context):
     result = set_comment.set_comment(ea=ea, comment=new_comment)
     assert result["ok"] is True
     assert result["ea"] == ea
-    round_trip = ida_bytes.get_cmt(ea, 0) or ""
+    round_trip = idc.get_func_cmt(ea, 0) or ""
     assert round_trip == new_comment.rstrip("\r\n")
 
 # ---------------------------------------------------------------------------
@@ -452,3 +454,12 @@ def test_search_results(create_idb, kwargs, expected_eas):
 def test_list_strings_pagination_and_filters(create_idb, kwargs, expected):
     result = search.list_strings(**kwargs)
     assert result == expected
+
+def test_get_disasm_function(create_idb):
+    res = disasm_function.disasm_function(name="sub_140060FC0")
+    res = res["disasm"]
+    assert res == """0x140060fc0: sub     rsp, 28h
+0x140060fc4: call    sub_140062890
+0x140060fc9: mov     rcx, rax
+0x140060fcc: add     rsp, 28h
+0x140060fd0: jmp     sub_1400608C0"""

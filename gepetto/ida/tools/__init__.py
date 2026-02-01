@@ -9,6 +9,7 @@ from . import decompile_function  # noqa: F401
 from . import get_bytes  # noqa: F401
 from . import get_current_function  # noqa: F401
 from . import get_disasm  # noqa: F401
+from . import disasm_function  # noqa: F401
 from . import get_ea  # noqa: F401
 from . import get_screen_ea  # noqa: F401
 from . import get_struct  # noqa: F401
@@ -31,6 +32,7 @@ __all__ = [
     "get_bytes",
     "get_current_function",
     "get_disasm",
+    "disasm_function",
     "get_ea",
     "get_screen_ea",
     "get_struct",
@@ -45,5 +47,5 @@ __all__ = [
     "set_comment",
     "to_hex",
     "run_python",
-    "rename_global.py",
+    "rename_global",
 ]

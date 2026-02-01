@@ -79,6 +79,26 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "disasm_function",
+            "description": "Return disassembly for an entire function. Provide either `ea` or `name`.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ea": {
+                        "type": "string",
+                        "description": "EA (int or hex string) inside the target function.",
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Function name to resolve if no EA is supplied.",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_bytes",
             "description": "Return raw bytes for an effective address. If the address is an offset/pointer, the tool may automatically dereference it and return the pointed data instead.",
             "parameters": {
