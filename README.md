@@ -85,6 +85,8 @@ method with the corresponding provider.
   - Qwen/Qwen2.5-VL-7B-Instruct
 - [LM Studio](https://lmstudio.ai/)
   - Any local model exposed through LM Studio (will not appear if LM Studio Developer server is not running)
+- [Forge](https://forge.tensorblock.co/)
+  - Access 200+ models from various providers through a single API key (uses `Provider/model-name` format)
 
 Adding support for additional models shouldn't be too difficult, provided whatever provider you're considering exposes
 an API similar to OpenAI's. Look into the `gepetto/models` folder for inspiration, or open an issue if you can't figure
