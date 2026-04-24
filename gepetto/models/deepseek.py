@@ -7,8 +7,8 @@ from gepetto.models.openai import GPT
 
 _ = gepetto.config._
 
-DEEPSEEK_CHAT_NAME = "deepseek-chat"
-DEEPSEEK_REASONER_NAME = "deepseek-reasoner"
+DEEPSEEK_V4_FLASH = "deepseek-v4-flash"
+DEEPSEEK_V4_PRO = "deepseek-v4-pro"
 
 class DeepSeek(GPT):
     @staticmethod
@@ -17,7 +17,7 @@ class DeepSeek(GPT):
 
     @staticmethod
     def supported_models():
-        return [DEEPSEEK_CHAT_NAME, DEEPSEEK_REASONER_NAME]
+        return [DEEPSEEK_V4_FLASH, DEEPSEEK_V4_PRO]
 
     @staticmethod
     def is_configured_properly() -> bool:
