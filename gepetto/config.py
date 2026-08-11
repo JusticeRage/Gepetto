@@ -99,15 +99,30 @@ def _set_option_in_text(text, section, option, value):
 
     # Case-insensitive to match RawConfigParser's own option lookup, and the
     # captured prefix preserves the key's spelling, separator and spacing.
-    pattern = re.compile(r"^(?P<prefix>\s*" + re.escape(option) + r"\s*[:=]\s*)", re.IGNORECASE)
+    # Horizontal whitespace only. A plain \s* after the separator swallows the
+    # newline when the option is empty ("API_KEY ="), which is the usual state
+    # of a freshly installed config, and the value then lands on its own line
+    # without its key.
+    pattern = re.compile(
+        r"^(?P<prefix>[^\S\n]*" + re.escape(option) + r"[^\S\n]*[:=][^\S\n]*)",
+        re.IGNORECASE,
+    )
     for index in range(start + 1, end):
         if _is_blank_or_comment(lines[index]):
             continue
         match = pattern.match(lines[index])
         if not match:
             continue
-        option_indent = _indent_width(match.group("prefix"))
-        lines[index] = f"{match.group('prefix')}{value}\n"
+        prefix = match.group("prefix")
+        if not prefix[-1:].isspace():
+            # "API_KEY =" has nothing after the separator. Follow the spacing
+            # the file already uses around it rather than jamming the value
+            # against the '=', while leaving a compact "KEY=value" compact.
+            separator = max(prefix.rfind("="), prefix.rfind(":"))
+            if separator > 0 and prefix[separator - 1].isspace():
+                prefix += " "
+        option_indent = _indent_width(prefix)
+        lines[index] = f"{prefix}{value}\n"
         # Drop what remains of a multi-line value. Per configparser, only lines
         # indented further than the key continue it, so options that merely
         # share an indentation style are left alone.
