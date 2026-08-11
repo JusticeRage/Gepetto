@@ -1,3 +1,4 @@
+import importlib.metadata
 import importlib.util
 import pathlib
 import traceback
@@ -106,6 +107,38 @@ def _load_directory(folder, source: str):
     _current_source = "built-in"
 
 
+def _load_entry_points(group: str = "gepetto.providers"):
+    """Import providers advertised by installed distributions.
+
+    An entry point may resolve to a LanguageModel subclass, or to a callable
+    that is handed register_model so one distribution can register several.
+    """
+    global _current_source
+    try:
+        discovered = importlib.metadata.entry_points(group=group)
+    except Exception:
+        print(f"Gepetto: could not enumerate '{group}' entry points:")
+        traceback.print_exc()
+        return
+
+    for entry_point in discovered:
+        _current_source = f"entry point {entry_point.name} ({getattr(entry_point, 'value', '')})"
+        try:
+            target = entry_point.load()
+            if isinstance(target, type):
+                register_model(target)
+            elif callable(target):
+                target(register_model)
+            else:
+                print(f"Gepetto: entry point {entry_point.name} is neither a class nor callable; ignoring.")
+        except Exception:
+            print(f"Gepetto: failed to load provider from entry point {entry_point.name}:")
+            traceback.print_exc()
+
+    _current_source = "built-in"
+
+
 def load_available_models():
     _load_directory(gepetto.paths.PLUGIN_DIR / "models", "built-in")
     _load_directory(gepetto.paths.providers_dir(), "user")
+    _load_entry_points()

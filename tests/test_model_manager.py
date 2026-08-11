@@ -157,3 +157,71 @@ def test_drop_in_overrides_a_previously_registered_provider(tmp_path, capsys):
 
     assert model_manager.MODEL_LIST[0] is not builtin
     assert "overridden by user" in capsys.readouterr().out
+
+
+class FakeEntryPoint:
+    def __init__(self, name, value, target):
+        self.name = name
+        self.value = value
+        self._target = target
+
+    def load(self):
+        if isinstance(self._target, Exception):
+            raise self._target
+        return self._target
+
+
+def patch_entry_points(monkeypatch, entry_points):
+    def _entry_points(group=None):
+        assert group == "gepetto.providers"
+        return list(entry_points)
+
+    monkeypatch.setattr(model_manager.importlib.metadata, "entry_points", _entry_points)
+
+
+def test_entry_point_exposing_a_class_is_registered(monkeypatch):
+    provider = make_provider("FromClass")
+    patch_entry_points(monkeypatch, [FakeEntryPoint("c", "pkg:Provider", provider)])
+
+    model_manager._load_entry_points()
+
+    assert model_manager.MODEL_LIST == [provider]
+
+
+def test_entry_point_exposing_a_callable_receives_the_registrar(monkeypatch):
+    first, second = make_provider("One"), make_provider("Two")
+
+    def register_all(register):
+        register(first)
+        register(second)
+
+    patch_entry_points(monkeypatch, [FakeEntryPoint("h", "pkg:register_all", register_all)])
+
+    model_manager._load_entry_points()
+
+    assert model_manager.MODEL_LIST == [first, second]
+
+
+def test_a_broken_entry_point_does_not_abort_the_others(monkeypatch, capsys):
+    working = make_provider("Working")
+    patch_entry_points(monkeypatch, [
+        FakeEntryPoint("bad", "pkg:missing", ImportError("no such module")),
+        FakeEntryPoint("good", "pkg:Provider", working),
+    ])
+
+    model_manager._load_entry_points()
+
+    assert model_manager.MODEL_LIST == [working]
+    assert "bad" in capsys.readouterr().out
+
+
+def test_entry_point_overrides_a_drop_in(monkeypatch, tmp_path, capsys):
+    write_provider(tmp_path, "shared.py", "Shared")
+    model_manager._load_directory(tmp_path, "user")
+    from_drop_in = model_manager.MODEL_LIST[0]
+
+    patch_entry_points(monkeypatch, [FakeEntryPoint("e", "pkg:Provider", make_provider("Shared"))])
+    model_manager._load_entry_points()
+
+    assert model_manager.MODEL_LIST[0] is not from_drop_in
+    assert "overridden by entry point e" in capsys.readouterr().out
