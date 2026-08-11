@@ -169,6 +169,16 @@ def _refresh_openai_models_background(
             _OPENAI_REFRESH_THREAD = None
 
 
+def _wait_for_openai_refresh(timeout: float = 5.0) -> None:
+    """Block until whichever refresh _schedule_openai_refresh just scheduled
+    (or found already running) has finished, instead of firing a second,
+    independent HTTP request to the same endpoint."""
+    with _OPENAI_MODELS_LOCK:
+        thread = _OPENAI_REFRESH_THREAD
+    if thread is not None:
+        thread.join(timeout)
+
+
 async def _fetch_openai_models_async(
     endpoint: str,
     headers: dict[str, str],
@@ -288,9 +298,17 @@ class GPT(LanguageModel):
         proxy = gepetto.config.get_config("Gepetto", "PROXY")
         headers = {"Authorization": f"Bearer {api_key}"}
         timeout = _httpx.Timeout(2.0, connect=2.0)
-        models = _execute_openai_fetch(endpoint, headers, proxy, timeout)
-        if models:
-            _update_openai_models(models)
+        # Route through the same scheduler supported_models() uses instead of
+        # calling _execute_openai_fetch() directly: that used to fire a second,
+        # independent HTTP request racing whatever background refresh a prior
+        # supported_models() call had just scheduled (see instantiate_model(),
+        # which calls supported_models() and then refresh_models_sync() back
+        # to back when the requested model isn't cached yet). Scheduling here
+        # either starts the one fetch that happens, or -- if one is already
+        # in flight or just completed within the cooldown window -- joins it,
+        # so callers still get a synchronous, up-to-date answer.
+        _schedule_openai_refresh(endpoint, headers, proxy, timeout)
+        _wait_for_openai_refresh(timeout=5.0)
         with _OPENAI_MODELS_LOCK:
             current = list(_OPENAI_MODELS) if _OPENAI_MODELS is not None else list(_DEFAULT_OPENAI_MODELS)
         return current
