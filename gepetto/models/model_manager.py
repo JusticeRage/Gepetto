@@ -1,7 +1,8 @@
 import importlib.util
-import os
 import pathlib
+import traceback
 
+import gepetto.paths
 from gepetto.models.base import LanguageModel
 
 MODEL_LIST: list[LanguageModel] = list()
@@ -78,13 +79,33 @@ def get_fallback_model():
     )
 
 
-def load_available_models():
-    folder = pathlib.Path(os.path.dirname(__file__))
-    for py_file in folder.glob("*.py"):
-        module_name = py_file.stem  # Get the file name without extension
-        spec = importlib.util.spec_from_file_location(module_name, py_file)
-        module = importlib.util.module_from_spec(spec)
+def _load_directory(folder, source: str):
+    """Import every provider module in a directory.
+
+    Failures are contained per file: these modules may be third-party, and an
+    exception here would otherwise escape load_config() and PLUGIN_ENTRY(),
+    taking the whole plugin down instead of one provider.
+    """
+    global _current_source
+    folder = pathlib.Path(folder)
+    if not folder.is_dir():
+        return
+
+    for py_file in sorted(folder.glob("*.py")):
+        if py_file.name.startswith("_"):
+            continue
+        _current_source = f"{source} ({py_file})"
         try:
+            spec = importlib.util.spec_from_file_location(py_file.stem, py_file)
+            module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
-        except (ImportError, ModuleNotFoundError) as e:
-            print("Module", module_name, "loading failed:", repr(e), "Skipping..")
+        except Exception:
+            print(f"Gepetto: failed to load provider {py_file}:")
+            traceback.print_exc()
+
+    _current_source = "built-in"
+
+
+def load_available_models():
+    _load_directory(gepetto.paths.PLUGIN_DIR / "models", "built-in")
+    _load_directory(gepetto.paths.providers_dir(), "user")

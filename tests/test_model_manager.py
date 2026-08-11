@@ -1,3 +1,5 @@
+import textwrap
+
 import pytest
 
 from gepetto.models.base import LanguageModel
@@ -80,3 +82,78 @@ def test_override_does_not_disturb_other_providers():
     model_manager.register_model(beta)
     model_manager.register_model(alpha2)
     assert model_manager.MODEL_LIST == [alpha2, beta]
+
+
+PROVIDER_TEMPLATE = """
+    from gepetto.models.base import LanguageModel
+    import gepetto.models.model_manager
+
+
+    class Provider(LanguageModel):
+        @staticmethod
+        def get_menu_name():
+            return "{menu_name}"
+
+        @staticmethod
+        def supported_models():
+            return ["{menu_name}-model"]
+
+        @staticmethod
+        def is_configured_properly():
+            return {configured}
+
+        def query_model_async(self, query, cb, stream, additional_model_options):
+            raise NotImplementedError
+
+
+    gepetto.models.model_manager.register_model(Provider)
+"""
+
+
+def write_provider(folder, filename, menu_name, configured=True):
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / filename).write_text(
+        textwrap.dedent(PROVIDER_TEMPLATE).format(menu_name=menu_name, configured=configured),
+        encoding="utf-8",
+    )
+
+
+def test_directory_scan_registers_a_drop_in_provider(tmp_path):
+    write_provider(tmp_path, "mine.py", "Mine")
+    model_manager._load_directory(tmp_path, "user")
+    assert [p.get_menu_name() for p in model_manager.MODEL_LIST] == ["Mine"]
+
+
+def test_directory_scan_skips_dunder_and_private_files(tmp_path):
+    write_provider(tmp_path, "__init__.py", "Dunder")
+    write_provider(tmp_path, "_helper.py", "Private")
+    write_provider(tmp_path, "real.py", "Real")
+    model_manager._load_directory(tmp_path, "user")
+    assert [p.get_menu_name() for p in model_manager.MODEL_LIST] == ["Real"]
+
+
+def test_a_broken_provider_does_not_abort_the_scan(tmp_path, capsys):
+    (tmp_path / "broken.py").write_text("raise RuntimeError('boom')\n", encoding="utf-8")
+    write_provider(tmp_path, "working.py", "Working")
+
+    model_manager._load_directory(tmp_path, "user")
+
+    assert [p.get_menu_name() for p in model_manager.MODEL_LIST] == ["Working"]
+    captured = capsys.readouterr()
+    assert "broken.py" in captured.out + captured.err
+
+
+def test_missing_directory_is_not_an_error(tmp_path):
+    model_manager._load_directory(tmp_path / "does-not-exist", "user")
+    assert model_manager.MODEL_LIST == []
+
+
+def test_drop_in_overrides_a_previously_registered_provider(tmp_path, capsys):
+    builtin = make_provider("Shared")
+    model_manager.register_model(builtin)
+
+    write_provider(tmp_path, "shared.py", "Shared")
+    model_manager._load_directory(tmp_path, "user")
+
+    assert model_manager.MODEL_LIST[0] is not builtin
+    assert "overridden by user" in capsys.readouterr().out
