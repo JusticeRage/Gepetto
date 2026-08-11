@@ -1,7 +1,10 @@
 import configparser
 import gettext
 import os
+import pathlib
+import shutil
 
+import gepetto.paths
 from gepetto.models.model_manager import instantiate_model, load_available_models, get_fallback_model
 
 # =============================================================================
@@ -13,6 +16,9 @@ model = None
 
 # INI configuration file parser object
 parsed_ini = None
+
+# Path of the configuration file actually in use, set by load_config().
+config_path = None
 
 # Translator function for message localization
 _translator = None
@@ -45,18 +51,52 @@ def _(message):
     return _get_translator()(message)
 
 
+def _ensure_user_config():
+    """Return the configuration file to use, seeding it on first run.
+
+    The bundled file is either a virgin template on a fresh install or the
+    user's own populated file on an upgrade, so a single copy handles both.
+    After this runs once, the plugin directory is never written to again and
+    upgrades stop destroying API keys.
+    """
+    user_config = gepetto.paths.config_file()
+    if user_config.exists():
+        return user_config
+
+    bundled = gepetto.paths.bundled_config()
+    try:
+        user_config.parent.mkdir(parents=True, exist_ok=True)
+        if bundled.exists():
+            shutil.copyfile(bundled, user_config)
+        else:
+            user_config.touch()
+        if os.name == "posix":
+            os.chmod(user_config, 0o600)
+    except OSError as e:
+        print(f"Gepetto: could not create {user_config} ({e}); falling back to {bundled}.")
+        return bundled
+
+    print(f"Gepetto: configuration migrated to {user_config}")
+    return user_config
+
+
 def load_config():
     """
     Loads the configuration of the plugin from the INI file. Sets up the correct locale and language model.
     Also prepares an OpenAI client configured accordingly to the user specifications.
     :return:
     """
-    global model, parsed_ini, _translator, language, available_locales
+    global model, parsed_ini, config_path, _translator, language, available_locales
     parsed_ini = configparser.RawConfigParser()
-    parsed_ini.read(os.path.join(os.path.abspath(os.path.dirname(__file__)), "config.ini"), encoding="utf-8")
+    config_path = _ensure_user_config()
+    parsed_ini.read(config_path, encoding="utf-8")
+    # A missing or truncated file must not take the plugin down: every read
+    # below goes through a fallback, and the section is guaranteed to exist.
+    if not parsed_ini.has_section("Gepetto"):
+        parsed_ini.add_section("Gepetto")
 
     # Read available locales from the locales directory
-    locales_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "locales")
+    locales_dir = str(gepetto.paths.locales_dir())
     available_locales = set()
     if os.path.exists(locales_dir):
         for item in os.listdir(locales_dir):
@@ -65,7 +105,7 @@ def load_config():
                 available_locales.add(item)
 
     # Set up translations
-    language = parsed_ini.get('Gepetto', 'LANGUAGE')
+    language = parsed_ini.get('Gepetto', 'LANGUAGE', fallback='')
     translate = gettext.translation('gepetto',
                                     locales_dir,
                                     fallback=True,
@@ -73,7 +113,7 @@ def load_config():
     _translator = translate.gettext
 
     # Select model
-    requested_model = parsed_ini.get('Gepetto', 'MODEL')
+    requested_model = parsed_ini.get('Gepetto', 'MODEL', fallback='')
     load_available_models()
     # Attempt to load the requested model, otherwise get the first available one, or don't load Gepetto
     try:
@@ -120,9 +160,11 @@ def update_config(section, option, new_value):
     :param new_value: The new value to set
     :return:
     """
-    path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "config.ini")
+    path = config_path or _ensure_user_config()
     config = configparser.RawConfigParser()
     config.read(path, encoding="utf-8")
+    if not config.has_section(section):
+        config.add_section(section)
     config.set(section, option, _stringify_config_value(new_value))
     with open(path, "w", encoding="utf-8") as f:
         config.write(f)
