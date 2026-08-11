@@ -118,12 +118,15 @@ def load_config():
     # Attempt to load the requested model, otherwise get the first available one, or don't load Gepetto
     try:
         model = instantiate_model(requested_model)
-    except RuntimeError:
+    except Exception:
+        # Deliberately broad: a third-party provider's constructor can raise
+        # anything, and that must cost the user that one provider, not the
+        # whole plugin.
         print(_("Attempting to load the first available model..."))
         try:
             model = get_fallback_model()
             print(f"Defaulted to {str(model)}.")
-        except RuntimeError:
+        except Exception:
             print(_("No model available. Please edit the configuration file and try again."))
             model = None
 

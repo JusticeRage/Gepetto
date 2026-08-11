@@ -80,8 +80,20 @@ def get_fallback_model():
     )
 
 
-def _load_directory(folder, source: str):
+# Drop-in files already executed, keyed by resolved path, so that calling
+# load_available_models() twice does not re-execute them and re-register a
+# second, identical-but-distinct class over the first.
+_LOADED_FILES = {}
+
+
+def _load_directory(folder, source: str, package: str = None):
     """Import every provider module in a directory.
+
+    ``package`` names the Python package the directory corresponds to, and is
+    set for the built-in models. Importing those normally rather than by file
+    path matters: the built-ins import each other (``from gepetto.models.openai
+    import GPT``), so loading them by path as well would build a second, distinct
+    copy of every class and register it over the first.
 
     Failures are contained per file: these modules may be third-party, and an
     exception here would otherwise escape load_config() and PLUGIN_ENTRY(),
@@ -95,11 +107,18 @@ def _load_directory(folder, source: str):
     for py_file in sorted(folder.glob("*.py")):
         if py_file.name.startswith("_"):
             continue
+        resolved = str(py_file.resolve())
+        if resolved in _LOADED_FILES:
+            continue
         _current_source = f"{source} ({py_file})"
         try:
-            spec = importlib.util.spec_from_file_location(py_file.stem, py_file)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            if package:
+                importlib.import_module(f"{package}.{py_file.stem}")
+            else:
+                spec = importlib.util.spec_from_file_location(py_file.stem, py_file)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+            _LOADED_FILES[resolved] = True
         except Exception:
             print(f"Gepetto: failed to load provider {py_file}:")
             traceback.print_exc()
@@ -139,6 +158,6 @@ def _load_entry_points(group: str = "gepetto.providers"):
 
 
 def load_available_models():
-    _load_directory(gepetto.paths.PLUGIN_DIR / "models", "built-in")
+    _load_directory(gepetto.paths.PLUGIN_DIR / "models", "built-in", package=__package__)
     _load_directory(gepetto.paths.providers_dir(), "user")
     _load_entry_points()

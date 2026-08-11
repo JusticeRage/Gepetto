@@ -257,6 +257,28 @@ def test_missing_config_everywhere_still_loads(config_env, monkeypatch, capsys):
     assert config.get_config("Gepetto", "MODEL", default="fallback") == "fallback"
 
 
+def test_a_provider_exploding_on_construction_does_not_break_loading(config_env, monkeypatch, capsys):
+    # A third-party provider's constructor can raise anything. Only RuntimeError
+    # used to be caught here, so a TypeError escaped PLUGIN_ENTRY entirely.
+    config, _, _, _ = config_env
+
+    monkeypatch.setattr(config, "load_available_models", lambda: None)
+
+    def _boom(_: str):
+        raise TypeError("Acme() takes no arguments")
+
+    def _boom_fallback():
+        raise TypeError("still broken")
+
+    monkeypatch.setattr(config, "instantiate_model", _boom)
+    monkeypatch.setattr(config, "get_fallback_model", _boom_fallback)
+
+    config.load_config()
+
+    assert config.model is None
+    assert "No model available" in capsys.readouterr().out
+
+
 def test_unwritable_user_directory_falls_back_to_the_bundled_file(config_env, monkeypatch, capsys):
     config, _, plugin_dir, user_dir = config_env
 

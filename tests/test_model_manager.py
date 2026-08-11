@@ -30,6 +30,7 @@ def make_provider(menu_name, configured=True, models=("m1",)):
 def clean_registry(monkeypatch):
     monkeypatch.setattr(model_manager, "MODEL_LIST", [])
     monkeypatch.setattr(model_manager, "_current_source", "built-in")
+    monkeypatch.setattr(model_manager, "_LOADED_FILES", {})
 
 
 def test_registers_a_configured_provider():
@@ -157,6 +158,36 @@ def test_drop_in_overrides_a_previously_registered_provider(tmp_path, capsys):
 
     assert model_manager.MODEL_LIST[0] is not builtin
     assert "overridden by user" in capsys.readouterr().out
+
+
+def test_loading_the_same_directory_twice_is_idempotent(tmp_path, capsys):
+    # Re-executing a file builds a second, distinct class that would otherwise
+    # register itself over the first and log a bogus override.
+    write_provider(tmp_path, "mine.py", "Mine")
+
+    model_manager._load_directory(tmp_path, "user")
+    first = model_manager.MODEL_LIST[0]
+    capsys.readouterr()
+
+    model_manager._load_directory(tmp_path, "user")
+
+    assert model_manager.MODEL_LIST == [first]
+    assert "overridden" not in capsys.readouterr().out
+
+
+def test_builtin_package_import_does_not_duplicate_classes(tmp_path, monkeypatch, capsys):
+    # The built-ins import each other, so loading them by file path as well
+    # would register a second copy of every shared class over the first.
+    package_dir = tmp_path / "pkg"
+    write_provider(package_dir, "shared.py", "Shared")
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    model_manager._load_directory(package_dir, "built-in", package="pkg")
+    model_manager._load_directory(package_dir, "built-in", package="pkg")
+
+    assert [p.get_menu_name() for p in model_manager.MODEL_LIST] == ["Shared"]
+    assert "overridden" not in capsys.readouterr().out
 
 
 class FakeEntryPoint:
