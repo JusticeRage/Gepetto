@@ -1,7 +1,11 @@
 import configparser
 import gettext
 import os
+import pathlib
+import re
+import shutil
 
+import gepetto.paths
 from gepetto.models.model_manager import instantiate_model, load_available_models, get_fallback_model
 
 # =============================================================================
@@ -13,6 +17,9 @@ model = None
 
 # INI configuration file parser object
 parsed_ini = None
+
+# Path of the configuration file actually in use, set by load_config().
+config_path = None
 
 # Translator function for message localization
 _translator = None
@@ -45,18 +52,129 @@ def _(message):
     return _get_translator()(message)
 
 
+_SECTION_RE = re.compile(r"^\s*\[(?P<name>[^]]+)\]\s*$")
+
+
+def _indent_width(line) -> int:
+    return len(line) - len(line.lstrip())
+
+
+def _is_blank_or_comment(line) -> bool:
+    stripped = line.strip()
+    return not stripped or stripped[0] in "#;"
+
+
+def _find_section(lines, section):
+    """Return the (start, end) line bounds of a section, or (None, None)."""
+    target = section.strip().lower()
+    start = None
+    for index, line in enumerate(lines):
+        match = _SECTION_RE.match(line)
+        if not match:
+            continue
+        if start is None:
+            if match.group("name").strip().lower() == target:
+                start = index
+        else:
+            return start, index
+    return (start, len(lines)) if start is not None else (None, None)
+
+
+def _set_option_in_text(text, section, option, value):
+    """Set one option in INI text, leaving every other byte alone.
+
+    Reserializing through RawConfigParser would be shorter, but it drops every
+    comment in the file. That was tolerable when the config lived in the plugin
+    directory and was replaced on each upgrade; now that it is the user's own
+    file, switching models from the menu must not delete their annotations.
+    """
+    lines = text.splitlines(keepends=True)
+    start, end = _find_section(lines, section)
+
+    if start is None:
+        prefix = text if (not text or text.endswith("\n")) else text + "\n"
+        if prefix.strip():
+            prefix += "\n"
+        return f"{prefix}[{section}]\n{option} = {value}\n"
+
+    # Case-insensitive to match RawConfigParser's own option lookup, and the
+    # captured prefix preserves the key's spelling, separator and spacing.
+    pattern = re.compile(r"^(?P<prefix>\s*" + re.escape(option) + r"\s*[:=]\s*)", re.IGNORECASE)
+    for index in range(start + 1, end):
+        if _is_blank_or_comment(lines[index]):
+            continue
+        match = pattern.match(lines[index])
+        if not match:
+            continue
+        option_indent = _indent_width(match.group("prefix"))
+        lines[index] = f"{match.group('prefix')}{value}\n"
+        # Drop what remains of a multi-line value. Per configparser, only lines
+        # indented further than the key continue it, so options that merely
+        # share an indentation style are left alone.
+        tail = index + 1
+        while (
+            tail < end
+            and not _is_blank_or_comment(lines[tail])
+            and _indent_width(lines[tail]) > option_indent
+        ):
+            lines[tail] = ""
+            tail += 1
+        return "".join(lines)
+
+    # Present but unset: append to the section, before its trailing blank lines.
+    insert_at = end
+    while insert_at > start + 1 and not lines[insert_at - 1].strip():
+        insert_at -= 1
+    lines.insert(insert_at, f"{option} = {value}\n")
+    return "".join(lines)
+
+
+def _ensure_user_config():
+    """Return the configuration file to use, seeding it on first run.
+
+    The bundled file is either a virgin template on a fresh install or the
+    user's own populated file on an upgrade, so a single copy handles both.
+    After this runs once, the plugin directory is never written to again and
+    upgrades stop destroying API keys.
+    """
+    user_config = gepetto.paths.config_file()
+    if user_config.exists():
+        return user_config
+
+    bundled = gepetto.paths.bundled_config()
+    try:
+        user_config.parent.mkdir(parents=True, exist_ok=True)
+        if bundled.exists():
+            shutil.copyfile(bundled, user_config)
+        else:
+            user_config.touch()
+        if os.name == "posix":
+            os.chmod(user_config, 0o600)
+    except OSError as e:
+        print(f"Gepetto: could not create {user_config} ({e}); falling back to {bundled}.")
+        return bundled
+
+    print(f"Gepetto: configuration migrated to {user_config}")
+    return user_config
+
+
 def load_config():
     """
     Loads the configuration of the plugin from the INI file. Sets up the correct locale and language model.
     Also prepares an OpenAI client configured accordingly to the user specifications.
     :return:
     """
-    global model, parsed_ini, _translator, language, available_locales
+    global model, parsed_ini, config_path, _translator, language, available_locales
     parsed_ini = configparser.RawConfigParser()
-    parsed_ini.read(os.path.join(os.path.abspath(os.path.dirname(__file__)), "config.ini"), encoding="utf-8")
+    config_path = _ensure_user_config()
+    parsed_ini.read(config_path, encoding="utf-8")
+    # A missing or truncated file must not take the plugin down: every read
+    # below goes through a fallback, and the section is guaranteed to exist.
+    if not parsed_ini.has_section("Gepetto"):
+        parsed_ini.add_section("Gepetto")
 
     # Read available locales from the locales directory
-    locales_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "locales")
+    locales_dir = str(gepetto.paths.locales_dir())
     available_locales = set()
     if os.path.exists(locales_dir):
         for item in os.listdir(locales_dir):
@@ -65,7 +183,7 @@ def load_config():
                 available_locales.add(item)
 
     # Set up translations
-    language = parsed_ini.get('Gepetto', 'LANGUAGE')
+    language = parsed_ini.get('Gepetto', 'LANGUAGE', fallback='')
     translate = gettext.translation('gepetto',
                                     locales_dir,
                                     fallback=True,
@@ -73,17 +191,20 @@ def load_config():
     _translator = translate.gettext
 
     # Select model
-    requested_model = parsed_ini.get('Gepetto', 'MODEL')
+    requested_model = parsed_ini.get('Gepetto', 'MODEL', fallback='')
     load_available_models()
     # Attempt to load the requested model, otherwise get the first available one, or don't load Gepetto
     try:
         model = instantiate_model(requested_model)
-    except RuntimeError:
+    except Exception:
+        # Deliberately broad: a third-party provider's constructor can raise
+        # anything, and that must cost the user that one provider, not the
+        # whole plugin.
         print(_("Attempting to load the first available model..."))
         try:
             model = get_fallback_model()
             print(f"Defaulted to {str(model)}.")
-        except RuntimeError:
+        except Exception:
             print(_("No model available. Please edit the configuration file and try again."))
             model = None
 
@@ -120,18 +241,20 @@ def update_config(section, option, new_value):
     :param new_value: The new value to set
     :return:
     """
-    path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "config.ini")
-    config = configparser.RawConfigParser()
-    config.read(path, encoding="utf-8")
-    config.set(section, option, _stringify_config_value(new_value))
-    with open(path, "w", encoding="utf-8") as f:
-        config.write(f)
+    path = pathlib.Path(config_path or _ensure_user_config())
+    value = _stringify_config_value(new_value)
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        text = ""
+    path.write_text(_set_option_in_text(text, section, option, value), encoding="utf-8")
 
     global parsed_ini
     if parsed_ini is not None:
         if not parsed_ini.has_section(section):
             parsed_ini.add_section(section)
-        parsed_ini.set(section, option, _stringify_config_value(new_value))
+        parsed_ini.set(section, option, value)
 
 
 def get_localization_locale():

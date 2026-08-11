@@ -22,7 +22,7 @@ Alternatively, you can manually install the plugin:
 1. Drop this script (`gepetto.py`, as well as the `gepetto/` folder) into your IDA plugins folder (`$IDAUSR/plugins`).
 2. The plugins directory location depends on your system:
    - **Windows**: `%APPDATA%\Hex-Rays\IDA Pro\plugins\`
-   - **macOS**: `~/Library/Application Support/IDA Pro/plugins/`
+   - **macOS**: `~/.idapro/plugins/`
    - **Linux**: `~/.idapro/plugins/`
 3. Install the required packages to IDA's Python installation. Find which interpreter IDA is using by checking the following registry key:
    `Computer\HKEY_CURRENT_USER\Software\Hex-Rays\IDA` (default on Windows: `%LOCALAPPDATA%\Programs\Python\Python39`).
@@ -31,10 +31,24 @@ Alternatively, you can manually install the plugin:
    [/path/to/python] -m pip install -r requirements.txt
    ```
 
-⚠️ You will also need to edit the configuration file (found as `gepetto/config.ini`) and add your own API keys. For 
-OpenAI, it can be found on [this page](https://platform.openai.com/api-keys).
-Please note that API queries are usually not free (although not very expensive) and you will need to set up a payment 
-method with the corresponding provider.
+### Configuration
+
+Gepetto keeps its configuration in your IDA user directory, so it survives
+plugin upgrades:
+
+- **Windows**: `%APPDATA%\Hex-Rays\IDA Pro\cfg\gepetto\config.ini`
+- **macOS / Linux**: `~/.idapro/cfg/gepetto/config.ini`
+
+The first time the plugin runs it copies `gepetto/config.ini` there and tells
+you the path on the console. After that, the copy shipped with the plugin is
+only a template — edit the one in your user directory. Set `GEPETTO_CONFIG_DIR`
+to override the location entirely.
+
+Add your API keys to that file, or supply them through the environment
+variables named in it. For OpenAI, a key can be created on
+[this page](https://platform.openai.com/api-keys). Please note that API queries
+are usually not free (although not very expensive) and you will need to set up a
+payment method with the corresponding provider.
 
 ## Supported models
 
@@ -89,9 +103,66 @@ method with the corresponding provider.
   - Qwen/Qwen2.5-VL-7B-Instruct
 - [LM Studio](https://lmstudio.ai/)
   - Any local model exposed through LM Studio (will not appear if LM Studio Developer server is not running)
-Adding support for additional models shouldn't be too difficult, provided whatever provider you're considering exposes
-an API similar to OpenAI's. Look into the `gepetto/models` folder for inspiration, or open an issue if you can't figure
-it out.
+## Adding your own provider
+
+Gepetto loads providers from three places, each overriding the last on a menu
+name collision: the modules shipped in `gepetto/models/`, then any `.py` file in
+`$IDAUSR/cfg/gepetto/providers/`, then any installed distribution advertising a
+`gepetto.providers` entry point. Overrides are announced on the console, so you
+can replace a built-in provider without forking the plugin.
+
+A drop-in provider uses exactly the same contract as a built-in one. For an
+OpenAI-compatible endpoint, the whole file is:
+
+```python
+import openai
+import gepetto.config
+import gepetto.models.model_manager
+from gepetto.models.openai import GPT
+
+
+class MyProvider(GPT):
+    @staticmethod
+    def get_menu_name() -> str:
+        return "MyProvider"
+
+    @staticmethod
+    def supported_models():
+        return ["my-model-v1"]
+
+    @staticmethod
+    def is_configured_properly() -> bool:
+        return bool(gepetto.config.get_config("MyProvider", "API_KEY", "MYPROVIDER_API_KEY"))
+
+    def __init__(self, model):
+        try:
+            super().__init__(model)
+        except ValueError:
+            pass  # No OpenAI key needed for this provider.
+        self.model = model
+        self.client = openai.OpenAI(
+            api_key=gepetto.config.get_config("MyProvider", "API_KEY", "MYPROVIDER_API_KEY"),
+            base_url="https://api.example.com/v1",
+        )
+
+
+gepetto.models.model_manager.register_model(MyProvider)
+```
+
+Add a matching `[MyProvider]` section to your `config.ini` and restart IDA:
+providers are registered at load time, so a new key or a new file needs a
+restart before it appears in the menu.
+
+To ship one as a package instead, expose the class or a
+`register(register_model)` callable:
+
+```toml
+[project.entry-points."gepetto.providers"]
+myprovider = "myprovider:MyProvider"
+```
+
+Files in `providers/` execute arbitrary Python when IDA starts. That is the same
+trust level as any IDA plugin, but only install providers you trust.
 
 ## Usage
 
