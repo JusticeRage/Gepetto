@@ -146,15 +146,24 @@ def test_get_bytes(create_idb, target_name, size, expected_prefix):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize(
-    ("target_name", "expected_fragment"),
+    ("target_name", "expected_fragments"),
     [
-        pytest.param("sub_1400D3720", "void __fastcall sub_1400D3720()\n{\n  unknown_libname_7(&unk_140118890);\n}\n", id="full"),
-        pytest.param("main", "manalyze.conf", id="main"),
+        # Asserted as fragments rather than one exact block: Hex-Rays 9.4
+        # wraps this body in __wind/__unwind SEH scaffolding that 9.3 and
+        # earlier do not emit, so an exact match passes on one version and
+        # fails on the other while the decompilation is equally correct.
+        pytest.param(
+            "sub_1400D3720",
+            ("void __fastcall sub_1400D3720()", "unknown_libname_7(&unk_140118890);"),
+            id="full",
+        ),
+        pytest.param("main", ("manalyze.conf",), id="main"),
     ],
 )
-def test_get_function_code(create_idb, target_name, expected_fragment):
-    result = decompile_function.decompile_function(name=target_name)
-    assert expected_fragment in str(result)
+def test_get_function_code(create_idb, target_name, expected_fragments):
+    result = str(decompile_function.decompile_function(name=target_name))
+    for fragment in expected_fragments:
+        assert fragment in result, f"{fragment!r} missing from:\n{result}"
 
 # ---------------------------------------------------------------------------
 
