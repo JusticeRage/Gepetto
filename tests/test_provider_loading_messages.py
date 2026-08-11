@@ -18,7 +18,8 @@ def isolate(monkeypatch):
 
 
 def write(folder, name, body):
-    folder.mkdir(parents=True, exist_ok=True)
+    # folder is pytest's tmp_path: it already exists, is unique per test, and
+    # pytest removes it once it is a few sessions old.
     (folder / name).write_text(body, encoding="utf-8")
 
 
