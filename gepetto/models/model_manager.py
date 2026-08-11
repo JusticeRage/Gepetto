@@ -9,6 +9,13 @@ from gepetto.models.base import LanguageModel
 MODEL_LIST: list[LanguageModel] = list()
 
 
+def _missing_dependency(exc):
+    """Name the dependency an import failure was looking for."""
+    # 'from google import genai' raises ImportError rather than
+    # ModuleNotFoundError, and reports the outer package as its name.
+    return getattr(exc, "name", None) or str(exc)
+
+
 # Describes where the provider currently being imported came from, for log
 # messages. Set by the loaders below around each import.
 _current_source = "built-in"
@@ -119,7 +126,16 @@ def _load_directory(folder, source: str, package: str = None):
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
             _LOADED_FILES[resolved] = True
+        except (ImportError, ModuleNotFoundError) as e:
+            # Expected, not a defect: someone who does not use Claude will never
+            # have the anthropic SDK installed. One line, no stack trace.
+            print(
+                f"Gepetto: provider '{py_file.stem}' unavailable, optional "
+                f"dependency missing: {_missing_dependency(e)}"
+            )
         except Exception:
+            # A syntax error or an exception raised by the module itself. This
+            # is a real defect and the traceback is the point.
             print(f"Gepetto: failed to load provider {py_file}:")
             traceback.print_exc()
 
@@ -150,6 +166,11 @@ def _load_entry_points(group: str = "gepetto.providers"):
                 target(register_model)
             else:
                 print(f"Gepetto: entry point {entry_point.name} is neither a class nor callable; ignoring.")
+        except (ImportError, ModuleNotFoundError) as e:
+            print(
+                f"Gepetto: entry point '{entry_point.name}' unavailable, optional "
+                f"dependency missing: {_missing_dependency(e)}"
+            )
         except Exception:
             print(f"Gepetto: failed to load provider from entry point {entry_point.name}:")
             traceback.print_exc()
