@@ -257,6 +257,111 @@ def test_missing_config_everywhere_still_loads(config_env, monkeypatch, capsys):
     assert config.get_config("Gepetto", "MODEL", default="fallback") == "fallback"
 
 
+ANNOTATED_CONFIG = """
+# Gepetto configuration. Edit this file, not the bundled template.
+
+[Gepetto]
+# Which model to use on startup.
+MODEL = gpt-4
+LANGUAGE = en_US
+AUTO_SHOW_STATUS_PANEL = true
+
+[OpenAI]
+# Set your API key here, or put it in the OPENAI_API_KEY environment variable.
+API_KEY = sk-secret
+
+# Base URL if you want to redirect requests to a different / local model.
+BASE_URL =
+
+[DeepSeek]
+# Optional; only needed for DeepSeek models.
+API_KEY =
+"""
+
+
+def test_update_config_preserves_comments_and_layout(loaded_config):
+    # Switching models from the menu calls update_config. Reserializing the file
+    # through RawConfigParser would silently delete every comment the user (and
+    # the shipped template) put there.
+    config, _, _, user_dir = loaded_config
+    user_cfg = user_dir / "config.ini"
+    user_cfg.write_text(textwrap.dedent(ANNOTATED_CONFIG).lstrip(), encoding="utf-8")
+
+    config.update_config("Gepetto", "MODEL", "deepseek-v4-flash")
+
+    text = user_cfg.read_text(encoding="utf-8")
+    assert "# Gepetto configuration. Edit this file, not the bundled template." in text
+    assert "# Which model to use on startup." in text
+    assert "# Set your API key here, or put it in the OPENAI_API_KEY environment variable." in text
+    assert "# Optional; only needed for DeepSeek models." in text
+
+    # The value changed, the key keeps the casing the file used, and nothing
+    # else in the file moved.
+    assert "MODEL = deepseek-v4-flash" in text
+    assert "gpt-4" not in text
+    assert "API_KEY = sk-secret" in text
+    assert text.count("[OpenAI]") == 1
+
+    reread = configparser.RawConfigParser()
+    reread.read(user_cfg, encoding="utf-8")
+    assert reread.get("Gepetto", "MODEL") == "deepseek-v4-flash"
+    assert reread.get("OpenAI", "API_KEY") == "sk-secret"
+
+
+def test_update_config_adds_a_missing_option_to_an_existing_section(loaded_config):
+    config, _, _, user_dir = loaded_config
+    user_cfg = user_dir / "config.ini"
+    user_cfg.write_text(textwrap.dedent(ANNOTATED_CONFIG).lstrip(), encoding="utf-8")
+
+    config.update_config("DeepSeek", "BASE_URL", "https://api.deepseek.com/v1")
+
+    text = user_cfg.read_text(encoding="utf-8")
+    assert "# Optional; only needed for DeepSeek models." in text
+    reread = configparser.RawConfigParser()
+    reread.read(user_cfg, encoding="utf-8")
+    assert reread.get("DeepSeek", "BASE_URL") == "https://api.deepseek.com/v1"
+    assert reread.get("OpenAI", "API_KEY") == "sk-secret"
+
+
+def test_update_config_adds_a_missing_section(loaded_config):
+    config, _, _, user_dir = loaded_config
+    user_cfg = user_dir / "config.ini"
+    user_cfg.write_text(textwrap.dedent(ANNOTATED_CONFIG).lstrip(), encoding="utf-8")
+
+    config.update_config("BrandNew", "API_KEY", "abc123")
+
+    text = user_cfg.read_text(encoding="utf-8")
+    assert "# Which model to use on startup." in text
+    reread = configparser.RawConfigParser()
+    reread.read(user_cfg, encoding="utf-8")
+    assert reread.get("BrandNew", "API_KEY") == "abc123"
+    assert reread.get("Gepetto", "MODEL") == "gpt-4"
+
+
+def test_update_config_matches_section_and_option_case_insensitively(loaded_config):
+    # RawConfigParser reads are case-insensitive for options, so the rewrite has
+    # to find MODEL when asked for 'model' rather than appending a duplicate.
+    config, _, _, user_dir = loaded_config
+    user_cfg = user_dir / "config.ini"
+    user_cfg.write_text(textwrap.dedent(ANNOTATED_CONFIG).lstrip(), encoding="utf-8")
+
+    config.update_config("gepetto", "model", "o3")
+
+    text = user_cfg.read_text(encoding="utf-8")
+    assert text.count("MODEL") == 1
+    assert "MODEL = o3" in text
+
+
+def test_update_config_still_updates_the_in_memory_cache(loaded_config):
+    config, _, _, user_dir = loaded_config
+    user_cfg = user_dir / "config.ini"
+    user_cfg.write_text(textwrap.dedent(ANNOTATED_CONFIG).lstrip(), encoding="utf-8")
+
+    config.update_config("Gepetto", "MODEL", "o3")
+
+    assert config.parsed_ini.get("Gepetto", "MODEL") == "o3"
+
+
 def test_a_provider_exploding_on_construction_does_not_break_loading(config_env, monkeypatch, capsys):
     # A third-party provider's constructor can raise anything. Only RuntimeError
     # used to be caught here, so a TypeError escaped PLUGIN_ENTRY entirely.

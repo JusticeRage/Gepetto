@@ -2,6 +2,7 @@ import configparser
 import gettext
 import os
 import pathlib
+import re
 import shutil
 
 import gepetto.paths
@@ -49,6 +50,83 @@ def _get_translator():
 def _(message):
     """Translation function that lazy-loads the translator"""
     return _get_translator()(message)
+
+
+_SECTION_RE = re.compile(r"^\s*\[(?P<name>[^]]+)\]\s*$")
+
+
+def _indent_width(line) -> int:
+    return len(line) - len(line.lstrip())
+
+
+def _is_blank_or_comment(line) -> bool:
+    stripped = line.strip()
+    return not stripped or stripped[0] in "#;"
+
+
+def _find_section(lines, section):
+    """Return the (start, end) line bounds of a section, or (None, None)."""
+    target = section.strip().lower()
+    start = None
+    for index, line in enumerate(lines):
+        match = _SECTION_RE.match(line)
+        if not match:
+            continue
+        if start is None:
+            if match.group("name").strip().lower() == target:
+                start = index
+        else:
+            return start, index
+    return (start, len(lines)) if start is not None else (None, None)
+
+
+def _set_option_in_text(text, section, option, value):
+    """Set one option in INI text, leaving every other byte alone.
+
+    Reserializing through RawConfigParser would be shorter, but it drops every
+    comment in the file. That was tolerable when the config lived in the plugin
+    directory and was replaced on each upgrade; now that it is the user's own
+    file, switching models from the menu must not delete their annotations.
+    """
+    lines = text.splitlines(keepends=True)
+    start, end = _find_section(lines, section)
+
+    if start is None:
+        prefix = text if (not text or text.endswith("\n")) else text + "\n"
+        if prefix.strip():
+            prefix += "\n"
+        return f"{prefix}[{section}]\n{option} = {value}\n"
+
+    # Case-insensitive to match RawConfigParser's own option lookup, and the
+    # captured prefix preserves the key's spelling, separator and spacing.
+    pattern = re.compile(r"^(?P<prefix>\s*" + re.escape(option) + r"\s*[:=]\s*)", re.IGNORECASE)
+    for index in range(start + 1, end):
+        if _is_blank_or_comment(lines[index]):
+            continue
+        match = pattern.match(lines[index])
+        if not match:
+            continue
+        option_indent = _indent_width(match.group("prefix"))
+        lines[index] = f"{match.group('prefix')}{value}\n"
+        # Drop what remains of a multi-line value. Per configparser, only lines
+        # indented further than the key continue it, so options that merely
+        # share an indentation style are left alone.
+        tail = index + 1
+        while (
+            tail < end
+            and not _is_blank_or_comment(lines[tail])
+            and _indent_width(lines[tail]) > option_indent
+        ):
+            lines[tail] = ""
+            tail += 1
+        return "".join(lines)
+
+    # Present but unset: append to the section, before its trailing blank lines.
+    insert_at = end
+    while insert_at > start + 1 and not lines[insert_at - 1].strip():
+        insert_at -= 1
+    lines.insert(insert_at, f"{option} = {value}\n")
+    return "".join(lines)
 
 
 def _ensure_user_config():
@@ -163,20 +241,20 @@ def update_config(section, option, new_value):
     :param new_value: The new value to set
     :return:
     """
-    path = config_path or _ensure_user_config()
-    config = configparser.RawConfigParser()
-    config.read(path, encoding="utf-8")
-    if not config.has_section(section):
-        config.add_section(section)
-    config.set(section, option, _stringify_config_value(new_value))
-    with open(path, "w", encoding="utf-8") as f:
-        config.write(f)
+    path = pathlib.Path(config_path or _ensure_user_config())
+    value = _stringify_config_value(new_value)
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        text = ""
+    path.write_text(_set_option_in_text(text, section, option, value), encoding="utf-8")
 
     global parsed_ini
     if parsed_ini is not None:
         if not parsed_ini.has_section(section):
             parsed_ini.add_section(section)
-        parsed_ini.set(section, option, _stringify_config_value(new_value))
+        parsed_ini.set(section, option, value)
 
 
 def get_localization_locale():
