@@ -88,5 +88,23 @@ def test_cli_dispatches_the_call_graph_tool(monkeypatch):
     )
     messages = []
 
-    assert cli.dispatch_tool_call(tc, messages) is True
+    cli.dispatch_tool_call(tc, messages)
     assert invoked == [(tc, messages)]
+
+
+def test_cli_dispatcher_returns_an_error_for_an_unknown_tool():
+    tc = SimpleNamespace(
+        id="unknown-call",
+        function=SimpleNamespace(name="not_a_gepetto_tool", arguments="{}"),
+    )
+    messages = []
+
+    cli.dispatch_tool_call(tc, messages)
+
+    assert json.loads(messages[-1]["content"]) == {
+        "type": "error",
+        "error": {
+            "message": "Unknown tool: not_a_gepetto_tool",
+            "context": {"tool_name": "not_a_gepetto_tool"},
+        },
+    }

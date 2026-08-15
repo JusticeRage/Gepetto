@@ -8,7 +8,7 @@ import gepetto.ida.handlers
 from gepetto.ida.tools import get_call_graph_context
 from gepetto.ida.status_panel.panel_interface import LogCategory, LogLevel
 from gepetto.ida.status_panel.status_panel_factory import get_status_panel
-from gepetto.ida.tools.tools import TOOLS
+from gepetto.ida.tools.tools import TOOLS, add_result_to_messages, tool_error_payload
 import gepetto.ida.tools as ida_tools
 
 _ = gepetto.config._
@@ -42,7 +42,7 @@ MESSAGES: list[dict] = [
 
 
 def dispatch_tool_call(tc, messages):
-    """Dispatch one model tool call and report whether its name is known."""
+    """Dispatch one model tool call, returning an error result when unknown."""
     handlers = {
         "get_screen_ea": ida_tools.get_screen_ea.handle_get_screen_ea_tc,
         "get_current_function": ida_tools.get_current_function.handle_get_current_function_tc,
@@ -69,11 +69,19 @@ def dispatch_tool_call(tc, messages):
         "rename_global": ida_tools.rename_global.handle_rename_global_tc,
     }
     function = getattr(tc, "function", None)
-    handler = handlers.get(getattr(function, "name", None))
+    tool_name = getattr(function, "name", None)
+    handler = handlers.get(tool_name)
     if handler is None:
-        return False
+        add_result_to_messages(
+            messages,
+            tc,
+            tool_error_payload(
+                f"Unknown tool: {tool_name or '<missing name>'}",
+                tool_name=tool_name or "<missing name>",
+            ),
+        )
+        return
     handler(tc, messages)
-    return True
 
 _REASONING_KEYS = ("reasoning", "thinking", "thought", "internal_monologue")
 _REASONING_TYPES = {"reasoning", "thinking", "thought"}
