@@ -31,8 +31,8 @@ MESSAGES: list[dict] = [
             f"When asked to perform an operation (such as renaming something), don't ask for confirmation. Just do it!\n"
             f"Always refresh the disassembly view after making a change in the IDB (renaming, etc.), so it is shown to"
             f"the user (no need to mention when you do it).\n"
-            f"Addresses should always be shown as hex in the form 0x1234, but never convert decimal numbers to "
-            f"hexadecimal yourself; always use the `to_hex` tool for that.\n"
+            f"Addresses shown to the user should be hex in the form 0x1234. Values returned by a tool must be passed "
+            f"unchanged to later tools. Use `to_hex` only when a decimal address must be rendered as hex in prose.\n"
             f"If you ever encounter a tool error, don't try again, print the exception and stop.",
     }
 ]  # Keep a history of the conversation to simulate LLM memory.

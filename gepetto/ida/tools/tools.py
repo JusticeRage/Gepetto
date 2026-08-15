@@ -133,8 +133,8 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "ea": {
-                        "type": "string",
-                        "description": "EA (int or hex string) inside the target function.",
+                        "anyOf": [{"type": "integer"}, {"type": "string"}],
+                        "description": "EA (integer or hex string) inside the target function.",
                     },
                     "name": {
                         "type": "string",
