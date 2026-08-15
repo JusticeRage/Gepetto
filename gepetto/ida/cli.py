@@ -5,6 +5,7 @@ import ida_idaapi
 
 import gepetto.config
 import gepetto.ida.handlers
+from gepetto.ida.tools import get_call_graph_context
 from gepetto.ida.status_panel.panel_interface import LogCategory, LogLevel
 from gepetto.ida.status_panel.status_panel_factory import get_status_panel
 from gepetto.ida.tools.tools import TOOLS
@@ -33,9 +34,46 @@ MESSAGES: list[dict] = [
             f"the user (no need to mention when you do it).\n"
             f"Addresses shown to the user should be hex in the form 0x1234. Values returned by a tool must be passed "
             f"unchanged to later tools. Use `to_hex` only when a decimal address must be rendered as hex in prose.\n"
+            f"Use `get_call_graph_context` when caller or callee evidence would materially establish a function role, "
+            f"name, or type; keep its bounds small.\n"
             f"If you ever encounter a tool error, don't try again, print the exception and stop.",
     }
 ]  # Keep a history of the conversation to simulate LLM memory.
+
+
+def dispatch_tool_call(tc, messages):
+    """Dispatch one model tool call and report whether its name is known."""
+    handlers = {
+        "get_screen_ea": ida_tools.get_screen_ea.handle_get_screen_ea_tc,
+        "get_current_function": ida_tools.get_current_function.handle_get_current_function_tc,
+        "get_ea": ida_tools.get_ea.handle_get_ea_tc,
+        "decompile_function": ida_tools.decompile_function.handle_decompile_function_tc,
+        "get_call_graph_context": get_call_graph_context.handle_get_call_graph_context_tc,
+        "rename_lvar": ida_tools.rename_lvar.handle_rename_lvar_tc,
+        "rename_function": ida_tools.rename_function.handle_rename_function_tc,
+        "set_comment": ida_tools.set_comment.handle_set_comment_tc,
+        "get_xrefs": ida_tools.get_xrefs.handle_get_xrefs_tc,
+        "list_imports": ida_tools.list_imports.handle_list_imports_tc,
+        "list_functions": ida_tools.list_functions.handle_list_functions_tc,
+        "list_symbols": ida_tools.list_symbols.handle_list_symbols_tc,
+        "list_strings": ida_tools.search.handle_list_strings_tc,
+        "search": ida_tools.search.handle_search_tc,
+        "to_hex": ida_tools.to_hex.handle_to_hex_tc,
+        "get_disasm": ida_tools.get_disasm.handle_get_disasm_tc,
+        "disasm_function": ida_tools.disasm_function.handle_disasm_function_tc,
+        "get_bytes": ida_tools.get_bytes.handle_get_bytes_tc,
+        "declare_c_type": ida_tools.declare_c_type.handle_declare_c_type_tc,
+        "get_struct": ida_tools.get_struct.handle_get_struct_tc,
+        "refresh_view": ida_tools.refresh_view.handle_refresh_view_tc,
+        "run_python": ida_tools.run_python.handle_run_python_tc,
+        "rename_global": ida_tools.rename_global.handle_rename_global_tc,
+    }
+    function = getattr(tc, "function", None)
+    handler = handlers.get(getattr(function, "name", None))
+    if handler is None:
+        return False
+    handler(tc, messages)
+    return True
 
 _REASONING_KEYS = ("reasoning", "thinking", "thought", "internal_monologue")
 _REASONING_TYPES = {"reasoning", "thinking", "thought"}
@@ -164,50 +202,7 @@ class GepettoCLI(ida_kernwin.cli_t):
                 first_tool_name = response.tool_calls[0].function.name
                 STATUS_PANEL.set_status(_("Using tool: {tool_name}").format(tool_name=first_tool_name), busy=True)
                 for tc in response.tool_calls:
-                    if tc.function.name == "get_screen_ea":
-                        ida_tools.get_screen_ea.handle_get_screen_ea_tc(tc, MESSAGES)
-                    elif tc.function.name == "get_current_function":
-                        ida_tools.get_current_function.handle_get_current_function_tc(tc, MESSAGES)
-                    elif tc.function.name == "get_ea":
-                        ida_tools.get_ea.handle_get_ea_tc(tc, MESSAGES)
-                    elif tc.function.name == "decompile_function":
-                        ida_tools.decompile_function.handle_decompile_function_tc(tc, MESSAGES)
-                    elif tc.function.name == "rename_lvar":
-                        ida_tools.rename_lvar.handle_rename_lvar_tc(tc, MESSAGES)
-                    elif tc.function.name == "rename_function":
-                        ida_tools.rename_function.handle_rename_function_tc(tc, MESSAGES)
-                    elif tc.function.name == "set_comment":
-                        ida_tools.set_comment.handle_set_comment_tc(tc, MESSAGES)
-                    elif tc.function.name == "get_xrefs":
-                        ida_tools.get_xrefs.handle_get_xrefs_tc(tc, MESSAGES)
-                    elif tc.function.name == "list_imports":
-                        ida_tools.list_imports.handle_list_imports_tc(tc, MESSAGES)
-                    elif tc.function.name == "list_functions":
-                        ida_tools.list_functions.handle_list_functions_tc(tc, MESSAGES)
-                    elif tc.function.name == "list_symbols":
-                        ida_tools.list_symbols.handle_list_symbols_tc(tc, MESSAGES)
-                    elif tc.function.name == "list_strings":
-                        ida_tools.search.handle_list_strings_tc(tc, MESSAGES)
-                    elif tc.function.name == "search":
-                        ida_tools.search.handle_search_tc(tc, MESSAGES)
-                    elif tc.function.name == "to_hex":
-                        ida_tools.to_hex.handle_to_hex_tc(tc, MESSAGES)
-                    elif tc.function.name == "get_disasm":
-                        ida_tools.get_disasm.handle_get_disasm_tc(tc, MESSAGES)
-                    elif tc.function.name == "disasm_function":
-                        ida_tools.disasm_function.handle_disasm_function_tc(tc, MESSAGES)
-                    elif tc.function.name == "get_bytes":
-                        ida_tools.get_bytes.handle_get_bytes_tc(tc, MESSAGES)
-                    elif tc.function.name == "declare_c_type":
-                        ida_tools.declare_c_type.handle_declare_c_type_tc(tc, MESSAGES)
-                    elif tc.function.name == "get_struct":
-                        ida_tools.get_struct.handle_get_struct_tc(tc, MESSAGES)
-                    elif tc.function.name == "refresh_view":
-                        ida_tools.refresh_view.handle_refresh_view_tc(tc, MESSAGES)
-                    elif tc.function.name == "run_python":
-                        ida_tools.run_python.handle_run_python_tc(tc, MESSAGES)
-                    elif tc.function.name == "rename_global":
-                        ida_tools.rename_global.handle_rename_global_tc(tc, MESSAGES)
+                    dispatch_tool_call(tc, MESSAGES)
                 STATUS_PANEL.start_stream()
                 start_model_interaction()
             else:
