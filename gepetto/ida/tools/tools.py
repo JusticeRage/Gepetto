@@ -147,6 +147,51 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_call_graph_context",
+            "description": (
+                "Return bounded caller and/or callee pseudocode when the current "
+                "function alone is insufficient to establish its purpose, name, or "
+                "types. Use small bounds and only request relationship evidence that "
+                "materially improves the analysis."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ea": {
+                        "anyOf": [{"type": "integer"}, {"type": "string"}],
+                        "description": "Address or name of the root function. Defaults to the cursor.",
+                    },
+                    "direction": {
+                        "type": "string",
+                        "enum": ["callers", "callees", "both"],
+                        "default": "both",
+                        "description": "Which relationships to inspect.",
+                    },
+                    "max_depth": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 2,
+                        "description": "Maximum call-graph hops. Zero returns only the root body.",
+                    },
+                    "max_functions": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "default": 8,
+                        "description": "Maximum number of neighbouring functions to return.",
+                    },
+                    "max_chars_per_function": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "default": 1200,
+                        "description": "Unicode-code-point budget for each decompiled body.",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "rename_lvar",
             "description": "Rename a local variable within a function.",
             "parameters": {
