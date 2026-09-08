@@ -8,7 +8,9 @@ from dataclasses import dataclass
 from collections.abc import Callable
 
 import ida_kernwin
-from gepetto.ida.status_panel.qt_compat import QtCore, QtGui, QtWidgets, exec_menu
+from gepetto.ida.qt import QtCore, QtGui, QtWidgets
+from gepetto.ida.status_panel.panel_controls import buttons_for
+from gepetto.ida.status_panel.prompt_input import PromptInput, align_row
 
 from gepetto.ida.utils.hooks import run_when_desktop_ready
 from gepetto.ida.status_panel.panel_interface import StatusPanel, LogCategory, LogLevel
@@ -130,7 +132,8 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
         self._conversation_view: QtWidgets.QTextBrowser | None = None
         self._log_view: QtWidgets.QTextBrowser | None = None
         self._splitter: QtWidgets.QSplitter | None = None
-        self._chat_input: QtWidgets.QLineEdit | None = None
+        self._chat_input: PromptInput | None = None
+        self._prompt_buttons: list = []
         self._send_button: QtWidgets.QPushButton | None = None
         self._filter_buttons: dict[LogCategory, QtWidgets.QToolButton] = {}
         self._active_filters: set[LogCategory] = set(LogCategory)
@@ -253,17 +256,23 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
 
         chat_row = QtWidgets.QHBoxLayout()
         chat_row.setSpacing(4)
-        self._chat_input = QtWidgets.QLineEdit()
-        self._chat_input.setPlaceholderText(_("Type a prompt and press Enter…"))
-        self._chat_input.returnPressed.connect(self._handle_chat_submit)  # type: ignore[arg-type]
+        self._chat_input = PromptInput(self._handle_chat_submit)
         chat_row.addWidget(self._chat_input, stretch=1)
+        # Bottom-aligned, so they stay beside the last line as the box grows
+        # rather than drifting away from it.
+        bottom = QtCore.Qt.AlignBottom
+        self._prompt_buttons = buttons_for(self._chat_input)
+        for button in self._prompt_buttons:
+            chat_row.addWidget(button, 0, bottom)
         self._send_button = QtWidgets.QPushButton(_("Send"))
         self._send_button.clicked.connect(self._handle_chat_submit)  # type: ignore[arg-type]
-        chat_row.addWidget(self._send_button)
+        chat_row.addWidget(self._send_button, 0, bottom)
         self._stop_button = QtWidgets.QPushButton(_("Stop"))
         self._stop_button.setEnabled(False)
         self._stop_button.clicked.connect(self._handle_stop_clicked)  # type: ignore[arg-type]
-        chat_row.addWidget(self._stop_button)
+        chat_row.addWidget(self._stop_button, 0, bottom)
+        align_row(self._chat_input, *self._prompt_buttons, self._send_button,
+                  self._stop_button)
 
         self._progress_bar = QtWidgets.QProgressBar()
         self._progress_bar.setRange(0, 1)
@@ -593,7 +602,7 @@ class GepettoStatusForm(ida_kernwin.PluginForm):
             error_action.setEnabled(False)
 
         pos = self._model_button.mapToGlobal(QtCore.QPoint(0, 0))
-        exec_menu(menu, pos)
+        menu.exec_(pos)
 
     # ------------------------------------------------------------------
     def _switch_model(self, model_name: str) -> None:
