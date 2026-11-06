@@ -101,6 +101,10 @@ payment method with the corresponding provider.
   - meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8
   - meta-llama/Llama-4-Scout-17B-16E-Instruct
   - Qwen/Qwen2.5-VL-7B-Instruct
+- [Cheaper Inference](https://cheaperinference.com/)
+  - claude-sonnet-5
+  - glm-5.3
+  - kimi-k3
 - [LM Studio](https://lmstudio.ai/)
   - Any local model exposed through LM Studio (will not appear if LM Studio Developer server is not running)
 ## Adding your own provider
